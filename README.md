@@ -2,6 +2,9 @@
 
 A trading project that aims to earn money. 
 
+Plan: inject 10k hkd to some brokers, trade with a lowest amount of money first. 
+
+
 to be switch to public after removing credentials
 
 https://github.com/ProgramIsFun/EonTrading-Core
