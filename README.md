@@ -19,3 +19,5 @@ https://github.com/ProgramIsFun/TradingApiTestingPlaying
 
 
 https://github.com/ProgramIsFun/EonTrading-Webull
+
+https://github.com/ProgramIsFun/EonTrading-Trader
