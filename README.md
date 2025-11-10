@@ -24,3 +24,5 @@ https://github.com/ProgramIsFun/EonTrading-Trader
 https://github.com/ProgramIsFun/EonTrading-DataGrabber
 
 https://github.com/ProgramIsFun/EonTrading-Schema
+
+https://github.com/ProgramIsFun/ProgramIsFun-Python-Helpers
