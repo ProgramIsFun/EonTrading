@@ -1,7 +1,7 @@
 """News watcher: polls news sources, scores sentiment, publishes events."""
 import asyncio
 from src.data.news import NewsAPISource
-from src.strategies.sentiment import SentimentAnalyzer
+from src.strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 from src.common.event_bus import EventBus, LocalEventBus
 from src.common.events import CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE, SentimentEvent
 
@@ -9,10 +9,10 @@ from src.common.events import CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE, Se
 class NewsWatcher:
     """Polls news, analyzes sentiment, publishes to event bus."""
 
-    def __init__(self, bus: EventBus, sources: list = None, interval_sec: int = 120):
+    def __init__(self, bus: EventBus, sources: list = None, analyzer: BaseSentimentAnalyzer = None, interval_sec: int = 120):
         self.bus = bus
         self.sources = sources or []
-        self.analyzer = SentimentAnalyzer()
+        self.analyzer = analyzer or KeywordSentimentAnalyzer()
         self.interval = interval_sec
 
     async def run(self):
@@ -71,7 +71,16 @@ async def main():
     await bus.start()
 
     source = NewsAPISource(api_key=api_key)
-    watcher = NewsWatcher(bus, sources=[source], interval_sec=120)
+
+    # Pick analyzer: keyword (free) or LLM (needs OPENAI_API_KEY)
+    if os.getenv("OPENAI_API_KEY"):
+        analyzer = LLMSentimentAnalyzer()
+        print("Using LLM sentiment analyzer")
+    else:
+        analyzer = KeywordSentimentAnalyzer()
+        print("Using keyword sentiment analyzer (set OPENAI_API_KEY for LLM)")
+
+    watcher = NewsWatcher(bus, sources=[source], analyzer=analyzer, interval_sec=120)
     trader = SentimentTrader(bus, threshold=0.5, min_confidence=0.4)
     await trader.start()
 

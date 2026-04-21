@@ -1,9 +1,22 @@
-"""Sentiment analysis for news headlines."""
+"""Sentiment analysis interface and implementations."""
 import re
+import json
+import os
+from abc import ABC, abstractmethod
 from datetime import datetime
 from ..common.events import NewsEvent, SentimentEvent
 
-# S&P 500 major tickers and their common names
+
+class BaseSentimentAnalyzer(ABC):
+    """Interface for sentiment analyzers. Swap implementations freely."""
+
+    @abstractmethod
+    def analyze(self, event: NewsEvent) -> SentimentEvent:
+        pass
+
+
+# --- Keyword-based (fast, free, no deps) ---
+
 TICKER_MAP = {
     "apple": "AAPL", "aapl": "AAPL",
     "microsoft": "MSFT", "msft": "MSFT",
@@ -26,7 +39,6 @@ SECTOR_KEYWORDS = {
     "consumer": ["retail", "consumer", "shopping"],
 }
 
-# Simple keyword-based sentiment (fast, no dependencies)
 BULLISH_WORDS = [
     "surge", "soar", "rally", "jump", "gain", "rise", "beat", "exceed",
     "upgrade", "bullish", "record high", "boom", "strong", "growth",
@@ -40,49 +52,107 @@ BEARISH_WORDS = [
 ]
 
 
-class SentimentAnalyzer:
-    """Keyword-based sentiment scorer. Fast, no ML dependencies."""
+class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
+    """Fast keyword-based scorer. No external dependencies."""
 
     def analyze(self, event: NewsEvent) -> SentimentEvent:
         text = (event.headline + " " + event.body).lower()
 
-        # Extract symbols
         symbols = []
         for keyword, ticker in TICKER_MAP.items():
             if keyword in text and ticker not in symbols:
                 symbols.append(ticker)
 
-        # Detect sector
         sector = ""
         for sec, keywords in SECTOR_KEYWORDS.items():
             if any(kw in text for kw in keywords):
                 sector = sec
                 break
 
-        # Score sentiment
         bull = sum(1 for w in BULLISH_WORDS if w in text)
         bear = sum(1 for w in BEARISH_WORDS if w in text)
         total = bull + bear
         if total == 0:
-            sentiment = 0.0
-            confidence = 0.0
+            sentiment, confidence = 0.0, 0.0
         else:
-            sentiment = (bull - bear) / total  # -1 to +1
-            confidence = min(total / 5, 1.0)   # more keywords = more confident
+            sentiment = (bull - bear) / total
+            confidence = min(total / 5, 1.0)
 
-        # Urgency based on strong words
-        urgency = "normal"
-        if any(w in text for w in ["crash", "surge", "ban", "war", "tariff"]):
-            urgency = "high"
+        urgency = "high" if any(w in text for w in ["crash", "surge", "ban", "war", "tariff"]) else "normal"
 
         return SentimentEvent(
-            source=event.source,
-            headline=event.headline,
+            source=event.source, headline=event.headline,
             timestamp=event.timestamp,
             analyzed_at=datetime.utcnow().isoformat() + "Z",
-            symbols=symbols,
-            sector=sector,
+            symbols=symbols, sector=sector,
             sentiment=round(sentiment, 3),
             confidence=round(confidence, 3),
             urgency=urgency,
         )
+
+
+# --- LLM-based (accurate, needs API key) ---
+
+LLM_PROMPT = """Analyze this financial news headline. Return JSON only, no explanation.
+
+Headline: "{headline}"
+
+Return:
+{{
+  "symbols": ["AAPL"],       // affected stock tickers, empty if none
+  "sector": "technology",    // affected sector or empty
+  "sentiment": 0.5,          // -1.0 (very bearish) to +1.0 (very bullish)
+  "confidence": 0.8,         // 0.0 to 1.0
+  "urgency": "normal"        // "low", "normal", "high"
+}}"""
+
+
+class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
+    """LLM-based scorer. More accurate, needs API key.
+
+    Supports any OpenAI-compatible API (OpenAI, Ollama, local LLMs).
+    """
+
+    def __init__(
+        self,
+        api_key: str = None,
+        base_url: str = "https://api.openai.com/v1",
+        model: str = "gpt-4o-mini",
+    ):
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.base_url = base_url
+        self.model = model
+
+    def analyze(self, event: NewsEvent) -> SentimentEvent:
+        import requests
+
+        prompt = LLM_PROMPT.format(headline=event.headline)
+        try:
+            resp = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={"model": self.model, "messages": [{"role": "user", "content": prompt}], "temperature": 0},
+                timeout=15,
+            )
+            content = resp.json()["choices"][0]["message"]["content"]
+            # Extract JSON from response (handle markdown code blocks)
+            content = re.sub(r"```json?\s*", "", content).replace("```", "").strip()
+            data = json.loads(content)
+
+            return SentimentEvent(
+                source=event.source, headline=event.headline,
+                timestamp=event.timestamp,
+                analyzed_at=datetime.utcnow().isoformat() + "Z",
+                symbols=data.get("symbols", []),
+                sector=data.get("sector", ""),
+                sentiment=round(float(data.get("sentiment", 0)), 3),
+                confidence=round(float(data.get("confidence", 0)), 3),
+                urgency=data.get("urgency", "normal"),
+            )
+        except Exception as e:
+            print(f"LLM analysis failed: {e}")
+            return SentimentEvent(
+                source=event.source, headline=event.headline,
+                timestamp=event.timestamp,
+                analyzed_at=datetime.utcnow().isoformat() + "Z",
+            )
