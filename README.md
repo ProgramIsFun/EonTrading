@@ -1,30 +1,29 @@
 # EonTrading
 
-A trading project that aims to earn money. 
+Trading system: data collection, backtesting, and live execution.
 
-Plan: inject 10k hkd to some brokers, trade with a lowest amount of money first. 
+## Structure
 
+```
+src/
+├── data/           # Market data collection & storage
+│   ├── providers/  # Data source adapters (yfinance, finnhub, etc.)
+│   └── utils/      # MongoDB helpers
+├── strategies/     # Strategy definitions (shared by backtest + live)
+├── backtest/       # Backtesting engine
+├── live/           # Live trading execution
+│   └── brokers/    # Broker API integrations (Futu, Webull, etc.)
+└── common/         # Shared models, config, utilities
+tasks/              # Jupyter notebooks for ad-hoc tasks
+docs/               # Documentation & reference material
+config/             # Environment configs (gitignored)
+```
 
-to be switch to public after removing credentials
+## Setup
 
-https://github.com/ProgramIsFun/EonTrading-Core
-
-https://github.com/ProgramIsFun/TradingApiTestingPlaying
-
-https://github.com/ProgramIsFun/EonTrading-Backtest
-
-https://github.com/ProgramIsFun/EonTrading-Web 
-
-https://github.com/ProgramIsFun/EonTrading-Webull
-
-https://github.com/ProgramIsFun/EonTrading-Futu
-
-https://github.com/ProgramIsFun/EonTrading-Trader
-
-https://github.com/ProgramIsFun/EonTrading-DataGrabber
-
-https://github.com/ProgramIsFun/EonTrading-Schema
-
-https://github.com/ProgramIsFun/ProgramIsFun-Python-Helpers
-
-https://github.com/ProgramIsFun/EonTrading-GeneralInfo
+```bash
+uv sync                    # core deps
+uv sync --extra backtest   # + backtesting
+uv sync --extra futu       # + Futu broker
+uv sync --extra dev        # + jupyter/notebooks
+```

@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+!.env.example
+config/*.env
+*.egg-info/
+dist/
+build/
+.venv/
+.ipynb_checkpoints/
+uv.lock

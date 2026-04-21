@@ -1,0 +1,20 @@
+[project]
+name = "eontrading"
+version = "0.1.0"
+description = "Trading system: data collection, backtesting, and live execution"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "yfinance>=0.2.66",
+    "finnhub-python>=2.4.25",
+    "pymongo[srv]>=4.15.3",
+    "python-dotenv>=1.2.1",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "tqdm>=4.67.1",
+]
+
+[project.optional-dependencies]
+backtest = ["backtesting>=0.6.5"]
+futu = ["futu-api>=9.1"]
+dev = ["ipykernel>=7.1.0", "jupyter>=1.0.0"]
