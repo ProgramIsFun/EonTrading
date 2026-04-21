@@ -18,4 +18,5 @@ dependencies = [
 [project.optional-dependencies]
 backtest = ["backtesting>=0.6.5"]
 futu = ["futu-api>=9.1"]
+redis = ["redis>=5.0.0"]
 dev = ["ipykernel>=7.1.0", "jupyter>=1.0.0"]
