@@ -1,2 +1,3 @@
 from .base_strategy import Strategy
-from .examples import SMACrossover, RSIMeanReversion
+from .sma_crossover import SMACrossover
+from .rsi_mean_reversion import RSIMeanReversion
