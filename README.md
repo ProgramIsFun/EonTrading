@@ -22,25 +22,36 @@ Mac (dev machine)  ──────>  Windows PC (192.168.0.38)
 ```
 src/
 ├── data/
-│   ├── providers/          # Data source adapters
-│   │   ├── base_provider.py    # Abstract MarketDataProvider interface
-│   │   └── yfinance_provider.py # YFinance implementation (HK + US stocks)
-│   ├── storage/            # Database backends
-│   │   ├── base_storage.py     # Abstract StorageBackend interface
-│   │   └── clickhouse_storage.py # ClickHouse implementation
-│   ├── ingest/             # Data ingestion pipelines
-│   │   └── yfinance_ingest.py  # Batch ingest from yfinance → ClickHouse
+│   ├── providers/              # Data source adapters
+│   │   ├── base_provider.py        # Abstract MarketDataProvider interface
+│   │   └── yfinance_provider.py    # YFinance implementation (HK + US stocks)
+│   ├── storage/                # Database backends
+│   │   ├── base_storage.py         # Abstract StorageBackend interface
+│   │   └── clickhouse_storage.py   # ClickHouse implementation
+│   ├── ingest/                 # Data ingestion pipelines
+│   │   └── yfinance_ingest.py      # Batch ingest from yfinance → ClickHouse
+│   ├── news/                   # News data sources
+│   │   └── newsapi_source.py       # NewsAPI.org integration
 │   └── utils/
-│       └── db_helper.py        # MongoDB connection helper
-├── strategies/             # Strategy definitions (shared by backtest + live)
-├── backtest/               # Backtesting engine
-├── live/
-│   └── brokers/
-│       └── futu_broker.py      # Futu OpenD integration (HK market)
-└── common/                 # Shared models, config, utilities
-scripts/                    # Runnable scripts
-config/                     # Symbol lists, env configs
-docs/                       # Reference material
+│       └── db_helper.py            # MongoDB connection helper
+├── strategies/                 # Strategy definitions
+│   ├── base_strategy.py            # Strategy + Signal interfaces
+│   ├── sma_crossover.py            # SMA crossover (price-based)
+│   ├── rsi_mean_reversion.py       # RSI mean reversion (price-based)
+│   └── sentiment.py                # Sentiment analyzers (keyword + LLM)
+├── backtest/                   # Backtesting engine
+│   └── engine.py                   # Backtest runner with costs, SL/TP, shorting
+├── live/                       # Live trading
+│   ├── brokers/
+│   │   └── futu_broker.py          # Futu OpenD integration (HK market)
+│   └── news_trader.py              # News sentiment live trader
+└── common/                     # Shared infrastructure
+    ├── costs.py                    # Transaction cost models (US, HK, crypto)
+    ├── events.py                   # Event schemas (NewsEvent, SentimentEvent, TradeEvent)
+    └── event_bus.py                # Pub/sub (LocalEventBus, RedisEventBus)
+scripts/                        # Runnable scripts
+config/                         # Symbol lists, env configs
+docs/                           # Reference material
 ```
 
 ## Setup
@@ -116,6 +127,62 @@ PYTHONPATH=. python scripts/backfill_sp500.py
 | yfinance | US, HK, global | 1d: 20+ years, 1m: last 30 days | Free, rate limited |
 | Futu OpenD | HK, US | Real-time tick | Free with account |
 | Binance | Crypto | Real-time tick | Free |
+
+## Strategies
+
+### Price-based (for backtesting)
+Strategies output signals (`1`=buy, `-1`=sell, `0`=hold) or rich `Signal` objects with per-trade size/SL/TP.
+
+| Strategy | File | Description |
+|----------|------|-------------|
+| SMA Crossover | `sma_crossover.py` | Buy when fast MA crosses above slow MA |
+| RSI Mean Reversion | `rsi_mean_reversion.py` | Buy oversold, sell overbought |
+
+### Sentiment-based (for live trading)
+Pluggable sentiment analyzers score news headlines and drive trading decisions.
+
+| Analyzer | When to use |
+|----------|-------------|
+| `KeywordSentimentAnalyzer` | Free, fast, no deps. Good enough for testing. |
+| `LLMSentimentAnalyzer` | More accurate. Works with OpenAI, Ollama, or any OpenAI-compatible API. |
+
+```python
+# Keyword (default)
+analyzer = KeywordSentimentAnalyzer()
+
+# OpenAI
+analyzer = LLMSentimentAnalyzer()  # uses OPENAI_API_KEY env var
+
+# Local Ollama
+analyzer = LLMSentimentAnalyzer(base_url="http://localhost:11434/v1", model="llama3", api_key="ollama")
+```
+
+### Backtest engine features
+| Feature | Flag | Default |
+|---------|------|---------|
+| Next-bar open execution | `exec_next_open` | on |
+| Short selling | `allow_short` | off |
+| Stop-loss | `stop_loss_pct` | off |
+| Take-profit | `take_profit_pct` | off |
+| Position sizing | `position_size` | 100% |
+| Transaction costs | `cost_model` | ZERO |
+
+## Live Trading
+
+### News sentiment trader
+Polls news sources, scores sentiment, trades automatically.
+
+```bash
+# Keyword analyzer (free)
+NEWSAPI_KEY=your_key PYTHONPATH=. python -m src.live.news_trader
+
+# LLM analyzer (more accurate)
+NEWSAPI_KEY=your_key OPENAI_API_KEY=your_key PYTHONPATH=. python -m src.live.news_trader
+```
+
+Architecture: `NewsAPI → NewsWatcher → SentimentAnalyzer → EventBus → SentimentTrader`
+
+See [Event System docs](docs/event-system.md) for details on pub/sub, message schemas, and backends.
 
 ## Brokers
 | Broker | Markets | Status |
