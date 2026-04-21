@@ -30,4 +30,4 @@ class CostModel:
 US_STOCKS = CostModel(commission=0.99, slippage_pct=0.0005)
 HK_STOCKS = CostModel(commission=0.0, slippage_pct=0.001, stamp_duty_pct=0.001)
 CRYPTO = CostModel(commission_pct=0.001, slippage_pct=0.0005)
-ZERO = CostModel()  # for testing without costs
+ZERO = CostModel(slippage_pct=0.0)  # for testing without costs
