@@ -2,28 +2,130 @@
 
 Trading system: data collection, backtesting, and live execution.
 
-## Structure
+## Architecture
+
+```
+Mac (dev machine)  ──────>  Windows PC (192.168.0.38)
+  - Code & scripts            - ClickHouse (Docker, port 8123/9000)
+  - Strategy dev               - AiRelay (port 3200, key: see .env)
+  - Backtesting                - Data storage (~134 MB for S&P 500 daily)
+```
+
+**Data flow:** yfinance → Python ingestion → ClickHouse (on Windows)
+
+**Databases:**
+- **ClickHouse** (`eontrading` db) — all OHLCV price data (time series)
+- **MongoDB** (`EonTradingDB`) — symbols list, configs, metadata
+
+## Project Structure
 
 ```
 src/
-├── data/           # Market data collection & storage
-│   ├── providers/  # Data source adapters (yfinance, finnhub, etc.)
-│   └── utils/      # MongoDB helpers
-├── strategies/     # Strategy definitions (shared by backtest + live)
-├── backtest/       # Backtesting engine
-├── live/           # Live trading execution
-│   └── brokers/    # Broker API integrations (Futu, Webull, etc.)
-└── common/         # Shared models, config, utilities
-tasks/              # Jupyter notebooks for ad-hoc tasks
-docs/               # Documentation & reference material
-config/             # Environment configs (gitignored)
+├── data/
+│   ├── providers/          # Data source adapters
+│   │   ├── base_provider.py    # Abstract MarketDataProvider interface
+│   │   └── yfinance_provider.py # YFinance implementation (HK + US stocks)
+│   ├── storage/            # Database backends
+│   │   ├── base_storage.py     # Abstract StorageBackend interface
+│   │   └── clickhouse_storage.py # ClickHouse implementation
+│   ├── ingest/             # Data ingestion pipelines
+│   │   └── yfinance_ingest.py  # Batch ingest from yfinance → ClickHouse
+│   └── utils/
+│       └── db_helper.py        # MongoDB connection helper
+├── strategies/             # Strategy definitions (shared by backtest + live)
+├── backtest/               # Backtesting engine
+├── live/
+│   └── brokers/
+│       └── futu_broker.py      # Futu OpenD integration (HK market)
+└── common/                 # Shared models, config, utilities
+scripts/                    # Runnable scripts
+config/                     # Symbol lists, env configs
+docs/                       # Reference material
 ```
 
 ## Setup
 
+### Prerequisites
+- Python 3.11+
+- ClickHouse running on Windows PC (Docker)
+- MongoDB Atlas (for symbols/metadata)
+
+### Install dependencies
 ```bash
-uv sync                    # core deps
-uv sync --extra backtest   # + backtesting
-uv sync --extra futu       # + Futu broker
-uv sync --extra dev        # + jupyter/notebooks
+pip install -e .                    # core deps
+pip install -e ".[backtest]"        # + backtesting
+pip install -e ".[futu]"            # + Futu broker
+pip install -e ".[dev]"             # + jupyter/notebooks
 ```
+
+### macOS SSL fix (if needed)
+```bash
+# Add to ~/.zshrc
+export SSL_CERT_FILE=$(python3 -c "import certifi; print(certifi.where())")
+```
+
+## ClickHouse
+
+### Start (on Windows PC)
+```bash
+docker run -d --name clickhouse \
+  -p 8123:8123 -p 9000:9000 \
+  -v clickhouse-data:/var/lib/clickhouse \
+  -e CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1 \
+  -e CLICKHOUSE_PASSWORD= \
+  clickhouse/clickhouse-server
+```
+
+### Schema
+Database: `eontrading`, Table: `ohlcv`
+
+| Column    | Type                | Notes |
+|-----------|---------------------|-------|
+| symbol    | String              | e.g. AAPL, 0700.HK |
+| exchange  | String              | US, HK, CRYPTO |
+| interval  | Enum8               | 1s, 1m, 5m, 15m, 1h, 1d, 1w |
+| timestamp | DateTime64(3, UTC)  | millisecond precision |
+| open      | Float64             | |
+| high      | Float64             | |
+| low       | Float64             | |
+| close     | Float64             | |
+| volume    | Float64             | |
+
+Engine: `MergeTree()`, ordered by `(symbol, interval, timestamp)`, partitioned by `toYear(timestamp)`.
+
+### Connect from Python
+```python
+from src.data.storage import ClickHouseStorage
+storage = ClickHouseStorage(host="192.168.0.38")
+df = storage.query_ohlcv("AAPL", "1d", start, end)
+```
+
+## Data
+
+### Current data
+- **S&P 500 daily** — 503 symbols, 4.3M+ rows, 1962–2026 (134 MB compressed)
+
+### Backfill
+```bash
+PYTHONPATH=. python scripts/backfill_sp500.py
+```
+
+### Data sources
+| Source | Markets | Granularity | Limits |
+|--------|---------|-------------|--------|
+| yfinance | US, HK, global | 1d: 20+ years, 1m: last 30 days | Free, rate limited |
+| Futu OpenD | HK, US | Real-time tick | Free with account |
+| Binance | Crypto | Real-time tick | Free |
+
+## Brokers
+| Broker | Markets | Status |
+|--------|---------|--------|
+| Futu | HK, US stocks | Basic integration (src/live/brokers/futu_broker.py) |
+| Webull | US stocks | Planned |
+| Binance | Crypto | Planned |
+
+## Related repos (archived)
+- [EonTrading-DataGrabber](https://github.com/ProgramIsFun/EonTrading-DataGrabber) — absorbed into src/data/
+- [EonTrading-Futu](https://github.com/ProgramIsFun/EonTrading-Futu) — absorbed into src/live/brokers/
+- [EonTrading-Core](https://github.com/ProgramIsFun/EonTrading-Core) — broker research/examples (reference)
+- [EonTrading-Webull](https://github.com/ProgramIsFun/EonTrading-Webull) — notebooks (reference)
