@@ -124,6 +124,25 @@ PYTHONPATH=. python scripts/backfill_sp500.py
 | Webull | US stocks | Planned |
 | Binance | Crypto | Planned |
 
+## Testing
+
+### Unit tests (no external deps, runs anywhere)
+```bash
+PYTHONPATH=. python -m pytest tests/ -v
+```
+- `tests/test_costs.py` — cost model math
+- `tests/test_strategies.py` — signal generation logic
+- `tests/test_backtest.py` — engine: PnL, drawdown, Sharpe, stop-loss, shorting
+
+All use synthetic in-memory data. No ClickHouse or network needed.
+
+### Integration scripts (need ClickHouse on Windows PC)
+```bash
+PYTHONPATH=. python scripts/test_ingest.py      # ingest 3 symbols → query back
+PYTHONPATH=. python scripts/test_backtest.py     # fetch AAPL from ClickHouse → backtest
+PYTHONPATH=. python scripts/backfill_sp500.py    # bulk load S&P 500 history
+```
+
 ## Related repos (archived)
 - [EonTrading-DataGrabber](https://github.com/ProgramIsFun/EonTrading-DataGrabber) — absorbed into src/data/
 - [EonTrading-Futu](https://github.com/ProgramIsFun/EonTrading-Futu) — absorbed into src/live/brokers/
