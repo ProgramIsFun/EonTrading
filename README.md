@@ -124,6 +124,10 @@ PYTHONPATH=. python scripts/backfill_sp500.py
 | Webull | US stocks | Planned |
 | Binance | Crypto | Planned |
 
+## Docs
+- [Event System](docs/event-system.md) — pub/sub architecture, message schemas, EventBus backends
+- [General Trading Info](docs/general-info.md) — options, warrants, terminology
+
 ## Testing
 
 ### Unit tests (no external deps, runs anywhere)
