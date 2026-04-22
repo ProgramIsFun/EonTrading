@@ -3,7 +3,8 @@ import asyncio
 from src.data.news import NewsAPISource
 from src.strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 from src.common.event_bus import EventBus, LocalEventBus
-from src.common.events import CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE, SentimentEvent
+from src.common.events import CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE, SentimentEvent, TradeEvent
+from datetime import datetime
 
 
 class NewsWatcher:
@@ -32,11 +33,12 @@ class NewsWatcher:
 class SentimentTrader:
     """Listens to sentiment events and decides trades."""
 
-    def __init__(self, bus: EventBus, threshold: float = 0.5, min_confidence: float = 0.4):
+    def __init__(self, bus: EventBus, threshold: float = 0.5, min_confidence: float = 0.4, position_size: float = 1.0):
         self.bus = bus
         self.threshold = threshold
         self.min_confidence = min_confidence
-        self.holdings = set()  # symbols we're holding
+        self.position_size = position_size
+        self.holdings = set()
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_SENTIMENT, self._on_sentiment)
@@ -49,19 +51,29 @@ class SentimentTrader:
             return
 
         for symbol in event.symbols:
+            action = None
             if event.sentiment <= -self.threshold and symbol in self.holdings:
-                print(f"  SELL {symbol} (sentiment: {event.sentiment}, headline: {event.headline[:60]})")
+                action = "sell"
                 self.holdings.discard(symbol)
-                # TODO: publish TradeEvent and execute via broker
-
             elif event.sentiment >= self.threshold and symbol not in self.holdings:
-                print(f"  BUY {symbol} (sentiment: {event.sentiment}, headline: {event.headline[:60]})")
+                action = "buy"
                 self.holdings.add(symbol)
-                # TODO: publish TradeEvent and execute via broker
+
+            if action:
+                trade = TradeEvent(
+                    symbol=symbol, action=action,
+                    reason=f"sentiment:{event.sentiment} on {event.headline[:60]}",
+                    timestamp=datetime.utcnow().isoformat() + "Z",
+                    size=self.position_size,
+                )
+                print(f"  {action.upper()} {symbol} (sentiment: {event.sentiment}, headline: {event.headline[:60]})")
+                await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
 
 
 async def main():
     import os
+    from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker
+
     api_key = os.getenv("NEWSAPI_KEY")
     if not api_key:
         print("Set NEWSAPI_KEY env var. Get one free at https://newsapi.org")
@@ -80,9 +92,19 @@ async def main():
         analyzer = KeywordSentimentAnalyzer()
         print("Using keyword sentiment analyzer (set OPENAI_API_KEY for LLM)")
 
+    # Pick broker: dry-run (default) or Futu (needs OpenD running)
+    if os.getenv("FUTU_LIVE"):
+        broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
+        print(f"Using Futu broker ({'real' if os.getenv('FUTU_REAL') else 'simulate'})")
+    else:
+        broker = LogBroker()
+        print("Using dry-run broker (set FUTU_LIVE=1 for Futu)")
+
     watcher = NewsWatcher(bus, sources=[source], analyzer=analyzer, interval_sec=120)
     trader = SentimentTrader(bus, threshold=0.5, min_confidence=0.4)
+    executor = TradeExecutor(bus, broker)
     await trader.start()
+    await executor.start()
 
     print("Running news sentiment trader (Ctrl+C to stop)...")
     await watcher.run()

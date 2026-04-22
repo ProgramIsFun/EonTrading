@@ -2,7 +2,7 @@
 import os
 import requests
 from datetime import datetime, timedelta
-from ..common.events import NewsEvent
+from src.common.events import NewsEvent
 
 
 class NewsSource:
