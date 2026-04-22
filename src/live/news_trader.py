@@ -72,17 +72,28 @@ class SentimentTrader:
 
 async def main():
     import os
+    from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource
     from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker
-
-    api_key = os.getenv("NEWSAPI_KEY")
-    if not api_key:
-        print("Set NEWSAPI_KEY env var. Get one free at https://newsapi.org")
-        return
 
     bus = LocalEventBus()
     await bus.start()
 
-    source = NewsAPISource(api_key=api_key)
+    # Build sources — each activates if its key is set (RSS/Reddit need no key)
+    sources = []
+    if os.getenv("NEWSAPI_KEY"):
+        sources.append(NewsAPISource())
+        print("  ✅ NewsAPI")
+    if os.getenv("FINNHUB_KEY"):
+        sources.append(FinnhubSource())
+        print("  ✅ Finnhub")
+    sources.append(RSSSource())
+    print("  ✅ RSS feeds (Yahoo Finance, CNBC)")
+    sources.append(RedditSource())
+    print("  ✅ Reddit (r/wallstreetbets, r/stocks, r/investing)")
+
+    if not sources:
+        print("No news sources available.")
+        return
 
     # Pick analyzer: keyword (free) or LLM (needs OPENAI_API_KEY)
     if os.getenv("OPENAI_API_KEY"):
@@ -100,7 +111,7 @@ async def main():
         broker = LogBroker()
         print("Using dry-run broker (set FUTU_LIVE=1 for Futu)")
 
-    watcher = NewsWatcher(bus, sources=[source], analyzer=analyzer, interval_sec=120)
+    watcher = NewsWatcher(bus, sources=sources, analyzer=analyzer, interval_sec=120)
     trader = SentimentTrader(bus, threshold=0.5, min_confidence=0.4)
     executor = TradeExecutor(bus, broker)
     await trader.start()
