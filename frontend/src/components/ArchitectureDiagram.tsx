@@ -69,6 +69,21 @@ export default function ArchitectureDiagram() {
           </div>
         </div>
         <div style={{ fontSize: 10, color: "#666", marginTop: 8 }}>Same components, same logic — only the event bus changes. Switch anytime with no code changes.</div>
+        <div style={{ marginTop: 8, fontSize: 11, color: "#ccc" }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Channel routing (how services communicate):</div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#888", fontSize: 11 }}>
+            <span style={{ color: "#22c55e" }}>Watcher</span>
+            <span>→ publishes →</span>
+            <code style={{ background: "#2a2a3e", padding: "2px 6px", borderRadius: 3, color: "#818cf8" }}>sentiment</code>
+            <span>→ subscribes →</span>
+            <span style={{ color: "#f59e0b" }}>Trader</span>
+            <span>→ publishes →</span>
+            <code style={{ background: "#2a2a3e", padding: "2px 6px", borderRadius: 3, color: "#818cf8" }}>trade</code>
+            <span>→ subscribes →</span>
+            <span style={{ color: "#ef4444" }}>Executor</span>
+          </div>
+          <div style={{ fontSize: 10, color: "#555", marginTop: 4 }}>Each service only receives messages from channels it subscribes to. Executor never sees sentiment events.</div>
+        </div>
       </div>
 
       {/* Live Pipeline */}
