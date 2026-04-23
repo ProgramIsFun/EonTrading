@@ -42,10 +42,29 @@ class SentimentBacktestResult:
         )
 
 
-def fetch_prices(symbol: str, start: str, end: str) -> pd.DataFrame:
-    df = yf.download(symbol, start=start, end=end, auto_adjust=True, progress=False)
+def fetch_prices(symbol: str, start: str, end: str, interval: str = "1h") -> pd.DataFrame:
+    """Fetch price data. Tries requested interval, falls back to daily."""
+    df = None
+    if interval != "1d":
+        try:
+            df = yf.download(symbol, start=start, end=end, interval=interval, auto_adjust=True, progress=False)
+            if df.empty:
+                df = None
+        except Exception:
+            df = None
+    if df is None:
+        df = yf.download(symbol, start=start, end=end, interval="1d", auto_adjust=True, progress=False)
+        interval = "1d"
     df = df.reset_index()
+    # Normalize column names (yfinance returns MultiIndex for single ticker)
+    first_col = df.columns[0]
+    date_col = first_col if isinstance(first_col, str) else first_col[0]
     df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
+    df = df.rename(columns={date_col.lower(): "timestamp"})
+    if "datetime" in df.columns:
+        df = df.rename(columns={"datetime": "timestamp"})
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    df._interval = interval
     return df
 
 
@@ -65,24 +84,32 @@ def run_sentiment_backtest(
     cooldown_days: int = 1,
     stop_loss_pct: float = 0.0,
     take_profit_pct: float = 0.0,
+    interval: str = "1h",
 ) -> SentimentBacktestResult:
     analyzer = analyzer or KeywordSentimentAnalyzer()
-    prices = fetch_prices(symbol, start, end)
+    prices = fetch_prices(symbol, start, end, interval=interval)
     if prices.empty:
         raise ValueError(f"No price data for {symbol}")
+    used_interval = getattr(prices, '_interval', interval)
+    print(f"  Using {used_interval} data ({len(prices)} bars)")
 
-    prices["date_str"] = prices["date"].dt.strftime("%Y-%m-%d")
-    price_map = dict(zip(prices["date_str"], prices["close"]))
-    dates_sorted = sorted(price_map.keys())
+    # Convert day-based params to bar counts
+    bars_per_day = {"1h": 7, "1d": 1}.get(used_interval, 1)
+    cooldown_bars = max(cooldown_days * bars_per_day, 1)
+    max_hold_bars = max_hold_days * bars_per_day if max_hold_days > 0 else 0
 
-    def next_trading_day(date_str):
-        for d in dates_sorted:
-            if d >= date_str:
-                return d
-        return None
+    # Find the nearest bar at or after a given timestamp
+    timestamps = prices["timestamp"].values
 
-    # Analyze news and build signal map: date → best signal
-    signal_map = {}
+    def find_bar(news_ts: str) -> int:
+        """Return index of nearest bar at or after news timestamp."""
+        ts = pd.Timestamp(news_ts, tz="UTC") if "T" in news_ts else pd.Timestamp(news_ts + "T09:30:00", tz="UTC")
+        ts_val = ts.to_numpy()
+        idx = timestamps.searchsorted(ts_val)
+        return int(min(idx, len(prices) - 1))
+
+    # Analyze news and build signal list
+    signals = []
     for ev in news_events:
         news = NewsEvent(
             source="backtest", headline=ev["headline"],
@@ -90,29 +117,35 @@ def run_sentiment_backtest(
         )
         result = analyzer.analyze(news)
         if result.confidence >= min_confidence and symbol in result.symbols:
-            trade_date = next_trading_day(ev["date"])
-            if trade_date:
-                # Keep strongest signal per day
-                existing = signal_map.get(trade_date)
-                if not existing or abs(result.sentiment) > abs(existing["sentiment"]):
-                    signal_map[trade_date] = {
-                        "sentiment": result.sentiment,
-                        "confidence": result.confidence,
-                        "headline": ev["headline"],
-                    }
+            bar_idx = find_bar(ev["date"])
+            signals.append({
+                "bar_idx": bar_idx,
+                "sentiment": result.sentiment,
+                "confidence": result.confidence,
+                "headline": ev["headline"],
+            })
+
+    # Dedup: keep strongest signal per bar
+    signal_map = {}
+    for sig in signals:
+        idx = sig["bar_idx"]
+        existing = signal_map.get(idx)
+        if not existing or abs(sig["sentiment"]) > abs(existing["sentiment"]):
+            signal_map[idx] = sig
 
     # Simulate
     cash = initial_capital
     shares = 0
     entry_price = 0.0
-    entry_date_idx = 0
+    entry_bar_idx = 0
     last_trade_idx = -999
     trades = []
     equity = []
 
-    for i, row in prices.iterrows():
-        date_str = row["date_str"]
+    for i in range(len(prices)):
+        row = prices.iloc[i]
         price = row["close"]
+        ts = str(row["timestamp"])[:19]
 
         # Check stop-loss / take-profit on open positions
         if shares > 0:
@@ -121,7 +154,7 @@ def run_sentiment_backtest(
                 pnl = (sl_price - entry_price) * shares
                 cash += shares * sl_price
                 trades.append(SentimentTrade(
-                    symbol=symbol, action="sell (SL)", date=date_str,
+                    symbol=symbol, action="sell (SL)", date=ts,
                     price=sl_price, sentiment=0, headline="Stop loss hit",
                     shares=shares, pnl=pnl,
                 ))
@@ -131,30 +164,29 @@ def run_sentiment_backtest(
                 pnl = (tp_price - entry_price) * shares
                 cash += shares * tp_price
                 trades.append(SentimentTrade(
-                    symbol=symbol, action="sell (TP)", date=date_str,
+                    symbol=symbol, action="sell (TP)", date=ts,
                     price=tp_price, sentiment=0, headline="Take profit hit",
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0
 
             # Max hold period
-            if max_hold_days > 0 and shares > 0 and (i - entry_date_idx) >= max_hold_days:
+            if max_hold_days > 0 and shares > 0 and (i - entry_bar_idx) >= max_hold_bars:
                 pnl = (price - entry_price) * shares
                 cash += shares * price
                 trades.append(SentimentTrade(
-                    symbol=symbol, action="sell (expire)", date=date_str,
-                    price=price, sentiment=0, headline=f"Max hold {max_hold_days}d reached",
+                    symbol=symbol, action="sell (expire)", date=ts,
+                    price=price, sentiment=0, headline=f"Max hold reached",
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0
 
         # Check signals
-        sig = signal_map.get(date_str)
-        if sig and (i - last_trade_idx) >= cooldown_days:
+        sig = signal_map.get(i)
+        if sig and (i - last_trade_idx) >= cooldown_bars:
             sent = sig["sentiment"]
 
             if sent >= threshold and shares == 0:
-                # Position size scaled by sentiment strength
                 size = min(abs(sent), 1.0) if scale_by_sentiment else 1.0
                 buy_shares = int((cash * size) / price)
                 if buy_shares > 0:
@@ -162,10 +194,10 @@ def run_sentiment_backtest(
                     cash -= buy_shares * price + cost
                     shares = buy_shares
                     entry_price = price
-                    entry_date_idx = i
+                    entry_bar_idx = i
                     last_trade_idx = i
                     trades.append(SentimentTrade(
-                        symbol=symbol, action="buy", date=date_str,
+                        symbol=symbol, action="buy", date=ts,
                         price=price, sentiment=sent, headline=sig["headline"],
                         shares=buy_shares,
                     ))
@@ -176,7 +208,7 @@ def run_sentiment_backtest(
                 cash += shares * price - cost
                 last_trade_idx = i
                 trades.append(SentimentTrade(
-                    symbol=symbol, action="sell", date=date_str,
+                    symbol=symbol, action="sell", date=ts,
                     price=price, sentiment=sent, headline=sig["headline"],
                     shares=shares, pnl=pnl,
                 ))
@@ -187,10 +219,11 @@ def run_sentiment_backtest(
     # Close open position
     if shares > 0:
         last_price = prices["close"].iloc[-1]
+        ts = str(prices["timestamp"].iloc[-1])[:19]
         pnl = (last_price - entry_price) * shares
         cash += shares * last_price
         trades.append(SentimentTrade(
-            symbol=symbol, action="sell (close)", date=dates_sorted[-1],
+            symbol=symbol, action="sell (close)", date=ts,
             price=last_price, sentiment=0, headline="End of backtest",
             shares=shares, pnl=pnl,
         ))
