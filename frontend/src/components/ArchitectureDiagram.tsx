@@ -75,8 +75,6 @@ export default function ArchitectureDiagram() {
           <div>Executor → subscribes to <code style={{ color: "#818cf8" }}>trade</code> channel</div>
           <div style={{ color: "#555", marginTop: 4 }}>Same channels whether LocalEventBus (in-memory) or RedisEventBus (cross-process).</div>
         </div>
-        </div>
-        <div style={{ fontSize: 10, color: "#666", marginTop: 8 }}>Same components, same logic — only the event bus changes. Switch anytime with no code changes.</div>
       </div>
 
       {/* Live Pipeline */}
