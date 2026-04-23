@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from ..common.events import NewsEvent
 from ..strategies.sentiment import KeywordSentimentAnalyzer, BaseSentimentAnalyzer
 from ..common.costs import CostModel, ZERO
+from ..common.trading_logic import TradingLogic, PositionState
 
 
 @dataclass
@@ -25,7 +26,11 @@ class Position:
     shares: int
     entry_price: float
     entry_bar: int
-    peak_price: float = 0.0  # tracks highest price for trailing SL
+    state: PositionState = None  # shared trading logic state
+
+    def __post_init__(self):
+        if self.state is None:
+            self.state = PositionState(self.symbol, self.shares, self.entry_price)
 
 
 @dataclass
@@ -77,6 +82,12 @@ def run_portfolio_backtest(
     cooldown_days: int = 1,
 ) -> PortfolioResult:
     analyzer = analyzer or KeywordSentimentAnalyzer()
+    logic = TradingLogic(
+        threshold=threshold, min_confidence=min_confidence,
+        stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct,
+        trailing_sl=trailing_sl, max_allocation=max_allocation,
+        risk_per_trade=risk_per_trade,
+    )
 
     # Analyze all news → list of (timestamp, symbols, sentiment, headline)
     signals = []
@@ -184,24 +195,24 @@ def run_portfolio_backtest(
 
             closed = False
             # Update peak price for trailing SL
-            if trailing_sl:
-                pos.peak_price = max(pos.peak_price, high)
-            sl_ref = pos.peak_price if trailing_sl else pos.entry_price
-            if stop_loss_pct > 0 and low <= sl_ref * (1 - stop_loss_pct):
-                sell_price = sl_ref * (1 - stop_loss_pct)
-                cost = cost_model.sell_cost(sell_price, pos.shares)
-                pnl = (sell_price - pos.entry_price) * pos.shares - cost
-                cash += pos.shares * sell_price - cost
-                trades.append(Trade(sym, "sell (SL)", ts_str, sell_price, 0, "Stop loss", pos.shares, pnl))
+            logic.update_peak(pos.state, high)
+
+            sl_price = logic.check_stop_loss(pos.state, low)
+            if sl_price is not None:
+                cost = cost_model.sell_cost(sl_price, pos.shares)
+                pnl = (sl_price - pos.entry_price) * pos.shares - cost
+                cash += pos.shares * sl_price - cost
+                trades.append(Trade(sym, "sell (SL)", ts_str, sl_price, 0, "Stop loss", pos.shares, pnl))
                 closed = True
-            elif take_profit_pct > 0 and high >= pos.entry_price * (1 + take_profit_pct):
-                sell_price = pos.entry_price * (1 + take_profit_pct)
-                cost = cost_model.sell_cost(sell_price, pos.shares)
-                pnl = (sell_price - pos.entry_price) * pos.shares - cost
-                cash += pos.shares * sell_price - cost
-                trades.append(Trade(sym, "sell (TP)", ts_str, sell_price, 0, "Take profit", pos.shares, pnl))
-                closed = True
-            elif max_hold_days > 0 and (bar_idx - pos.entry_bar) >= max_hold_days * bars_per_day:
+            else:
+                tp_price = logic.check_take_profit(pos.state, high)
+                if tp_price is not None:
+                    cost = cost_model.sell_cost(tp_price, pos.shares)
+                    pnl = (tp_price - pos.entry_price) * pos.shares - cost
+                    cash += pos.shares * tp_price - cost
+                    trades.append(Trade(sym, "sell (TP)", ts_str, tp_price, 0, "Take profit", pos.shares, pnl))
+                    closed = True
+            if not closed and max_hold_days > 0 and (bar_idx - pos.entry_bar) >= max_hold_days * bars_per_day:
                 exec_p = float(bar["open"])
                 cost = cost_model.sell_cost(exec_p, pos.shares)
                 pnl = (exec_p - pos.entry_price) * pos.shares - cost
@@ -225,21 +236,15 @@ def run_portfolio_backtest(
                     exec_p = get_price(sym, ts, "open")
                     if exec_p is None:
                         continue
-                    # Position sizing
-                    eff_price = cost_model.effective_buy_price(exec_p)
-                    alloc = cash * max_allocation if max_allocation > 0 else cash
-                    if risk_per_trade > 0 and stop_loss_pct > 0:
-                        risk_alloc = (cash * risk_per_trade) / stop_loss_pct
-                        alloc = min(alloc, risk_alloc)
-                    buy_shares = int(alloc / eff_price)
+                    buy_shares = logic.should_buy(sig["sentiment"], sig.get("confidence", 1.0), sym, positions, cash, cost_model.effective_buy_price(exec_p))
                     if buy_shares > 0 and buy_shares * exec_p < cash:
                         cost = cost_model.buy_cost(exec_p, buy_shares)
                         cash -= buy_shares * exec_p + cost
-                        positions[sym] = Position(sym, buy_shares, exec_p, bar_idx, exec_p)
+                        positions[sym] = Position(sym, buy_shares, exec_p, bar_idx)
                         last_trade_ts[sym] = bar_idx
                         trades.append(Trade(sym, "buy", ts_str, exec_p, sig["sentiment"], sig["headline"], buy_shares))
 
-                elif sig["sentiment"] <= -threshold and sym in positions:
+                elif logic.should_sell_on_sentiment(sig["sentiment"], sig.get("confidence", 1.0), sym, positions):
                     pos = positions[sym]
                     exec_p = get_price(sym, ts, "open")
                     if exec_p is None:

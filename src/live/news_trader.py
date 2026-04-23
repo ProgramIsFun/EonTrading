@@ -33,34 +33,29 @@ class NewsWatcher:
 class SentimentTrader:
     """Listens to sentiment events and decides trades.
 
-    NOTE: Trading logic here is separate from the backtest engine
-    (src/backtest/portfolio_backtest.py). When backtest strategy changes
-    (e.g. trailing SL, position sizing), sync those changes here before going live.
+    Uses shared TradingLogic from src/common/trading_logic.py — same logic as backtest.
     """
 
-    def __init__(self, bus: EventBus, threshold: float = 0.5, min_confidence: float = 0.4, position_size: float = 1.0):
+    def __init__(self, bus: EventBus, logic: 'TradingLogic' = None, **kwargs):
+        from src.common.trading_logic import TradingLogic
         self.bus = bus
-        self.threshold = threshold
-        self.min_confidence = min_confidence
-        self.position_size = position_size
-        self.holdings = set()
+        self.logic = logic or TradingLogic(**kwargs)
+        self.holdings = set()  # symbols we're holding
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_SENTIMENT, self._on_sentiment)
 
     async def _on_sentiment(self, msg: dict):
         event = SentimentEvent.from_dict(msg)
-        if event.confidence < self.min_confidence:
-            return
         if not event.symbols:
             return
 
         for symbol in event.symbols:
             action = None
-            if event.sentiment <= -self.threshold and symbol in self.holdings:
+            if self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, {s: True for s in self.holdings}):
                 action = "sell"
                 self.holdings.discard(symbol)
-            elif event.sentiment >= self.threshold and symbol not in self.holdings:
+            elif event.confidence >= self.logic.min_confidence and event.sentiment >= self.logic.threshold and symbol not in self.holdings:
                 action = "buy"
                 self.holdings.add(symbol)
 
@@ -69,7 +64,6 @@ class SentimentTrader:
                     symbol=symbol, action=action,
                     reason=f"sentiment:{event.sentiment} on {event.headline[:60]}",
                     timestamp=datetime.utcnow().isoformat() + "Z",
-                    size=self.position_size,
                 )
                 print(f"  {action.upper()} {symbol} (sentiment: {event.sentiment}, headline: {event.headline[:60]})")
                 await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
@@ -117,7 +111,7 @@ async def main():
         print("Using dry-run broker (set FUTU_LIVE=1 for Futu)")
 
     watcher = NewsWatcher(bus, sources=sources, analyzer=analyzer, interval_sec=120)
-    trader = SentimentTrader(bus, threshold=0.5, min_confidence=0.4)
+    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15)
     executor = TradeExecutor(bus, broker)
     await trader.start()
     await executor.start()
