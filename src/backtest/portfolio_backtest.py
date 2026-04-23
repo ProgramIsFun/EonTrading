@@ -89,25 +89,21 @@ def run_portfolio_backtest(
         risk_per_trade=risk_per_trade,
     )
 
-    # Analyze all news → list of (timestamp, symbols, sentiment, headline)
-    signals = []
+    # Pre-process news: parse timestamps and sort
+    news_queue = []
     for ev in news_events:
-        news = NewsEvent(source="backtest", headline=ev["headline"],
-                         timestamp=ev["date"], body=ev.get("body", ""))
+        ts_str = ev["date"]
+        ts = pd.Timestamp(ts_str, tz="UTC") if "T" in ts_str else pd.Timestamp(ts_str + "T09:30:00", tz="UTC")
+        news_queue.append({"ts": ts, "headline": ev["headline"], "body": ev.get("body", ""), "date": ev["date"]})
+    news_queue.sort(key=lambda n: n["ts"])
+
+    # First pass: quick analyze without positions to discover which symbols we need prices for
+    all_symbols = set()
+    for nq in news_queue:
+        news = NewsEvent(source="backtest", headline=nq["headline"], timestamp=nq["date"], body=nq["body"])
         result = analyzer.analyze(news)
         if result.confidence >= min_confidence and result.symbols:
-            signals.append({
-                "date": ev["date"],
-                "symbols": result.symbols,
-                "sentiment": result.sentiment,
-                "headline": ev["headline"],
-            })
-    signals.sort(key=lambda s: s["date"])
-
-    # Collect all symbols we need prices for
-    all_symbols = set()
-    for sig in signals:
-        all_symbols.update(sig["symbols"])
+            all_symbols.update(result.symbols)
     if not all_symbols:
         return PortfolioResult(initial_capital=initial_capital, final_value=initial_capital,
                                total_return_pct=0, max_drawdown_pct=0, total_trades=0, win_rate=0)
@@ -128,24 +124,21 @@ def run_portfolio_backtest(
         df["ts"] = pd.to_datetime(df["ts"], utc=True)
         price_data[sym] = df
 
-    # Build unified timeline (all unique timestamps across all symbols)
+    # Build unified timeline
     all_ts = set()
     for df in price_data.values():
         all_ts.update(df["ts"].values)
     timeline = sorted(all_ts)
 
-    # Build signal map: timestamp → signal
-    signal_map = {}
-    for sig in signals:
-        ts_str = sig["date"]
-        ts = pd.Timestamp(ts_str, tz="UTC") if "T" in ts_str else pd.Timestamp(ts_str + "T09:30:00", tz="UTC")
-        ts_val = ts.to_numpy()
-        # Find next bar after news
+    # Build news map: bar timestamp → news event (for re-analysis with positions during simulation)
+    news_map = {}
+    for nq in news_queue:
+        ts_val = nq["ts"].to_numpy()
         idx = pd.Index(timeline).searchsorted(ts_val, side="right")
         if idx < len(timeline):
             bar_ts = timeline[idx]
-            if bar_ts not in signal_map or abs(sig["sentiment"]) > abs(signal_map[bar_ts]["sentiment"]):
-                signal_map[bar_ts] = sig
+            if bar_ts not in news_map:
+                news_map[bar_ts] = nq
 
     # Price lookup helper
     def get_price(symbol, ts, col="open"):
@@ -223,38 +216,41 @@ def run_portfolio_backtest(
             if closed:
                 del positions[sym]
 
-        # Check signals
-        sig = signal_map.get(ts)
-        if sig:
-            for sym in sig["symbols"]:
-                # Cooldown check
-                last = last_trade_ts.get(sym, 0)
-                if bar_idx - last < cooldown_days * bars_per_day:
-                    continue
-
-                if sig["sentiment"] >= threshold and sym not in positions:
-                    exec_p = get_price(sym, ts, "open")
-                    if exec_p is None:
+        # Check news — re-analyze with current positions for portfolio-aware scoring
+        nq = news_map.get(ts)
+        if nq:
+            news = NewsEvent(source="backtest", headline=nq["headline"], timestamp=nq["date"], body=nq["body"])
+            sig = analyzer.analyze(news, positions={s: pos.shares for s, pos in positions.items()})
+            if sig.confidence >= min_confidence and sig.symbols:
+                for sym in sig.symbols:
+                    # Cooldown check
+                    last = last_trade_ts.get(sym, 0)
+                    if bar_idx - last < cooldown_days * bars_per_day:
                         continue
-                    buy_shares = logic.should_buy(sig["sentiment"], sig.get("confidence", 1.0), sym, positions, cash, cost_model.effective_buy_price(exec_p))
-                    if buy_shares > 0 and buy_shares * exec_p < cash:
-                        cost = cost_model.buy_cost(exec_p, buy_shares)
-                        cash -= buy_shares * exec_p + cost
-                        positions[sym] = Position(sym, buy_shares, exec_p, bar_idx)
+
+                    if sig.sentiment >= threshold and sym not in positions:
+                        exec_p = get_price(sym, ts, "open")
+                        if exec_p is None:
+                            continue
+                        buy_shares = logic.should_buy(sig.sentiment, sig.confidence, sym, positions, cash, cost_model.effective_buy_price(exec_p))
+                        if buy_shares > 0 and buy_shares * exec_p < cash:
+                            cost = cost_model.buy_cost(exec_p, buy_shares)
+                            cash -= buy_shares * exec_p + cost
+                            positions[sym] = Position(sym, buy_shares, exec_p, bar_idx)
+                            last_trade_ts[sym] = bar_idx
+                            trades.append(Trade(sym, "buy", ts_str, exec_p, sig.sentiment, nq["headline"], buy_shares))
+
+                    elif logic.should_sell_on_sentiment(sig.sentiment, sig.confidence, sym, positions):
+                        pos = positions[sym]
+                        exec_p = get_price(sym, ts, "open")
+                        if exec_p is None:
+                            continue
+                        cost = cost_model.sell_cost(exec_p, pos.shares)
+                        pnl = (exec_p - pos.entry_price) * pos.shares - cost
+                        cash += pos.shares * exec_p - cost
                         last_trade_ts[sym] = bar_idx
-                        trades.append(Trade(sym, "buy", ts_str, exec_p, sig["sentiment"], sig["headline"], buy_shares))
-
-                elif logic.should_sell_on_sentiment(sig["sentiment"], sig.get("confidence", 1.0), sym, positions):
-                    pos = positions[sym]
-                    exec_p = get_price(sym, ts, "open")
-                    if exec_p is None:
-                        continue
-                    cost = cost_model.sell_cost(exec_p, pos.shares)
-                    pnl = (exec_p - pos.entry_price) * pos.shares - cost
-                    cash += pos.shares * exec_p - cost
-                    last_trade_ts[sym] = bar_idx
-                    trades.append(Trade(sym, "sell", ts_str, exec_p, sig["sentiment"], sig["headline"], pos.shares, pnl))
-                    del positions[sym]
+                        trades.append(Trade(sym, "sell", ts_str, exec_p, sig.sentiment, nq["headline"], pos.shares, pnl))
+                        del positions[sym]
 
         # Portfolio value
         port_value = cash
