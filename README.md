@@ -91,6 +91,7 @@ docs/                           # Reference material
 - [ ] Multi-timeframe: daily sentiment + hourly execution
 
 ### To Do — Infra
+- [ ] Split live pipeline into separate processes (NewsWatcher, Analyzer, Trader, Executor) via RedisEventBus
 - [ ] Deploy API to Windows PC alongside ClickHouse
 - [ ] Telegram/webhook alerts before executing trades
 - [ ] Set up Ollama on Windows PC for free local LLM
