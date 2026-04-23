@@ -85,7 +85,7 @@ docs/                           # Reference material
 - [x] 43 tests passing
 
 ### To Do — Strategy
-- [ ] LLM analyzer — keyword misses context ("growth slows" = bearish)
+- [ ] LLM analyzer — keyword misses context ("growth slows" = bearish). Include inverse ETFs (SQQQ, SH) in prompt for bearish market news.
 - [ ] Sector-based trading — "tariffs on China" should trigger tech stocks
 - [ ] Backtest with collected real news from MongoDB
 - [ ] Urgency-based position sizing
