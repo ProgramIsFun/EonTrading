@@ -66,12 +66,15 @@ export default function ArchitectureDiagram() {
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_trader</code>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_executor</code>
             </div>
-            <div style={{ marginTop: 6, fontSize: 10, color: "#888", lineHeight: 1.6 }}>
-              <div>Watcher → publishes to <code style={{ color: "#818cf8" }}>sentiment</code> channel</div>
-              <div>Trader → subscribes to <code style={{ color: "#818cf8" }}>sentiment</code>, publishes to <code style={{ color: "#818cf8" }}>trade</code> channel</div>
-              <div>Executor → subscribes to <code style={{ color: "#818cf8" }}>trade</code> channel</div>
-            </div>
           </div>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 10, color: "#888", lineHeight: 1.6, borderTop: "1px solid #333", paddingTop: 8 }}>
+          <div style={{ fontWeight: 600, color: "#ccc", marginBottom: 4 }}>Channel routing (both modes):</div>
+          <div>Watcher → publishes to <code style={{ color: "#818cf8" }}>sentiment</code> channel</div>
+          <div>Trader → subscribes to <code style={{ color: "#818cf8" }}>sentiment</code>, publishes to <code style={{ color: "#818cf8" }}>trade</code> channel</div>
+          <div>Executor → subscribes to <code style={{ color: "#818cf8" }}>trade</code> channel</div>
+          <div style={{ color: "#555", marginTop: 4 }}>Same channels whether LocalEventBus (in-memory) or RedisEventBus (cross-process).</div>
+        </div>
         </div>
         <div style={{ fontSize: 10, color: "#666", marginTop: 8 }}>Same components, same logic — only the event bus changes. Switch anytime with no code changes.</div>
       </div>
