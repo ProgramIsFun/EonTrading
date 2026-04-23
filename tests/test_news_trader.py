@@ -9,7 +9,8 @@ from src.common.events import (
     CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE,
 )
 from src.strategies.sentiment import KeywordSentimentAnalyzer
-from src.live.news_trader import NewsWatcher, SentimentTrader
+from src.live.news_watcher import NewsWatcher
+from src.live.sentiment_trader import SentimentTrader
 from src.live.brokers.broker import Broker, TradeExecutor
 
 

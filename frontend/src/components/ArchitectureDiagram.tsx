@@ -68,7 +68,7 @@ export default function ArchitectureDiagram() {
           <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>NewsWatcher</div>
             {internalTag()}
-            {pathTag("src/live/news_trader.py")}
+            {pathTag("src/live/news_watcher.py")}
             {pathTag("src/common/news_poller.py")}
           </div>
           <span style={arrow}>→</span>
@@ -85,7 +85,7 @@ export default function ArchitectureDiagram() {
             <div style={{ fontWeight: 600 }}>SentimentTrader</div>
             <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
             {internalTag()}
-            {pathTag("src/live/news_trader.py")}
+            {pathTag("src/live/sentiment_trader.py")}
           </div>
           <span style={arrow}>→</span>
           {label("[trade]")}
