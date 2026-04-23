@@ -40,9 +40,19 @@ export default function ParamsPanel({ params, onChange, onRun, loading }: Props)
           </div>
         ))}
       </div>
-      <button
-        onClick={onRun}
-        disabled={loading}
+      <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 16 }}>
+        <label style={{ fontSize: 13, color: "#ccc", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={params.trailing_sl}
+            onChange={(e) => onChange({ ...params, trailing_sl: e.target.checked })}
+            style={{ accentColor: "#818cf8" }}
+          />
+          Trailing Stop-Loss
+        </label>
+        <button
+          onClick={onRun}
+          disabled={loading}
         style={{
           marginTop: 12, padding: "8px 24px", background: loading ? "#555" : "#818cf8",
           color: "#fff", border: "none", borderRadius: 6, cursor: loading ? "wait" : "pointer",
@@ -51,6 +61,7 @@ export default function ParamsPanel({ params, onChange, onRun, loading }: Props)
       >
         {loading ? "Running..." : "Run Backtest"}
       </button>
+      </div>
     </div>
   );
 }

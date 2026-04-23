@@ -27,4 +27,5 @@ export interface BacktestParams {
   stop_loss: number;
   take_profit: number;
   max_hold_days: number;
+  trailing_sl: boolean;
 }

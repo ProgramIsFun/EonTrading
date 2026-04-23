@@ -25,6 +25,7 @@ class Position:
     shares: int
     entry_price: float
     entry_bar: int
+    peak_price: float = 0.0  # tracks highest price for trailing SL
 
 
 @dataclass
@@ -71,6 +72,7 @@ def run_portfolio_backtest(
     risk_per_trade: float = 0.0,
     stop_loss_pct: float = 0.05,
     take_profit_pct: float = 0.10,
+    trailing_sl: bool = False,
     max_hold_days: int = 30,
     cooldown_days: int = 1,
 ) -> PortfolioResult:
@@ -181,8 +183,12 @@ def run_portfolio_backtest(
             high = float(bar["high"]) if "high" in bar else price
 
             closed = False
-            if stop_loss_pct > 0 and low <= pos.entry_price * (1 - stop_loss_pct):
-                sell_price = pos.entry_price * (1 - stop_loss_pct)
+            # Update peak price for trailing SL
+            if trailing_sl:
+                pos.peak_price = max(pos.peak_price, high)
+            sl_ref = pos.peak_price if trailing_sl else pos.entry_price
+            if stop_loss_pct > 0 and low <= sl_ref * (1 - stop_loss_pct):
+                sell_price = sl_ref * (1 - stop_loss_pct)
                 cost = cost_model.sell_cost(sell_price, pos.shares)
                 pnl = (sell_price - pos.entry_price) * pos.shares - cost
                 cash += pos.shares * sell_price - cost
@@ -229,7 +235,7 @@ def run_portfolio_backtest(
                     if buy_shares > 0 and buy_shares * exec_p < cash:
                         cost = cost_model.buy_cost(exec_p, buy_shares)
                         cash -= buy_shares * exec_p + cost
-                        positions[sym] = Position(sym, buy_shares, exec_p, bar_idx)
+                        positions[sym] = Position(sym, buy_shares, exec_p, bar_idx, exec_p)
                         last_trade_ts[sym] = bar_idx
                         trades.append(Trade(sym, "buy", ts_str, exec_p, sig["sentiment"], sig["headline"], buy_shares))
 

@@ -40,6 +40,7 @@ def backtest(
     stop_loss: float = 0.05,
     take_profit: float = 0.10,
     max_hold_days: int = 30,
+    trailing_sl: bool = False,
 ):
     result = run_portfolio_backtest(
         news_events=SAMPLE_NEWS,
@@ -50,6 +51,7 @@ def backtest(
         max_allocation=max_allocation,
         stop_loss_pct=stop_loss, take_profit_pct=take_profit,
         max_hold_days=max_hold_days,
+        trailing_sl=trailing_sl,
     )
     return {
         "initial_capital": result.initial_capital,

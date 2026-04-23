@@ -13,6 +13,7 @@ const DEFAULT_PARAMS: BacktestParams = {
   stop_loss: 0.05,
   take_profit: 0.10,
   max_hold_days: 30,
+  trailing_sl: false,
 };
 
 export default function App() {
