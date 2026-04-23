@@ -78,8 +78,11 @@ def run_sentiment_backtest(
     min_confidence: float = 0.3,
     analyzer: BaseSentimentAnalyzer = None,
     cost_model: CostModel = ZERO,
-    # New parameters
+    # Position sizing
     scale_by_sentiment: bool = True,
+    max_allocation: float = 0.0,     # max % of capital per trade (0=off, e.g. 0.3=30%)
+    risk_per_trade: float = 0.0,     # max % of capital to risk per trade (0=off, e.g. 0.02=2%)
+    # Risk management
     max_hold_days: int = 0,
     cooldown_days: int = 1,
     stop_loss_pct: float = 0.0,
@@ -195,7 +198,21 @@ def run_sentiment_backtest(
             if sent >= threshold and shares == 0:
                 size = min(abs(sent), 1.0) if scale_by_sentiment else 1.0
                 eff_price = cost_model.effective_buy_price(exec_price)
-                buy_shares = int((cash * size) / eff_price)
+
+                # Position sizing: start with sentiment-scaled or full capital
+                max_shares = int((cash * size) / eff_price)
+
+                # Cap by max allocation
+                if max_allocation > 0:
+                    alloc_shares = int((cash * max_allocation) / eff_price)
+                    max_shares = min(max_shares, alloc_shares)
+
+                # Cap by risk-per-trade (requires stop loss)
+                if risk_per_trade > 0 and stop_loss_pct > 0:
+                    risk_shares = int((cash * risk_per_trade) / (exec_price * stop_loss_pct))
+                    max_shares = min(max_shares, risk_shares)
+
+                buy_shares = max_shares
                 if buy_shares > 0:
                     cost = cost_model.buy_cost(exec_price, buy_shares)
                     cash -= buy_shares * exec_price + cost
