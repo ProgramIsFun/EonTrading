@@ -35,8 +35,8 @@ async def main_single():
     analyzer = LLMSentimentAnalyzer() if os.getenv("OPENAI_API_KEY") else KeywordSentimentAnalyzer()
     broker = FutuBroker(simulate=not os.getenv("FUTU_REAL")) if os.getenv("FUTU_LIVE") else LogBroker()
 
-    watcher = NewsWatcher(bus, sources=sources, analyzer=analyzer, interval_sec=120)
     trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15)
+    watcher = NewsWatcher(bus, sources=sources, analyzer=analyzer, interval_sec=120, get_positions=lambda: trader.holdings)
     executor = TradeExecutor(bus, broker)
     await trader.start()
     await executor.start()

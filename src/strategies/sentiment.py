@@ -11,7 +11,7 @@ class BaseSentimentAnalyzer(ABC):
     """Interface for sentiment analyzers. Swap implementations freely."""
 
     @abstractmethod
-    def analyze(self, event: NewsEvent) -> SentimentEvent:
+    def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         pass
 
 
@@ -55,7 +55,7 @@ BEARISH_WORDS = [
 class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
     """Fast keyword-based scorer. No external dependencies."""
 
-    def analyze(self, event: NewsEvent) -> SentimentEvent:
+    def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         text = (event.headline + " " + event.body).lower()
 
         symbols = []
@@ -106,6 +106,27 @@ Return:
   "urgency": "normal"        // "low", "normal", "high"
 }}"""
 
+LLM_PROMPT_WITH_POSITIONS = """Analyze this financial news headline considering the current portfolio. Return JSON only, no explanation.
+
+Headline: "{headline}"
+
+Current holdings:
+{positions}
+
+Consider:
+- How does this news affect the stocks we currently hold?
+- Are there stocks not in our portfolio that are also affected?
+- Higher confidence if the news directly impacts our holdings.
+
+Return:
+{{
+  "symbols": ["AAPL"],       // ALL affected stock tickers (held or not)
+  "sector": "technology",    // affected sector or empty
+  "sentiment": 0.5,          // -1.0 (very bearish) to +1.0 (very bullish)
+  "confidence": 0.8,         // 0.0 to 1.0, higher if it affects our holdings
+  "urgency": "normal"        // "low", "normal", "high"
+}}"""
+
 
 class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
     """LLM-based scorer. More accurate, needs API key.
@@ -123,10 +144,14 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         self.base_url = base_url
         self.model = model
 
-    def analyze(self, event: NewsEvent) -> SentimentEvent:
+    def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         import requests
 
-        prompt = LLM_PROMPT.format(headline=event.headline)
+        if positions:
+            pos_str = "\n".join(f"- {sym}" for sym in positions.keys()) or "None"
+            prompt = LLM_PROMPT_WITH_POSITIONS.format(headline=event.headline, positions=pos_str)
+        else:
+            prompt = LLM_PROMPT.format(headline=event.headline)
         try:
             resp = requests.post(
                 f"{self.base_url}/chat/completions",
