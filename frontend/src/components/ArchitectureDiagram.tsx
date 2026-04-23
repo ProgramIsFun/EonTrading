@@ -54,10 +54,13 @@ export default function ArchitectureDiagram() {
         </div>
       </div>
 
-      {/* News Collector */}
+      {/* News Data Pipeline */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 12, color: "#f472b6", marginBottom: 8, fontWeight: 600 }}>News Collector (runs continuously)</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 12, color: "#f472b6", marginBottom: 8, fontWeight: 600 }}>News Data Pipeline → MongoDB (EonTradingDB.news)</div>
+
+        {/* Live collector */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          <span style={{ fontSize: 10, color: "#888", width: 70 }}>Live:</span>
           <div style={{ display: "flex", gap: 6 }}>
             {["RSS (free)", "Reddit (free)"].map((s) => (
               <div key={s} style={boxStyle("#2a2a4a")}>{s}</div>
@@ -66,12 +69,32 @@ export default function ArchitectureDiagram() {
           <span style={arrow}>→</span>
           <div style={boxStyle("#1e3a2e")}>
             <div style={{ fontWeight: 600 }}>collect_news.py</div>
-            <div style={{ fontSize: 10, color: "#888" }}>poll every 5min + dedup</div>
+            <div style={{ fontSize: 10, color: "#888" }}>poll every 5min</div>
           </div>
           <span style={arrow}>→</span>
           <div style={boxStyle("#3a2a1e")}>
             <div style={{ fontWeight: 600 }}>MongoDB</div>
-            <div style={{ fontSize: 10, color: "#888" }}>EonTradingDB.news</div>
+            <div style={{ fontSize: 10, color: "#888" }}>dedup by URL</div>
+          </div>
+        </div>
+
+        {/* Backfill */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, color: "#888", width: 70 }}>Backfill:</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            {["Finnhub (key)", "NewsAPI (key)"].map((s) => (
+              <div key={s} style={boxStyle("#2a2a4a")}>{s}</div>
+            ))}
+          </div>
+          <span style={arrow}>→</span>
+          <div style={boxStyle("#1e3a2e")}>
+            <div style={{ fontWeight: 600 }}>backfill_news.py</div>
+            <div style={{ fontSize: 10, color: "#888" }}>historical, per symbol</div>
+          </div>
+          <span style={arrow}>→</span>
+          <div style={boxStyle("#3a2a1e")}>
+            <div style={{ fontWeight: 600 }}>same collection</div>
+            <div style={{ fontSize: 10, color: "#888" }}>backfilled: true</div>
           </div>
         </div>
       </div>
