@@ -54,6 +54,28 @@ export default function ArchitectureDiagram() {
         </div>
       </div>
 
+      {/* News Collector */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 12, color: "#f472b6", marginBottom: 8, fontWeight: 600 }}>News Collector (runs continuously)</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {["RSS (free)", "Reddit (free)"].map((s) => (
+              <div key={s} style={boxStyle("#2a2a4a")}>{s}</div>
+            ))}
+          </div>
+          <span style={arrow}>→</span>
+          <div style={boxStyle("#1e3a2e")}>
+            <div style={{ fontWeight: 600 }}>collect_news.py</div>
+            <div style={{ fontSize: 10, color: "#888" }}>poll every 5min + dedup</div>
+          </div>
+          <span style={arrow}>→</span>
+          <div style={boxStyle("#3a2a1e")}>
+            <div style={{ fontWeight: 600 }}>MongoDB</div>
+            <div style={{ fontSize: 10, color: "#888" }}>EonTradingDB.news</div>
+          </div>
+        </div>
+      </div>
+
       {/* Backtest Pipeline */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: "#22c55e", marginBottom: 8, fontWeight: 600 }}>Backtest Pipeline</div>
