@@ -1,4 +1,4 @@
-import { Trade } from "../types/backtest";
+import type { Trade } from "../types/backtest";
 
 interface Props {
   trades: Trade[];

@@ -1,4 +1,4 @@
-import { BacktestResult } from "../types/backtest";
+import type { BacktestResult } from "../types/backtest";
 
 interface Props {
   result: BacktestResult;

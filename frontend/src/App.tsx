@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BacktestResult, BacktestParams } from "./types/backtest";
+import type { BacktestResult, BacktestParams } from "./types/backtest";
 import { fetchBacktest } from "./hooks/api";
 import StatsCard from "./components/StatsCard";
 import EquityChart from "./components/EquityChart";

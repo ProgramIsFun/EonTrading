@@ -1,4 +1,4 @@
-import { BacktestParams } from "../types/backtest";
+import type { BacktestParams } from "../types/backtest";
 
 interface Props {
   params: BacktestParams;
