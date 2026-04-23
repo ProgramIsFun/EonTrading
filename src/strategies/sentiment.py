@@ -97,11 +97,16 @@ LLM_PROMPT = """Analyze this financial news headline. Return JSON only, no expla
 
 Headline: "{headline}"
 
+Rules:
+- If the news is bearish for the broad market (e.g. tariffs, recession, war), include inverse ETFs: SQQQ (inverse Nasdaq), SH (inverse S&P 500), SDOW (inverse Dow) with POSITIVE sentiment (they go up when market drops).
+- For individual stock news, return the affected tickers.
+- Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
+
 Return:
 {{
-  "symbols": ["AAPL"],       // affected stock tickers, empty if none
+  "symbols": ["AAPL"],       // affected stock tickers or inverse ETFs
   "sector": "technology",    // affected sector or empty
-  "sentiment": 0.5,          // -1.0 (very bearish) to +1.0 (very bullish)
+  "sentiment": 0.5,          // -1.0 (very bearish) to +1.0 (very bullish) for the returned symbols
   "confidence": 0.8,         // 0.0 to 1.0
   "urgency": "normal"        // "low", "normal", "high"
 }}"""
@@ -113,16 +118,18 @@ Headline: "{headline}"
 Current holdings:
 {positions}
 
-Consider:
-- How does this news affect the stocks we currently hold?
-- Are there stocks not in our portfolio that are also affected?
+Rules:
+- If the news is bearish for the broad market (e.g. tariffs, recession, war), include inverse ETFs: SQQQ (inverse Nasdaq), SH (inverse S&P 500), SDOW (inverse Dow) with POSITIVE sentiment.
+- For individual stock news, return the affected tickers.
+- Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
 - Higher confidence if the news directly impacts our holdings.
+- Include both held stocks (for selling) and inverse ETFs (for buying) when market drops.
 
 Return:
 {{
-  "symbols": ["AAPL"],       // ALL affected stock tickers (held or not)
+  "symbols": ["AAPL"],       // ALL affected tickers + inverse ETFs if applicable
   "sector": "technology",    // affected sector or empty
-  "sentiment": 0.5,          // -1.0 (very bearish) to +1.0 (very bullish)
+  "sentiment": 0.5,          // -1.0 to +1.0 for the returned symbols
   "confidence": 0.8,         // 0.0 to 1.0, higher if it affects our holdings
   "urgency": "normal"        // "low", "normal", "high"
 }}"""
