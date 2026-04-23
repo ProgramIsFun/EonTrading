@@ -83,11 +83,6 @@
 ## Event Bus
 
 ```
-┌──────────┐    [news]     ┌──────────┐  [sentiment]  ┌──────────┐   [trade]   ┌──────────┐
-│  News    ├──────────────►│Sentiment ├──────────────►│  Trader  ├────────────►│ Executor │
-│  Watcher │               │ Analyzer │               │          │             │ (Broker) │
-└──────────┘               └──────────┘               └──────────┘             └──────────┘
-
 Backends:
   • LocalEventBus  — in-process, zero latency
   • RedisEventBus  — cross-process, ~1-5ms (Redis on Windows PC)
