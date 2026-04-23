@@ -31,7 +31,12 @@ class NewsWatcher:
 
 
 class SentimentTrader:
-    """Listens to sentiment events and decides trades."""
+    """Listens to sentiment events and decides trades.
+
+    NOTE: Trading logic here is separate from the backtest engine
+    (src/backtest/portfolio_backtest.py). When backtest strategy changes
+    (e.g. trailing SL, position sizing), sync those changes here before going live.
+    """
 
     def __init__(self, bus: EventBus, threshold: float = 0.5, min_confidence: float = 0.4, position_size: float = 1.0):
         self.bus = bus
