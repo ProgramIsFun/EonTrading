@@ -4,6 +4,7 @@ from src.data.news import NewsAPISource
 from src.strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 from src.common.event_bus import EventBus, LocalEventBus
 from src.common.events import CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE, SentimentEvent, TradeEvent
+from src.common.news_poller import NewsPoller
 from datetime import datetime
 
 
@@ -12,22 +13,19 @@ class NewsWatcher:
 
     def __init__(self, bus: EventBus, sources: list = None, analyzer: BaseSentimentAnalyzer = None, interval_sec: int = 120):
         self.bus = bus
-        self.sources = sources or []
+        self.poller = NewsPoller(sources=sources or [], interval_sec=interval_sec)
         self.analyzer = analyzer or KeywordSentimentAnalyzer()
-        self.interval = interval_sec
 
     async def run(self):
-        print(f"NewsWatcher started, polling every {self.interval}s")
+        print(f"NewsWatcher started, polling every {self.poller.interval}s")
         while True:
-            for source in self.sources:
-                events = source.fetch_latest()
-                for news in events:
-                    await self.bus.publish(CHANNEL_NEWS, news.to_dict())
-                    sentiment = self.analyzer.analyze(news)
-                    if sentiment.confidence > 0:
-                        await self.bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
-                        print(f"  [{sentiment.sentiment:+.2f}] {sentiment.headline[:80]}")
-            await asyncio.sleep(self.interval)
+            for news in self.poller.poll_once():
+                await self.bus.publish(CHANNEL_NEWS, news.to_dict())
+                sentiment = self.analyzer.analyze(news)
+                if sentiment.confidence > 0:
+                    await self.bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+                    print(f"  [{sentiment.sentiment:+.2f}] {sentiment.headline[:80]}")
+            await asyncio.sleep(self.poller.interval)
 
 
 class SentimentTrader:

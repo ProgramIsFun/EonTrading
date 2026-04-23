@@ -20,24 +20,23 @@ _collector_running = False
 
 def _run_collector():
     global _collector_running
+    from src.common.news_poller import NewsPoller
     from src.data.news import RSSSource, RedditSource
     from datetime import datetime
-    sources = [RSSSource(), RedditSource()]
+    poller = NewsPoller(sources=[RSSSource(), RedditSource()])
     client = get_mongo_client()
     col = client["EonTradingDB"]["news"]
     col.create_index("url", unique=True, sparse=True)
     import time
     while _collector_running:
-        for source in sources:
-            events = source.fetch_latest()
-            for ev in events:
-                if ev.url and col.find_one({"url": ev.url}):
-                    continue
-                col.insert_one({
-                    "source": ev.source, "headline": ev.headline,
-                    "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
-                    "collected_at": datetime.utcnow().isoformat() + "Z",
-                })
+        for ev in poller.poll_once():
+            if ev.url and col.find_one({"url": ev.url}):
+                continue
+            col.insert_one({
+                "source": ev.source, "headline": ev.headline,
+                "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
+                "collected_at": datetime.utcnow().isoformat() + "Z",
+            })
         time.sleep(300)
 
 

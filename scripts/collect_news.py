@@ -11,38 +11,34 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from src.common.news_poller import NewsPoller
 from src.data.news import RSSSource, RedditSource
 from src.data.utils.db_helper import get_mongo_client
 
 DB_NAME = "EonTradingDB"
 COLLECTION = "news"
-POLL_INTERVAL = 300  # 5 minutes
+POLL_INTERVAL = 300
 
 
 def get_collection():
     client = get_mongo_client()
-    return client[DB_NAME][COLLECTION]
+    col = client[DB_NAME][COLLECTION]
+    col.create_index("url", unique=True, sparse=True)
+    return col
 
 
-def collect_once(sources, col):
+def collect_once(poller, col):
     total = 0
-    for source in sources:
-        events = source.fetch_latest()
-        for ev in events:
-            # Dedup by URL
-            if ev.url and col.find_one({"url": ev.url}):
-                continue
-            doc = {
-                "source": ev.source,
-                "headline": ev.headline,
-                "timestamp": ev.timestamp,
-                "url": ev.url,
-                "body": ev.body,
-                "collected_at": datetime.utcnow().isoformat() + "Z",
-            }
-            col.insert_one(doc)
-            total += 1
-            print(f"  + [{ev.source}] {ev.headline[:70]}")
+    for ev in poller.poll_once():
+        if ev.url and col.find_one({"url": ev.url}):
+            continue
+        col.insert_one({
+            "source": ev.source, "headline": ev.headline,
+            "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
+            "collected_at": datetime.utcnow().isoformat() + "Z",
+        })
+        total += 1
+        print(f"  + [{ev.source}] {ev.headline[:70]}")
     return total
 
 
@@ -51,14 +47,11 @@ def main():
     parser.add_argument("--loop", action="store_true", help="Poll continuously")
     args = parser.parse_args()
 
-    sources = [
-        RSSSource(),
-        RedditSource(),
-    ]
-
+    poller = NewsPoller(
+        sources=[RSSSource(), RedditSource()],
+        interval_sec=POLL_INTERVAL,
+    )
     col = get_collection()
-    # Create index for dedup
-    col.create_index("url", unique=True, sparse=True)
 
     print(f"News collector started — sources: RSS, Reddit")
     print(f"Storing to MongoDB: {DB_NAME}.{COLLECTION}")
@@ -66,11 +59,11 @@ def main():
     if args.loop:
         while True:
             print(f"\n[{datetime.utcnow().strftime('%H:%M:%S')}] Polling...")
-            n = collect_once(sources, col)
+            n = collect_once(poller, col)
             print(f"  Collected {n} new articles (total in DB: {col.count_documents({})})")
-            time.sleep(POLL_INTERVAL)
+            time.sleep(poller.interval)
     else:
-        n = collect_once(sources, col)
+        n = collect_once(poller, col)
         print(f"\nCollected {n} new articles (total in DB: {col.count_documents({})})")
 
 
