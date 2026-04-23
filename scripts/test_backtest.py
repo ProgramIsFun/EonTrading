@@ -8,7 +8,7 @@ from src.strategies import SMACrossover, RSIMeanReversion
 from src.backtest import run_backtest
 from src.common.costs import US_STOCKS, ZERO
 
-storage = ClickHouseStorage(host="192.168.0.38")
+storage = ClickHouseStorage()
 
 # Get 5 years of AAPL daily data
 start = datetime(2021, 1, 1)

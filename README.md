@@ -102,7 +102,7 @@ Database: `eontrading`, Table: `ohlcv`
 | close     | Float64             | |
 | volume    | Float64             | |
 
-Engine: `MergeTree()`, ordered by `(symbol, interval, timestamp)`, partitioned by `toYear(timestamp)`.
+Engine: `ReplacingMergeTree()`, ordered by `(symbol, interval, timestamp)`, partitioned by `toYear(timestamp)`. Duplicate rows (same symbol+interval+timestamp) are automatically deduplicated.
 
 ### Connect from Python
 ```python

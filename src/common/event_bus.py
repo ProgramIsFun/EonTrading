@@ -48,9 +48,10 @@ class LocalEventBus(EventBus):
 class RedisEventBus(EventBus):
     """Redis-backed event bus. Works across processes and machines."""
 
-    def __init__(self, host: str = "192.168.0.38", port: int = 6379):
-        self._host = host
-        self._port = port
+    def __init__(self, host: str = None, port: int = None):
+        from src.env import REDIS_HOST, REDIS_PORT
+        self._host = host or REDIS_HOST
+        self._port = port or REDIS_PORT
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
         self._pubsub = None
         self._redis = None
