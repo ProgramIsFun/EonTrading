@@ -78,7 +78,7 @@ export default function ArchitectureDiagram() {
       </div>
 
       {/* Live Pipeline */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 24, borderBottom: "1px solid #333", paddingBottom: 20 }}>
         <div style={{ fontSize: 12, color: "#818cf8", marginBottom: 8, fontWeight: 600 }}>
           Live Trading Pipeline
         </div>
@@ -135,7 +135,7 @@ export default function ArchitectureDiagram() {
       </div>
 
       {/* News Data Pipeline */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 24, borderBottom: "1px solid #333", paddingBottom: 20 }}>
         <div style={{ fontSize: 12, color: "#f472b6", marginBottom: 8, fontWeight: 600 }}>News Data Pipeline → MongoDB (EonTradingDB.news)</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
@@ -184,7 +184,7 @@ export default function ArchitectureDiagram() {
       </div>
 
       {/* Backtest Pipeline */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 24, borderBottom: "1px solid #333", paddingBottom: 20 }}>
         <div style={{ fontSize: 12, color: "#22c55e", marginBottom: 8, fontWeight: 600 }}>Backtest Pipeline {processTag("runs inside FastAPI")}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={boxStyle(SOURCE)}>
@@ -214,7 +214,7 @@ export default function ArchitectureDiagram() {
       </div>
 
       {/* Dashboard */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 24, borderBottom: "1px solid #333", paddingBottom: 20 }}>
         <div style={{ fontSize: 12, color: "#f59e0b", marginBottom: 8, fontWeight: 600 }}>Dashboard</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={boxStyle(PROCESS)}>
