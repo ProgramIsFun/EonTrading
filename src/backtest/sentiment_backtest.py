@@ -102,10 +102,10 @@ def run_sentiment_backtest(
     timestamps = prices["timestamp"].values
 
     def find_bar(news_ts: str) -> int:
-        """Return index of nearest bar at or after news timestamp."""
+        """Return index of the NEXT bar after news timestamp (execute next bar's open)."""
         ts = pd.Timestamp(news_ts, tz="UTC") if "T" in news_ts else pd.Timestamp(news_ts + "T09:30:00", tz="UTC")
         ts_val = ts.to_numpy()
-        idx = timestamps.searchsorted(ts_val)
+        idx = timestamps.searchsorted(ts_val, side="right")  # next bar after news
         return int(min(idx, len(prices) - 1))
 
     # Analyze news and build signal list
@@ -144,25 +144,30 @@ def run_sentiment_backtest(
 
     for i in range(len(prices)):
         row = prices.iloc[i]
-        price = row["close"]
+        exec_price = row["open"]   # execute at bar's open (more realistic)
+        price = row["close"]       # use close for equity/SL/TP checks
         ts = str(row["timestamp"])[:19]
 
-        # Check stop-loss / take-profit on open positions
+        # Check stop-loss / take-profit using intraday low/high
         if shares > 0:
-            if stop_loss_pct > 0 and price <= entry_price * (1 - stop_loss_pct):
+            bar_low = row["low"] if "low" in row else price
+            bar_high = row["high"] if "high" in row else price
+            if stop_loss_pct > 0 and bar_low <= entry_price * (1 - stop_loss_pct):
                 sl_price = entry_price * (1 - stop_loss_pct)
-                pnl = (sl_price - entry_price) * shares
-                cash += shares * sl_price
+                cost = cost_model.sell_cost(sl_price, shares)
+                pnl = (sl_price - entry_price) * shares - cost
+                cash += shares * sl_price - cost
                 trades.append(SentimentTrade(
                     symbol=symbol, action="sell (SL)", date=ts,
                     price=sl_price, sentiment=0, headline="Stop loss hit",
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0
-            elif take_profit_pct > 0 and price >= entry_price * (1 + take_profit_pct):
+            elif take_profit_pct > 0 and bar_high >= entry_price * (1 + take_profit_pct):
                 tp_price = entry_price * (1 + take_profit_pct)
-                pnl = (tp_price - entry_price) * shares
-                cash += shares * tp_price
+                cost = cost_model.sell_cost(tp_price, shares)
+                pnl = (tp_price - entry_price) * shares - cost
+                cash += shares * tp_price - cost
                 trades.append(SentimentTrade(
                     symbol=symbol, action="sell (TP)", date=ts,
                     price=tp_price, sentiment=0, headline="Take profit hit",
@@ -172,8 +177,9 @@ def run_sentiment_backtest(
 
             # Max hold period
             if max_hold_days > 0 and shares > 0 and (i - entry_bar_idx) >= max_hold_bars:
-                pnl = (price - entry_price) * shares
-                cash += shares * price
+                cost = cost_model.sell_cost(exec_price, shares)
+                pnl = (exec_price - entry_price) * shares - cost
+                cash += shares * exec_price - cost
                 trades.append(SentimentTrade(
                     symbol=symbol, action="sell (expire)", date=ts,
                     price=price, sentiment=0, headline=f"Max hold reached",
@@ -188,28 +194,29 @@ def run_sentiment_backtest(
 
             if sent >= threshold and shares == 0:
                 size = min(abs(sent), 1.0) if scale_by_sentiment else 1.0
-                buy_shares = int((cash * size) / price)
+                eff_price = cost_model.effective_buy_price(exec_price)
+                buy_shares = int((cash * size) / eff_price)
                 if buy_shares > 0:
-                    cost = cost_model.buy_cost(price, buy_shares)
-                    cash -= buy_shares * price + cost
+                    cost = cost_model.buy_cost(exec_price, buy_shares)
+                    cash -= buy_shares * exec_price + cost
                     shares = buy_shares
-                    entry_price = price
+                    entry_price = exec_price
                     entry_bar_idx = i
                     last_trade_idx = i
                     trades.append(SentimentTrade(
                         symbol=symbol, action="buy", date=ts,
-                        price=price, sentiment=sent, headline=sig["headline"],
+                        price=exec_price, sentiment=sent, headline=sig["headline"],
                         shares=buy_shares,
                     ))
 
             elif sent <= -threshold and shares > 0:
-                cost = cost_model.sell_cost(price, shares)
-                pnl = (price - entry_price) * shares - cost
-                cash += shares * price - cost
+                cost = cost_model.sell_cost(exec_price, shares)
+                pnl = (exec_price - entry_price) * shares - cost
+                cash += shares * exec_price - cost
                 last_trade_idx = i
                 trades.append(SentimentTrade(
                     symbol=symbol, action="sell", date=ts,
-                    price=price, sentiment=sent, headline=sig["headline"],
+                    price=exec_price, sentiment=sent, headline=sig["headline"],
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0

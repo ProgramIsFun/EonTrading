@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Backtest with real historical news events against real price data."""
 from src.backtest.sentiment_backtest import run_sentiment_backtest
+from src.common.costs import US_STOCKS
 
 AAPL_NEWS = [
     {"date": "2025-01-30T16:30:00", "headline": "Apple reports record Q1 revenue of $124B, beating estimates"},
@@ -86,7 +87,7 @@ for symbol, news in datasets:
     result = run_sentiment_backtest(
         symbol=symbol, news_events=news,
         start="2025-01-01", end="2025-12-31",
-        initial_capital=10000.0, threshold=0.4, min_confidence=0.15,
+        initial_capital=10000.0, threshold=0.4, min_confidence=0.15, cost_model=US_STOCKS,
         scale_by_sentiment=True, max_hold_days=30,
         stop_loss_pct=0.05, take_profit_pct=0.10,
         interval="1h",
@@ -104,7 +105,7 @@ for symbol, news in datasets:
     result = run_sentiment_backtest(
         symbol=symbol, news_events=news,
         start="2025-01-01", end="2025-12-31",
-        initial_capital=10000.0, threshold=0.4, min_confidence=0.15,
+        initial_capital=10000.0, threshold=0.4, min_confidence=0.15, cost_model=US_STOCKS,
         scale_by_sentiment=True, max_hold_days=30,
         stop_loss_pct=0.05, take_profit_pct=0.10,
         interval="1h",
