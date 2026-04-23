@@ -28,6 +28,9 @@ const tag = (text: string, bg: string, fg: string) => (
 const processTag = (t?: string) => tag(t || "process", "#818cf822", "#818cf8");
 const internalTag = () => tag("internal", "#22c55e22", "#22c55e");
 const serviceTag = () => tag("service", "#f59e0b22", "#f59e0b");
+const pathTag = (p: string) => (
+  <div style={{ fontSize: 9, color: "#555", fontFamily: "monospace", marginTop: 2 }}>{p}</div>
+);
 
 const arrow = { color: "#555", fontSize: 18 };
 const label = (text: string) => <span style={{ fontSize: 10, color: "#666" }}>{text}</span>;
@@ -49,21 +52,31 @@ export default function ArchitectureDiagram() {
         <div style={{ fontSize: 12, color: "#818cf8", marginBottom: 8, fontWeight: 600 }}>Live Trading Pipeline {processTag("python3 -m src.live.news_trader")}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6 }}>
-            {["NewsAPI", "Finnhub", "RSS", "Reddit"].map((s) => (
-              <div key={s} style={boxStyle(SOURCE)}>{s}</div>
+            {[
+              { name: "NewsAPI", path: "src/data/news/newsapi_source.py" },
+              { name: "Finnhub", path: "src/data/news/finnhub_source.py" },
+              { name: "RSS", path: "src/data/news/rss_source.py" },
+              { name: "Reddit", path: "src/data/news/reddit_source.py" },
+            ].map((s) => (
+              <div key={s.name} style={boxStyle(SOURCE)}>
+                {s.name}
+                {pathTag(s.path)}
+              </div>
             ))}
           </div>
           <span style={arrow}>→</span>
           <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>NewsWatcher</div>
-            <div style={{ fontSize: 10, color: "#888" }}>poll + dedup</div>
             {internalTag()}
+            {pathTag("src/live/news_trader.py")}
+            {pathTag("src/common/news_poller.py")}
           </div>
           <span style={arrow}>→</span>
           <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Sentiment Analyzer</div>
             <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM</div>
             {internalTag()}
+            {pathTag("src/strategies/sentiment.py")}
           </div>
           <span style={arrow}>→</span>
           {label("[sentiment]")}
@@ -72,6 +85,7 @@ export default function ArchitectureDiagram() {
             <div style={{ fontWeight: 600 }}>SentimentTrader</div>
             <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
             {internalTag()}
+            {pathTag("src/live/news_trader.py")}
           </div>
           <span style={arrow}>→</span>
           {label("[trade]")}
@@ -80,6 +94,7 @@ export default function ArchitectureDiagram() {
             <div style={{ fontWeight: 600 }}>Executor</div>
             <div style={{ fontSize: 10, color: "#888" }}>Log / Futu</div>
             {internalTag()}
+            {pathTag("src/live/brokers/broker.py")}
           </div>
         </div>
       </div>
@@ -100,6 +115,7 @@ export default function ArchitectureDiagram() {
             <div style={{ fontWeight: 600 }}>collect_news.py</div>
             <div style={{ fontSize: 10, color: "#888" }}>poll every 5min</div>
             {processTag()}
+            {pathTag("scripts/collect_news.py")}
           </div>
           <span style={arrow}>→</span>
           <div style={boxStyle(SERVICE)}>
@@ -121,6 +137,7 @@ export default function ArchitectureDiagram() {
             <div style={{ fontWeight: 600 }}>backfill_news.py</div>
             <div style={{ fontSize: 10, color: "#888" }}>historical, per symbol</div>
             {processTag("one-off")}
+            {pathTag("scripts/backfill_news.py")}
           </div>
           <span style={arrow}>→</span>
           <div style={boxStyle(SERVICE)}>
@@ -143,12 +160,15 @@ export default function ArchitectureDiagram() {
           <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Analyzer</div>
             {internalTag()}
+            {pathTag("src/strategies/sentiment.py")}
           </div>
           <span style={arrow}>→</span>
           <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Backtest Engine</div>
             <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
             {internalTag()}
+            {pathTag("src/backtest/portfolio_backtest.py")}
+            {pathTag("src/backtest/engine.py")}
           </div>
           <span style={arrow}>←</span>
           <div style={boxStyle(SOURCE)}>
@@ -166,12 +186,14 @@ export default function ArchitectureDiagram() {
             <div style={{ fontWeight: 600 }}>React + Vite</div>
             <div style={{ fontSize: 10, color: "#888" }}>charts, controls</div>
             {processTag("npm run dev")}
+            {pathTag("frontend/")}
           </div>
           <span style={arrow}>→ HTTP →</span>
           <div style={boxStyle(PROCESS)}>
             <div style={{ fontWeight: 600 }}>FastAPI</div>
             <div style={{ fontSize: 10, color: "#888" }}>/api/backtest</div>
             {processTag("uvicorn")}
+            {pathTag("src/api/server.py")}
           </div>
           <span style={arrow}>→</span>
           <div style={boxStyle(INTERNAL)}>
@@ -184,7 +206,8 @@ export default function ArchitectureDiagram() {
       {/* Shared */}
       <div style={{ borderTop: "1px solid #333", paddingTop: 12 }}>
         <div style={{ fontSize: 12, color: "#818cf8", marginBottom: 8, fontWeight: 600 }}>Shared: TradingLogic</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, color: "#888" }}>
+        {pathTag("src/common/trading_logic.py")}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, color: "#888", marginTop: 6 }}>
           {["should_buy()", "should_sell_on_sentiment()", "check_stop_loss()", "check_take_profit()", "update_peak()"].map((m) => (
             <span key={m} style={{ background: "#2a2a3e", padding: "4px 8px", borderRadius: 4, fontFamily: "monospace" }}>{m}</span>
           ))}
