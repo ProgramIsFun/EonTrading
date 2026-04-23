@@ -1,0 +1,76 @@
+"""REST API for EonTrading dashboard."""
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from src.backtest.portfolio_backtest import run_portfolio_backtest
+from src.common.costs import US_STOCKS
+
+app = FastAPI(title="EonTrading API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Sample news for demo — replace with DB later
+SAMPLE_NEWS = [
+    {"date": "2025-01-06T10:00:00", "headline": "Nvidia unveils new Blackwell GPU chips at CES, stock rallies"},
+    {"date": "2025-01-27T09:30:00", "headline": "DeepSeek AI model shocks market, Nvidia stock crashes on cheaper AI fears"},
+    {"date": "2025-01-29T16:30:00", "headline": "Meta Q4 earnings beat estimates, ad revenue growth accelerates"},
+    {"date": "2025-01-30T16:30:00", "headline": "Apple reports record Q1 revenue of $124B, beating estimates"},
+    {"date": "2025-02-06T16:30:00", "headline": "Amazon Q4 earnings beat estimates, AWS revenue growth accelerates"},
+    {"date": "2025-02-14T10:00:00", "headline": "Meta announces massive AI spending increase to $65B, stock drops on cost fears"},
+    {"date": "2025-02-26T16:30:00", "headline": "Nvidia Q4 earnings smash records, data center revenue surges 93%"},
+    {"date": "2025-03-12T10:00:00", "headline": "Google acquires cloud security firm Wiz for $32B, biggest deal ever"},
+    {"date": "2025-04-03T14:00:00", "headline": "Trump announces sweeping tariffs on China, Apple supply chain at risk"},
+    {"date": "2025-04-09T15:00:00", "headline": "Trump pauses tariffs for 90 days, Apple stock surges on relief rally"},
+    {"date": "2025-04-23T10:00:00", "headline": "Elon Musk says he will reduce DOGE role to focus on Tesla, stock surges"},
+    {"date": "2025-04-24T16:30:00", "headline": "Alphabet Q1 earnings beat estimates, cloud revenue surges, stock rallies"},
+    {"date": "2025-04-30T16:30:00", "headline": "Meta Q1 earnings crush expectations, revenue up 16% on strong ad demand"},
+    {"date": "2025-04-30T16:30:00", "headline": "Microsoft Q3 earnings crush estimates, Azure growth reaccelerates to 35%"},
+    {"date": "2025-05-01T16:30:00", "headline": "Apple Q2 earnings beat expectations, services revenue hits record"},
+]
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/api/backtest")
+def backtest(
+    capital: float = 70000,
+    threshold: float = 0.4,
+    max_allocation: float = 0.2,
+    stop_loss: float = 0.05,
+    take_profit: float = 0.10,
+    max_hold_days: int = 30,
+):
+    result = run_portfolio_backtest(
+        news_events=SAMPLE_NEWS,
+        start="2025-01-01", end="2025-12-31",
+        initial_capital=capital,
+        threshold=threshold, min_confidence=0.15,
+        cost_model=US_STOCKS,
+        max_allocation=max_allocation,
+        stop_loss_pct=stop_loss, take_profit_pct=take_profit,
+        max_hold_days=max_hold_days,
+    )
+    return {
+        "initial_capital": result.initial_capital,
+        "final_value": round(result.final_value, 2),
+        "total_return_pct": round(result.total_return_pct, 2),
+        "max_drawdown_pct": round(result.max_drawdown_pct, 2),
+        "total_trades": result.total_trades,
+        "win_rate": round(result.win_rate, 1),
+        "equity_curve": [round(v, 2) for v in result.equity_curve.tolist()],
+        "trades": [
+            {
+                "symbol": t.symbol, "action": t.action, "date": t.date,
+                "price": round(t.price, 2), "shares": t.shares,
+                "sentiment": round(t.sentiment, 2), "pnl": round(t.pnl, 2),
+                "headline": t.headline,
+            }
+            for t in result.trades
+        ],
+    }
+
+
+@app.get("/api/news")
+def news():
+    return SAMPLE_NEWS
