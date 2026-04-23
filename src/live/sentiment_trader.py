@@ -12,11 +12,12 @@ class SentimentTrader:
     Uses shared TradingLogic from src/common/trading_logic.py — same logic as backtest.
     """
 
-    def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0, **kwargs):
+    def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0, position_store=None, **kwargs):
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
         self.holdings: dict[str, datetime] = {}
         self.max_hold_days = max_hold_days
+        self.position_store = position_store  # optional, for distributed mode
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_SENTIMENT, self._on_sentiment)
@@ -56,6 +57,8 @@ class SentimentTrader:
                 self.holdings[symbol] = datetime.utcnow()
 
             if action:
+                if self.position_store:
+                    self.position_store.set_positions({s: 1 for s in self.holdings})
                 trade = TradeEvent(
                     symbol=symbol, action=action,
                     reason=f"sentiment:{event.sentiment} on {event.headline[:60]}",

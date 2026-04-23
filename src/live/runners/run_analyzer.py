@@ -4,22 +4,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.common.event_bus import RedisEventBus
+from src.common.position_store import PositionStore
 from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 from src.live.analyzer_service import AnalyzerService
 
 
 async def main():
-    bus = RedisEventBus(host=os.getenv("REDIS_HOST", "192.168.0.38"))
-    await bus.subscribe("news", lambda _: None)  # register before start
+    redis_host = os.getenv("REDIS_HOST", "192.168.0.38")
+    bus = RedisEventBus(host=redis_host)
+    await bus.subscribe("news", lambda _: None)
     await bus.start()
 
     analyzer = LLMSentimentAnalyzer() if os.getenv("OPENAI_API_KEY") else KeywordSentimentAnalyzer()
+    store = PositionStore(host=redis_host)
 
-    # In distributed mode, query positions from broker or DB
-    # For now, no position context (can be added via shared DB later)
-    svc = AnalyzerService(bus, analyzer=analyzer)
+    svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     await svc.start()
-    print("AnalyzerService process started")
+    print("AnalyzerService process started (reading positions from Redis)")
     while True:
         await asyncio.sleep(3600)
 

@@ -4,17 +4,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.common.event_bus import RedisEventBus
+from src.common.position_store import PositionStore
 from src.live.sentiment_trader import SentimentTrader
 
 
 async def main():
-    bus = RedisEventBus(host=os.getenv("REDIS_HOST", "192.168.0.38"))
-    await bus.subscribe("sentiment", lambda _: None)  # register before start
+    redis_host = os.getenv("REDIS_HOST", "192.168.0.38")
+    bus = RedisEventBus(host=redis_host)
+    await bus.subscribe("sentiment", lambda _: None)
     await bus.start()
 
-    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15)
+    store = PositionStore(host=redis_host)
+    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store)
     await trader.start()
-    print("SentimentTrader process started")
+    print("SentimentTrader process started (writing positions to Redis)")
     while True:
         await asyncio.sleep(3600)
 
