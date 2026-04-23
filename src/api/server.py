@@ -3,6 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.costs import US_STOCKS
+from src.data.utils.db_helper import get_mongo_client
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="EonTrading API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -74,5 +78,11 @@ def backtest(
 
 
 @app.get("/api/news")
-def news():
-    return SAMPLE_NEWS
+def news(limit: int = 100):
+    try:
+        client = get_mongo_client()
+        col = client["EonTradingDB"]["news"]
+        docs = list(col.find({}, {"_id": 0}).sort("collected_at", -1).limit(limit))
+        return docs
+    except Exception:
+        return SAMPLE_NEWS
