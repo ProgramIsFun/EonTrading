@@ -132,7 +132,6 @@ export default function ArchitectureDiagram() {
         <div style={{ fontSize: 10, color: "#888", marginTop: 8 }}>
           Broker interface: <code style={{ color: "#818cf8" }}>execute(trade)</code> + <code style={{ color: "#818cf8" }}>get_positions()</code> — Watcher queries positions to give LLM analyzer portfolio context.
         </div>
-        </div>
       </div>
 
       {/* News Data Pipeline */}
