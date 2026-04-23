@@ -42,6 +42,9 @@ class MockBroker(Broker):
         self.trades.append(trade)
         return True
 
+    async def get_positions(self) -> dict[str, int]:
+        return {}
+
 
 # --- Keyword sentiment tests ---
 

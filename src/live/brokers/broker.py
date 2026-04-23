@@ -1,16 +1,20 @@
-"""Broker interface and Futu OpenD implementation."""
-import asyncio
+"""Broker interface and implementations."""
 from abc import ABC, abstractmethod
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
 
 
 class Broker(ABC):
-    """Interface for trade execution."""
+    """Interface for trade execution and position queries."""
 
     @abstractmethod
     async def execute(self, trade: TradeEvent) -> bool:
         """Execute a trade. Returns True if successful."""
+        pass
+
+    @abstractmethod
+    async def get_positions(self) -> dict[str, int]:
+        """Returns current positions as {symbol: shares}."""
         pass
 
 
@@ -41,13 +45,43 @@ class FutuBroker(Broker):
             print(f"  ❌ Futu error: {e}")
             return False
 
+    async def get_positions(self) -> dict[str, int]:
+        from futu import OpenSecTradeContext, TrdEnv
+        trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
+        try:
+            ctx = OpenSecTradeContext(host=self.host, port=self.port)
+            ret, data = ctx.position_list_query(trd_env=trd_env)
+            ctx.close()
+            if ret != 0:
+                return {}
+            positions = {}
+            for _, row in data.iterrows():
+                sym = row["code"]
+                qty = int(row["qty"])
+                if qty > 0:
+                    positions[sym] = qty
+            return positions
+        except Exception as e:
+            print(f"  ❌ Futu get_positions error: {e}")
+            return {}
+
 
 class LogBroker(Broker):
-    """Dry-run broker that just logs trades. Good for testing."""
+    """Dry-run broker that tracks positions in memory."""
+
+    def __init__(self):
+        self._positions: dict[str, int] = {}
 
     async def execute(self, trade: TradeEvent) -> bool:
         print(f"  📝 [DRY RUN] {trade.action.upper()} {trade.symbol} | reason: {trade.reason}")
+        if trade.action == "buy":
+            self._positions[trade.symbol] = self._positions.get(trade.symbol, 0) + int(trade.size)
+        elif trade.action == "sell":
+            self._positions.pop(trade.symbol, None)
         return True
+
+    async def get_positions(self) -> dict[str, int]:
+        return dict(self._positions)
 
 
 class TradeExecutor:
