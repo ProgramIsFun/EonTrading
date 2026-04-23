@@ -56,6 +56,40 @@ config/                         # Symbol lists, env configs
 docs/                           # Reference material
 ```
 
+## Roadmap
+
+### Done
+- [x] Live pipeline: news → sentiment → trade → broker (event bus)
+- [x] 4 news sources: NewsAPI, Finnhub, RSS, Reddit
+- [x] 2 sentiment analyzers: keyword, LLM
+- [x] Sentiment backtest with hourly data and realistic execution
+- [x] Risk management: SL/TP, trailing SL, hold limits, cooldown
+- [x] Position sizing: sentiment-scaled, max allocation, risk-per-trade
+- [x] Multi-symbol portfolio backtest with shared capital
+- [x] Shared TradingLogic between backtest and live trader
+- [x] Dashboard: React + Vite + FastAPI (equity chart, trade log, param controls)
+- [x] Real news backtest: 7 stocks with actual 2025 events
+
+### To Do — Strategy
+- [ ] LLM analyzer — keyword misses context ("growth slows" = bearish)
+- [ ] Sector-based trading — "tariffs on China" should trigger tech stocks
+- [ ] More historical news events for backtesting
+- [ ] Collect real news to DB — run watcher now, backtest later
+
+### To Do — Dashboard
+- [ ] P&L by symbol bar chart
+- [ ] Compare runs side by side
+- [ ] Live mode: real-time news feed and positions
+
+### To Do — Engine
+- [ ] Persist trades to MongoDB for history tracking
+- [ ] Multi-timeframe: daily sentiment + hourly execution
+
+### To Do — Infra
+- [ ] Deploy API to Windows PC alongside ClickHouse
+- [ ] Telegram/webhook alerts before executing trades
+- [ ] Scheduled news collection (cron)
+
 ## Setup
 
 ### Prerequisites
