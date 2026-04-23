@@ -63,6 +63,7 @@ export default function ArchitectureDiagram() {
             <div style={{ color: "#888" }}>Uses RedisEventBus (cross-process).</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_watcher</code>
+              <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_analyzer</code>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_trader</code>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_executor</code>
             </div>
@@ -70,7 +71,8 @@ export default function ArchitectureDiagram() {
         </div>
         <div style={{ marginTop: 10, fontSize: 10, color: "#888", lineHeight: 1.6, borderTop: "1px solid #333", paddingTop: 8 }}>
           <div style={{ fontWeight: 600, color: "#ccc", marginBottom: 4 }}>Channel routing (both modes):</div>
-          <div>Watcher → publishes to <code style={{ color: "#818cf8" }}>sentiment</code> channel</div>
+          <div>Watcher → publishes to <code style={{ color: "#818cf8" }}>news</code> channel</div>
+          <div>Analyzer → subscribes to <code style={{ color: "#818cf8" }}>news</code>, queries positions, publishes to <code style={{ color: "#818cf8" }}>sentiment</code> channel</div>
           <div>Trader → subscribes to <code style={{ color: "#818cf8" }}>sentiment</code>, publishes to <code style={{ color: "#818cf8" }}>trade</code> channel</div>
           <div>Executor → subscribes to <code style={{ color: "#818cf8" }}>trade</code> channel</div>
           <div style={{ color: "#555", marginTop: 4 }}>Same channels whether LocalEventBus (in-memory) or RedisEventBus (cross-process).</div>
@@ -99,15 +101,18 @@ export default function ArchitectureDiagram() {
           <span style={arrow}>→</span>
           <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>NewsWatcher</div>
+            <div style={{ fontSize: 10, color: "#888" }}>fetch only</div>
             {internalTag()}
             {pathTag("src/live/news_watcher.py")}
-            {pathTag("src/common/news_poller.py")}
           </div>
           <span style={arrow}>→</span>
+          {label("[news]")}
+          <span style={arrow}>→</span>
           <div style={boxStyle(INTERNAL)}>
-            <div style={{ fontWeight: 600 }}>Sentiment Analyzer</div>
-            <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM</div>
+            <div style={{ fontWeight: 600 }}>AnalyzerService</div>
+            <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM + positions</div>
             {internalTag()}
+            {pathTag("src/live/analyzer_service.py")}
             {pathTag("src/strategies/sentiment.py")}
           </div>
           <span style={arrow}>→</span>
@@ -130,7 +135,7 @@ export default function ArchitectureDiagram() {
           </div>
         </div>
         <div style={{ fontSize: 10, color: "#888", marginTop: 8 }}>
-          Broker interface: <code style={{ color: "#818cf8" }}>execute(trade)</code> + <code style={{ color: "#818cf8" }}>get_positions()</code> — NewsWatcher queries positions before each poll to give LLM analyzer portfolio context.
+          AnalyzerService queries <code style={{ color: "#818cf8" }}>get_positions()</code> from Trader for portfolio-aware LLM scoring. Broker exposes <code style={{ color: "#818cf8" }}>execute(trade)</code> + <code style={{ color: "#818cf8" }}>get_positions()</code>.
         </div>
       </div>
 
