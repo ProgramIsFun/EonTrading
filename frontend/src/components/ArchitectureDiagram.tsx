@@ -47,12 +47,34 @@ export default function ArchitectureDiagram() {
         {serviceTag()} <span>external service</span>
       </div>
 
+      {/* Mode explanation */}
+      <div style={{ background: "#1a1a2e", borderRadius: 8, padding: 12, marginBottom: 20, border: "1px solid #333" }}>
+        <div style={{ fontSize: 12, color: "#818cf8", fontWeight: 600, marginBottom: 6 }}>Deployment Modes</div>
+        <div style={{ display: "flex", gap: 24, fontSize: 11, color: "#ccc" }}>
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>🟢 Single Process (default)</div>
+            <div style={{ color: "#888" }}>All components in one Python process.</div>
+            <div style={{ color: "#888" }}>Uses LocalEventBus (in-memory).</div>
+            <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.news_trader</code>
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>🔵 Distributed (separate processes)</div>
+            <div style={{ color: "#888" }}>Each component runs independently.</div>
+            <div style={{ color: "#888" }}>Uses RedisEventBus (cross-process).</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 2 }}>
+              <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_watcher</code>
+              <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_trader</code>
+              <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_executor</code>
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: "#666", marginTop: 8 }}>Same components, same logic — only the event bus changes. Switch anytime with no code changes.</div>
+      </div>
+
       {/* Live Pipeline */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: "#818cf8", marginBottom: 8, fontWeight: 600 }}>
           Live Trading Pipeline
-          {processTag("single: python3 -m src.live.news_trader")}
-          {processTag("distributed: run_watcher + run_trader + run_executor")}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6 }}>
