@@ -8,6 +8,7 @@ import ParamsPanel from "./components/ParamsPanel";
 import PnlBySymbol from "./components/PnlBySymbol";
 import ArchitectureDiagram from "./components/ArchitectureDiagram";
 import NewsFeed from "./components/NewsFeed";
+import PriceBacktest from "./components/PriceBacktest";
 
 const DEFAULT_PARAMS: BacktestParams = {
   capital: 70000,
@@ -19,7 +20,7 @@ const DEFAULT_PARAMS: BacktestParams = {
   trailing_sl: false,
 };
 
-type Tab = "backtest" | "news" | "about";
+type Tab = "backtest" | "price" | "news" | "about";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("backtest");
@@ -75,7 +76,8 @@ export default function App() {
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>EonTrading</h1>
         <div style={{ display: "flex", gap: 4, background: "#1e1e2e", borderRadius: 8, padding: 4 }}>
-          <button style={tabStyle("backtest")} onClick={() => setTab("backtest")}>Backtest</button>
+          <button style={tabStyle("backtest")} onClick={() => setTab("backtest")}>Sentiment</button>
+          <button style={tabStyle("price")} onClick={() => setTab("price")}>Price</button>
           <button style={tabStyle("news")} onClick={() => { setTab("news"); setNewsBadge(0); }}>
             News
             {newsBadge > 0 && (
@@ -90,6 +92,8 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 1100 }}>
+        {tab === "price" && <PriceBacktest />}
+
         {tab === "news" && <NewsFeed />}
 
         {tab === "about" && <ArchitectureDiagram />}

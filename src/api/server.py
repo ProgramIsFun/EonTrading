@@ -88,6 +88,60 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/price-backtest")
+def price_backtest(
+    symbol: str = "AAPL",
+    strategy: str = "sma",
+    start: str = "2025-01-01",
+    end: str = "2025-12-31",
+    capital: float = 10000,
+    # SMA params
+    fast: int = 20,
+    slow: int = 50,
+    # RSI params
+    period: int = 14,
+    oversold: float = 30,
+    overbought: float = 70,
+):
+    import yfinance as yf
+    from src.backtest import run_backtest
+    from src.strategies import SMACrossover, RSIMeanReversion
+
+    df = yf.download(symbol, start=start, end=end, auto_adjust=True, progress=False)
+    if df.empty:
+        return {"error": f"No data for {symbol}"}
+    df = df.reset_index()
+    df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
+    if "date" in df.columns:
+        df = df.rename(columns={"date": "timestamp"})
+
+    if strategy == "rsi":
+        strat = RSIMeanReversion(period=period, oversold=oversold, overbought=overbought)
+    else:
+        strat = SMACrossover(fast=fast, slow=slow)
+
+    result = run_backtest(df, strat, symbol=symbol, initial_capital=capital, cost_model=US_STOCKS)
+    return {
+        "strategy": result.strategy,
+        "symbol": result.symbol,
+        "initial_capital": result.initial_capital,
+        "final_value": round(result.final_value, 2),
+        "total_return_pct": round(result.total_return_pct, 2),
+        "annual_return_pct": round(result.annual_return_pct, 2),
+        "max_drawdown_pct": round(result.max_drawdown_pct, 2),
+        "total_trades": result.total_trades,
+        "win_rate": round(result.win_rate, 1),
+        "sharpe_ratio": round(result.sharpe_ratio, 2),
+        "equity_curve": [round(v, 2) for v in result.equity_curve.tolist()],
+        "trades": [
+            {"symbol": t.symbol, "side": t.side, "entry_price": round(t.entry_price, 2),
+             "exit_price": round(t.exit_price, 2), "shares": t.shares, "pnl": round(t.pnl, 2),
+             "entry_date": str(t.entry_date)[:10], "exit_date": str(t.exit_date)[:10]}
+            for t in result.trades
+        ],
+    }
+
+
 @app.get("/api/backtest")
 def backtest(
     capital: float = 70000,
