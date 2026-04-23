@@ -2,7 +2,7 @@
 
 Trading system: data collection, backtesting, and live execution.
 
-**Scope:** This project trades with cash only — no margin, no leverage, no borrowing from brokers. All positions are fully funded by available capital.
+**Scope:** This project trades with cash only — no margin, no leverage, no short selling, no borrowing from brokers. This ensures maximum loss is capped at the initial capital. Borrowed positions (margin/shorts) carry the risk of losing more than you put in.
 
 ## Architecture
 
