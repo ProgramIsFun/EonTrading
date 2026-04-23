@@ -29,11 +29,11 @@
                             ▼ EventBus [sentiment]
                             │
                    ┌────────┴─────────┐
-                   │  SentimentTrader │  threshold, min_confidence
-                   │                  │  position sizing, cooldown
-                   │  Decides:        │
-                   │  BUY if sent > T │  (for each symbol in event)
-                   │  SELL if sent <-T│
+                   │  SentimentTrader │  ┌──────────────┐
+                   │                  │◄─┤ TradingLogic │ (shared)
+                   │  Decides:        │  └──────────────┘
+                   │  BUY if sent > T │  threshold, SL/TP, trailing,
+                   │  SELL if sent <-T│  position sizing, cooldown
                    └────────┬─────────┘
                             │
                             ▼ EventBus [trade]
@@ -63,10 +63,13 @@
 │                                            │
 │  News → Analyzer → Signals → Execution     │
 │                                            │
-│  Features:                                 │
+│  ┌──────────────┐                          │
+│  │ TradingLogic │ (same as live trader)    │
+│  └──────────────┘                          │
 │  • Execute at next bar's open              │
 │  • Slippage + commission (US_STOCKS)       │
 │  • Stop-loss / Take-profit (intraday H/L)  │
+│  • Trailing stop-loss                      │
 │  • Max hold period                         │
 │  • Cooldown between trades                 │
 │  • Position sizing:                        │
@@ -78,6 +81,35 @@
 │  • Single symbol  (sentiment_backtest.py)  │
 │  • Multi-symbol portfolio (portfolio_backtest.py) │
 └────────────────────────────────────────────┘
+```
+
+## Dashboard
+
+```
+┌──────────────────────────────────────────────┐
+│  React + TypeScript + Vite (frontend/)       │
+│                                              │
+│  ┌────────────┐ ┌──────────┐ ┌───────────┐  │
+│  │ ParamsPanel│ │StatsCard │ │EquityChart│  │
+│  │ (sliders)  │ │(return,  │ │(recharts) │  │
+│  │            │ │ DD, win%)│ │           │  │
+│  └────────────┘ └──────────┘ └───────────┘  │
+│  ┌──────────────────────────────────────┐    │
+│  │ TradeTable (log with P&L)           │    │
+│  └──────────────────────────────────────┘    │
+└──────────────────┬───────────────────────────┘
+                   │ HTTP
+                   ▼
+┌──────────────────────────────────────────────┐
+│  FastAPI (src/api/server.py)                 │
+│                                              │
+│  GET /api/backtest?capital=...&threshold=...  │
+│  GET /api/news                               │
+│  GET /api/health                             │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+          Backtest Engine (above)
 ```
 
 ## Event Bus
@@ -106,6 +138,21 @@ Backends:
 │  • Works with Ollama/local LLMs │  • Returns structured JSON
 │                                 │
 └─────────────────────────────────┘
+```
+
+## Shared Components
+
+```
+TradingLogic (src/common/trading_logic.py)
+├── should_buy()          — threshold + confidence + position sizing
+├── should_sell_on_sentiment() — bearish threshold check
+├── check_stop_loss()     — fixed or trailing SL
+├── check_take_profit()   — fixed TP
+└── update_peak()         — trailing SL peak tracking
+
+Used by:
+  • Backtest engine (portfolio_backtest.py)
+  • Live trader (news_trader.py → SentimentTrader)
 ```
 
 ## Constraints
