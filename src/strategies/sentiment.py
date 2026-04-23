@@ -98,7 +98,9 @@ LLM_PROMPT = """Analyze this financial news headline. Return JSON only, no expla
 Headline: "{headline}"
 
 Rules:
-- If the news is bearish for the broad market (e.g. tariffs, recession, war), include inverse ETFs: SQQQ (inverse Nasdaq), SH (inverse S&P 500), SDOW (inverse Dow) with POSITIVE sentiment (they go up when market drops).
+- We trade CASH ONLY — no margin, no leverage, no short selling, no borrowing. Maximum loss is capped at initial capital.
+- Because we cannot short, use inverse ETFs to profit from market drops: SQQQ (inverse Nasdaq), SH (inverse S&P 500), SDOW (inverse Dow). These are regular stocks we buy with cash.
+- If the news is bearish for the broad market (e.g. tariffs, recession, war), return inverse ETFs with POSITIVE sentiment (they go up when market drops).
 - For individual stock news, return the affected tickers.
 - Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
 
@@ -119,11 +121,11 @@ Current holdings:
 {positions}
 
 Rules:
-- If the news is bearish for the broad market (e.g. tariffs, recession, war), include inverse ETFs: SQQQ (inverse Nasdaq), SH (inverse S&P 500), SDOW (inverse Dow) with POSITIVE sentiment.
-- For individual stock news, return the affected tickers.
+- We trade CASH ONLY — no margin, no leverage, no short selling, no borrowing. Maximum loss is capped at initial capital.
+- Because we cannot short, use inverse ETFs to profit from market drops: SQQQ (inverse Nasdaq), SH (inverse S&P 500), SDOW (inverse Dow). These are regular stocks we buy with cash.
+- If the news is bearish for the broad market, return inverse ETFs with POSITIVE sentiment + return held stocks with NEGATIVE sentiment (so we sell them).
 - Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
 - Higher confidence if the news directly impacts our holdings.
-- Include both held stocks (for selling) and inverse ETFs (for buying) when market drops.
 
 Return:
 {{
