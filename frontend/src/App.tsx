@@ -5,6 +5,7 @@ import StatsCard from "./components/StatsCard";
 import EquityChart from "./components/EquityChart";
 import TradeTable from "./components/TradeTable";
 import ParamsPanel from "./components/ParamsPanel";
+import PnlBySymbol from "./components/PnlBySymbol";
 import ArchitectureDiagram from "./components/ArchitectureDiagram";
 
 const DEFAULT_PARAMS: BacktestParams = {
@@ -70,6 +71,7 @@ export default function App() {
             {result && (
               <>
                 <StatsCard result={result} />
+                <PnlBySymbol trades={result.trades} />
                 <EquityChart data={result.equity_curve} initialCapital={params.capital} />
                 <TradeTable trades={result.trades} />
               </>
