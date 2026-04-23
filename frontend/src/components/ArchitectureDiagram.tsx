@@ -11,6 +11,12 @@ const boxStyle = (color: string) => ({
 const processTag = (text: string) => (
   <span style={{ fontSize: 9, background: "#818cf822", color: "#818cf8", padding: "1px 5px", borderRadius: 3, marginLeft: 4 }}>{text}</span>
 );
+const internalTag = () => (
+  <span style={{ fontSize: 9, background: "#22c55e22", color: "#22c55e", padding: "1px 5px", borderRadius: 3 }}>internal</span>
+);
+const serviceTag = () => (
+  <span style={{ fontSize: 9, background: "#f59e0b22", color: "#f59e0b", padding: "1px 5px", borderRadius: 3 }}>service</span>
+);
 
 const arrow = { color: "#555", fontSize: 18 };
 const label = (text: string) => <span style={{ fontSize: 10, color: "#666" }}>{text}</span>;
@@ -21,10 +27,10 @@ export default function ArchitectureDiagram() {
       <div style={{ fontSize: 14, color: "#888", marginBottom: 16 }}>System Architecture</div>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: 16, marginBottom: 16, fontSize: 11, color: "#888" }}>
-        <span>Each section runs as a separate process:</span>
-        {processTag("process")}
-        <span>= standalone Python or Node process</span>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, fontSize: 11, color: "#888", flexWrap: "wrap" }}>
+        {processTag("process")} <span>= standalone process</span>
+        <span style={{ fontSize: 9, background: "#22c55e22", color: "#22c55e", padding: "1px 5px", borderRadius: 3 }}>internal</span> <span>= runs inside another process</span>
+        <span style={{ fontSize: 9, background: "#f59e0b22", color: "#f59e0b", padding: "1px 5px", borderRadius: 3 }}>service</span> <span>= external service</span>
       </div>
 
       {/* Live Pipeline */}
@@ -40,11 +46,13 @@ export default function ArchitectureDiagram() {
           <div style={boxStyle("#1e3a2e")}>
             <div style={{ fontWeight: 600 }}>NewsWatcher</div>
             <div style={{ fontSize: 10, color: "#888" }}>poll + dedup</div>
+            {internalTag()}
           </div>
           <span style={arrow}>→</span>
           <div style={boxStyle("#2a2a4a")}>
             <div style={{ fontWeight: 600 }}>Sentiment Analyzer</div>
             <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM (direct call)</div>
+            {internalTag()}
           </div>
           <span style={arrow}>→</span>
           {label("[sentiment]")}
@@ -52,6 +60,7 @@ export default function ArchitectureDiagram() {
           <div style={boxStyle("#3a2a1e")}>
             <div style={{ fontWeight: 600 }}>SentimentTrader</div>
             <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
+            {internalTag()}
           </div>
           <span style={arrow}>→</span>
           {label("[trade]")}
@@ -59,6 +68,7 @@ export default function ArchitectureDiagram() {
           <div style={boxStyle("#2a2a4a")}>
             <div style={{ fontWeight: 600 }}>Executor</div>
             <div style={{ fontSize: 10, color: "#888" }}>Log / Futu</div>
+            {internalTag()}
           </div>
         </div>
       </div>
@@ -84,6 +94,7 @@ export default function ArchitectureDiagram() {
           <div style={boxStyle("#3a2a1e")}>
             <div style={{ fontWeight: 600 }}>MongoDB</div>
             <div style={{ fontSize: 10, color: "#888" }}>dedup by URL</div>
+            {serviceTag()}
           </div>
         </div>
 
@@ -104,6 +115,7 @@ export default function ArchitectureDiagram() {
           <div style={boxStyle("#3a2a1e")}>
             <div style={{ fontWeight: 600 }}>same collection</div>
             <div style={{ fontSize: 10, color: "#888" }}>backfilled: true</div>
+            {serviceTag()}
           </div>
         </div>
       </div>
