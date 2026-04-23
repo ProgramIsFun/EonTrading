@@ -8,6 +8,10 @@ const boxStyle = (color: string) => ({
   minWidth: 100,
 });
 
+const processTag = (text: string) => (
+  <span style={{ fontSize: 9, background: "#818cf822", color: "#818cf8", padding: "1px 5px", borderRadius: 3, marginLeft: 4 }}>{text}</span>
+);
+
 const arrow = { color: "#555", fontSize: 18 };
 const label = (text: string) => <span style={{ fontSize: 10, color: "#666" }}>{text}</span>;
 
@@ -16,9 +20,16 @@ export default function ArchitectureDiagram() {
     <div style={{ background: "#1e1e2e", borderRadius: 8, padding: 24 }}>
       <div style={{ fontSize: 14, color: "#888", marginBottom: 16 }}>System Architecture</div>
 
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 16, marginBottom: 16, fontSize: 11, color: "#888" }}>
+        <span>Each section runs as a separate process:</span>
+        {processTag("process")}
+        <span>= standalone Python or Node process</span>
+      </div>
+
       {/* Live Pipeline */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 12, color: "#818cf8", marginBottom: 8, fontWeight: 600 }}>Live Trading Pipeline</div>
+        <div style={{ fontSize: 12, color: "#818cf8", marginBottom: 8, fontWeight: 600 }}>Live Trading Pipeline {processTag("python3 -m src.live.news_trader")}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6 }}>
             {["NewsAPI", "Finnhub", "RSS", "Reddit"].map((s) => (
@@ -58,7 +69,7 @@ export default function ArchitectureDiagram() {
 
         {/* Live collector */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-          <span style={{ fontSize: 10, color: "#888", width: 70 }}>Live:</span>
+          <span style={{ fontSize: 10, color: "#888", width: 70 }}>Live: {processTag("process")}</span>
           <div style={{ display: "flex", gap: 6 }}>
             {["RSS (free)", "Reddit (free)"].map((s) => (
               <div key={s} style={boxStyle("#2a2a4a")}>{s}</div>
@@ -78,7 +89,7 @@ export default function ArchitectureDiagram() {
 
         {/* Backfill */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 10, color: "#888", width: 70 }}>Backfill:</span>
+          <span style={{ fontSize: 10, color: "#888", width: 70 }}>Backfill: {processTag("one-off")}</span>
           <div style={{ display: "flex", gap: 6 }}>
             {["Finnhub (key)", "NewsAPI (key)"].map((s) => (
               <div key={s} style={boxStyle("#2a2a4a")}>{s}</div>
@@ -99,7 +110,7 @@ export default function ArchitectureDiagram() {
 
       {/* Backtest Pipeline */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 12, color: "#22c55e", marginBottom: 8, fontWeight: 600 }}>Backtest Pipeline</div>
+        <div style={{ fontSize: 12, color: "#22c55e", marginBottom: 8, fontWeight: 600 }}>Backtest Pipeline {processTag("runs inside FastAPI")}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={boxStyle("#2a2a4a")}>
             <div style={{ fontWeight: 600 }}>News Events</div>
@@ -129,11 +140,13 @@ export default function ArchitectureDiagram() {
           <div style={boxStyle("#2a2a4a")}>
             <div style={{ fontWeight: 600 }}>React + Vite</div>
             <div style={{ fontSize: 10, color: "#888" }}>charts, controls</div>
+            <div>{processTag("npm run dev")}</div>
           </div>
           <span style={arrow}>→ HTTP →</span>
           <div style={boxStyle("#2a2a4a")}>
             <div style={{ fontWeight: 600 }}>FastAPI</div>
             <div style={{ fontSize: 10, color: "#888" }}>/api/backtest</div>
+            <div>{processTag("uvicorn")}</div>
           </div>
           <span style={arrow}>→</span>
           <div style={boxStyle("#3a2a1e")}>
