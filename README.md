@@ -94,6 +94,7 @@ docs/                           # Reference material
 - [ ] Deploy API to Windows PC alongside ClickHouse
 - [ ] Telegram/webhook alerts before executing trades
 - [ ] Set up Ollama on Windows PC for free local LLM
+- [ ] Try `twscrape` library for TwitterSource implementation (track @elonmusk, @realDonaldTrump)
 
 ## Setup
 
