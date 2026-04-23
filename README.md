@@ -69,17 +69,22 @@ docs/                           # Reference material
 - [x] Shared TradingLogic between backtest and live trader
 - [x] Dashboard: React + Vite + FastAPI (equity chart, trade log, param controls)
 - [x] Real news backtest: 7 stocks with actual 2025 events
+- [x] P&L by symbol bar chart
+- [x] News feed tab with collector start/stop from dashboard
+- [x] News notification badge (polls every 30s)
+- [x] News collector: RSS + Reddit → MongoDB (EonTradingDB.news)
+- [x] Architecture diagram in dashboard (About tab)
+- [x] Max hold days in live trader (off by default)
 
 ### To Do — Strategy
 - [ ] LLM analyzer — keyword misses context ("growth slows" = bearish)
 - [ ] Sector-based trading — "tariffs on China" should trigger tech stocks
-- [ ] More historical news events for backtesting
-- [ ] Collect real news to DB — run watcher now, backtest later
+- [ ] Backtest with collected real news from MongoDB
+- [ ] Urgency-based position sizing
 
 ### To Do — Dashboard
-- [ ] P&L by symbol bar chart
 - [ ] Compare runs side by side
-- [ ] Live mode: real-time news feed and positions
+- [ ] Live mode: real-time positions and trade history
 
 ### To Do — Engine
 - [ ] Persist trades to MongoDB for history tracking
@@ -88,7 +93,7 @@ docs/                           # Reference material
 ### To Do — Infra
 - [ ] Deploy API to Windows PC alongside ClickHouse
 - [ ] Telegram/webhook alerts before executing trades
-- [ ] Scheduled news collection (cron)
+- [ ] Set up Ollama on Windows PC for free local LLM
 
 ## Setup
 
