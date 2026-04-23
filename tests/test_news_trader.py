@@ -2,6 +2,7 @@
 import asyncio
 import pytest
 from unittest.mock import AsyncMock
+from datetime import datetime
 from src.common.event_bus import LocalEventBus
 from src.common.events import (
     NewsEvent, SentimentEvent, TradeEvent,
@@ -112,7 +113,7 @@ class TestSentimentTrader:
         await executor.start()
 
         # First buy
-        trader.holdings.add("TSLA")
+        trader.holdings["TSLA"] = datetime.utcnow()
 
         sentiment = SentimentEvent(
             source="test", headline="Tesla crashes", timestamp="2026-04-22T10:00:00Z",

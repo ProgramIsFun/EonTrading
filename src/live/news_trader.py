@@ -36,14 +36,35 @@ class SentimentTrader:
     Uses shared TradingLogic from src/common/trading_logic.py — same logic as backtest.
     """
 
-    def __init__(self, bus: EventBus, logic: 'TradingLogic' = None, **kwargs):
+    def __init__(self, bus: EventBus, logic: 'TradingLogic' = None, max_hold_days: int = 0, **kwargs):
         from src.common.trading_logic import TradingLogic
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
-        self.holdings = set()  # symbols we're holding
+        self.holdings: dict[str, datetime] = {}  # symbol → entry time
+        self.max_hold_days = max_hold_days
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_SENTIMENT, self._on_sentiment)
+        if self.max_hold_days > 0:
+            asyncio.ensure_future(self._hold_checker())
+
+    async def _hold_checker(self):
+        """Background task: close positions that exceed max hold period."""
+        while True:
+            now = datetime.utcnow()
+            for symbol in list(self.holdings.keys()):
+                entry_time = self.holdings[symbol]
+                held_days = (now - entry_time).total_seconds() / 86400
+                if held_days >= self.max_hold_days:
+                    trade = TradeEvent(
+                        symbol=symbol, action="sell",
+                        reason=f"max hold {self.max_hold_days}d reached",
+                        timestamp=now.isoformat() + "Z",
+                    )
+                    print(f"  SELL {symbol} (max hold {self.max_hold_days}d reached)")
+                    await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
+                    del self.holdings[symbol]
+            await asyncio.sleep(3600)  # check every hour
 
     async def _on_sentiment(self, msg: dict):
         event = SentimentEvent.from_dict(msg)
@@ -52,12 +73,12 @@ class SentimentTrader:
 
         for symbol in event.symbols:
             action = None
-            if self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, {s: True for s in self.holdings}):
+            if self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, self.holdings):
                 action = "sell"
-                self.holdings.discard(symbol)
+                self.holdings.pop(symbol, None)
             elif event.confidence >= self.logic.min_confidence and event.sentiment >= self.logic.threshold and symbol not in self.holdings:
                 action = "buy"
-                self.holdings.add(symbol)
+                self.holdings[symbol] = datetime.utcnow()
 
             if action:
                 trade = TradeEvent(
