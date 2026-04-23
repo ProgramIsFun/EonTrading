@@ -4,12 +4,64 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.costs import US_STOCKS
 from src.data.utils.db_helper import get_mongo_client
+import asyncio
+import threading
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = FastAPI(title="EonTrading API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# --- News collector state ---
+_collector_task = None
+_collector_running = False
+
+
+def _run_collector():
+    global _collector_running
+    from src.data.news import RSSSource, RedditSource
+    from datetime import datetime
+    sources = [RSSSource(), RedditSource()]
+    client = get_mongo_client()
+    col = client["EonTradingDB"]["news"]
+    col.create_index("url", unique=True, sparse=True)
+    import time
+    while _collector_running:
+        for source in sources:
+            events = source.fetch_latest()
+            for ev in events:
+                if ev.url and col.find_one({"url": ev.url}):
+                    continue
+                col.insert_one({
+                    "source": ev.source, "headline": ev.headline,
+                    "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
+                    "collected_at": datetime.utcnow().isoformat() + "Z",
+                })
+        time.sleep(300)
+
+
+@app.get("/api/collector/status")
+def collector_status():
+    return {"running": _collector_running}
+
+
+@app.post("/api/collector/start")
+def collector_start():
+    global _collector_task, _collector_running
+    if _collector_running:
+        return {"status": "already running"}
+    _collector_running = True
+    _collector_task = threading.Thread(target=_run_collector, daemon=True)
+    _collector_task.start()
+    return {"status": "started"}
+
+
+@app.post("/api/collector/stop")
+def collector_stop():
+    global _collector_running
+    _collector_running = False
+    return {"status": "stopped"}
 
 # Sample news for demo — replace with DB later
 SAMPLE_NEWS = [

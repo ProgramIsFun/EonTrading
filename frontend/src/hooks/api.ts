@@ -14,3 +14,13 @@ export async function fetchNews(): Promise<any[]> {
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
+
+export async function getCollectorStatus(): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/api/collector/status`);
+  const data = await res.json();
+  return data.running;
+}
+
+export async function toggleCollector(start: boolean): Promise<void> {
+  await fetch(`${API_BASE}/api/collector/${start ? "start" : "stop"}`, { method: "POST" });
+}
