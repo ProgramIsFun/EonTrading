@@ -138,3 +138,13 @@ def news(limit: int = 100):
         return docs
     except Exception:
         return SAMPLE_NEWS
+
+
+@app.get("/api/news/count")
+def news_count():
+    try:
+        client = get_mongo_client()
+        col = client["EonTradingDB"]["news"]
+        return {"count": col.count_documents({})}
+    except Exception:
+        return {"count": 0}

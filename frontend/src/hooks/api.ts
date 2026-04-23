@@ -15,6 +15,12 @@ export async function fetchNews(): Promise<any[]> {
   return res.json();
 }
 
+export async function getNewsCount(): Promise<number> {
+  const res = await fetch(`${API_BASE}/api/news/count`);
+  const data = await res.json();
+  return data.count;
+}
+
 export async function getCollectorStatus(): Promise<boolean> {
   const res = await fetch(`${API_BASE}/api/collector/status`);
   const data = await res.json();

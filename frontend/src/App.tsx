@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { BacktestResult, BacktestParams } from "./types/backtest";
-import { fetchBacktest } from "./hooks/api";
+import { fetchBacktest, getNewsCount } from "./hooks/api";
 import StatsCard from "./components/StatsCard";
 import EquityChart from "./components/EquityChart";
 import TradeTable from "./components/TradeTable";
@@ -27,6 +27,24 @@ export default function App() {
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [newsCount, setNewsCount] = useState(0);
+  const prevCount = useRef(0);
+  const [newsBadge, setNewsBadge] = useState(0);
+
+  useEffect(() => {
+    const poll = setInterval(async () => {
+      try {
+        const count = await getNewsCount();
+        if (prevCount.current > 0 && count > prevCount.current) {
+          setNewsBadge((b) => b + (count - prevCount.current));
+        }
+        prevCount.current = count;
+        setNewsCount(count);
+      } catch {}
+    }, 30000);
+    getNewsCount().then((c) => { setNewsCount(c); prevCount.current = c; }).catch(() => {});
+    return () => clearInterval(poll);
+  }, []);
 
   const runBacktest = async () => {
     setLoading(true);
@@ -58,7 +76,15 @@ export default function App() {
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>EonTrading</h1>
         <div style={{ display: "flex", gap: 4, background: "#1e1e2e", borderRadius: 8, padding: 4 }}>
           <button style={tabStyle("backtest")} onClick={() => setTab("backtest")}>Backtest</button>
-          <button style={tabStyle("news")} onClick={() => setTab("news")}>News</button>
+          <button style={tabStyle("news")} onClick={() => { setTab("news"); setNewsBadge(0); }}>
+            News
+            {newsBadge > 0 && (
+              <span style={{
+                marginLeft: 6, background: "#ef4444", color: "#fff",
+                borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 700,
+              }}>{newsBadge}</span>
+            )}
+          </button>
           <button style={tabStyle("about")} onClick={() => setTab("about")}>About</button>
         </div>
       </div>
