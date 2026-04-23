@@ -1,3 +1,16 @@
+// Colors: process=blue, internal=green, service=amber, source=neutral
+const PROCESS = "#1a2a4a";
+const INTERNAL = "#1a3a2a";
+const SERVICE = "#3a2a1a";
+const SOURCE = "#2a2a3a";
+
+const borders: Record<string, string> = {
+  [PROCESS]: "#818cf844",
+  [INTERNAL]: "#22c55e44",
+  [SERVICE]: "#f59e0b44",
+  [SOURCE]: "#44444466",
+};
+
 const boxStyle = (color: string) => ({
   background: color,
   borderRadius: 8,
@@ -6,17 +19,15 @@ const boxStyle = (color: string) => ({
   color: "#e0e0e0",
   textAlign: "center" as const,
   minWidth: 100,
+  border: `1px solid ${borders[color] || "#333"}`,
 });
 
-const processTag = (text: string) => (
-  <span style={{ fontSize: 9, background: "#818cf822", color: "#818cf8", padding: "1px 5px", borderRadius: 3, marginLeft: 4 }}>{text}</span>
+const tag = (text: string, bg: string, fg: string) => (
+  <span style={{ fontSize: 9, background: bg, color: fg, padding: "1px 5px", borderRadius: 3 }}>{text}</span>
 );
-const internalTag = () => (
-  <span style={{ fontSize: 9, background: "#22c55e22", color: "#22c55e", padding: "1px 5px", borderRadius: 3 }}>internal</span>
-);
-const serviceTag = () => (
-  <span style={{ fontSize: 9, background: "#f59e0b22", color: "#f59e0b", padding: "1px 5px", borderRadius: 3 }}>service</span>
-);
+const processTag = (t?: string) => tag(t || "process", "#818cf822", "#818cf8");
+const internalTag = () => tag("internal", "#22c55e22", "#22c55e");
+const serviceTag = () => tag("service", "#f59e0b22", "#f59e0b");
 
 const arrow = { color: "#555", fontSize: 18 };
 const label = (text: string) => <span style={{ fontSize: 10, color: "#666" }}>{text}</span>;
@@ -27,10 +38,10 @@ export default function ArchitectureDiagram() {
       <div style={{ fontSize: 14, color: "#888", marginBottom: 16 }}>System Architecture</div>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, fontSize: 11, color: "#888", flexWrap: "wrap" }}>
-        {processTag("process")} <span>= standalone process</span>
-        <span style={{ fontSize: 9, background: "#22c55e22", color: "#22c55e", padding: "1px 5px", borderRadius: 3 }}>internal</span> <span>= runs inside another process</span>
-        <span style={{ fontSize: 9, background: "#f59e0b22", color: "#f59e0b", padding: "1px 5px", borderRadius: 3 }}>service</span> <span>= external service</span>
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, fontSize: 11, color: "#888", flexWrap: "wrap", alignItems: "center" }}>
+        {processTag()} <span>standalone process</span>
+        {internalTag()} <span>runs inside parent process</span>
+        {serviceTag()} <span>external service</span>
       </div>
 
       {/* Live Pipeline */}
@@ -39,25 +50,25 @@ export default function ArchitectureDiagram() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6 }}>
             {["NewsAPI", "Finnhub", "RSS", "Reddit"].map((s) => (
-              <div key={s} style={boxStyle("#2a2a4a")}>{s}</div>
+              <div key={s} style={boxStyle(SOURCE)}>{s}</div>
             ))}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle("#1e3a2e")}>
+          <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>NewsWatcher</div>
             <div style={{ fontSize: 10, color: "#888" }}>poll + dedup</div>
             {internalTag()}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle("#2a2a4a")}>
+          <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Sentiment Analyzer</div>
-            <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM (direct call)</div>
+            <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM</div>
             {internalTag()}
           </div>
           <span style={arrow}>→</span>
           {label("[sentiment]")}
           <span style={arrow}>→</span>
-          <div style={boxStyle("#3a2a1e")}>
+          <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>SentimentTrader</div>
             <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
             {internalTag()}
@@ -65,7 +76,7 @@ export default function ArchitectureDiagram() {
           <span style={arrow}>→</span>
           {label("[trade]")}
           <span style={arrow}>→</span>
-          <div style={boxStyle("#2a2a4a")}>
+          <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Executor</div>
             <div style={{ fontSize: 10, color: "#888" }}>Log / Futu</div>
             {internalTag()}
@@ -77,42 +88,42 @@ export default function ArchitectureDiagram() {
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: "#f472b6", marginBottom: 8, fontWeight: 600 }}>News Data Pipeline → MongoDB (EonTradingDB.news)</div>
 
-        {/* Live collector */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-          <span style={{ fontSize: 10, color: "#888", width: 70 }}>Live: {processTag("process")}</span>
+          <span style={{ fontSize: 10, color: "#888", width: 55 }}>Live:</span>
           <div style={{ display: "flex", gap: 6 }}>
-            {["RSS (free)", "Reddit (free)"].map((s) => (
-              <div key={s} style={boxStyle("#2a2a4a")}>{s}</div>
+            {["RSS", "Reddit"].map((s) => (
+              <div key={s} style={boxStyle(SOURCE)}>{s}</div>
             ))}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle("#1e3a2e")}>
+          <div style={boxStyle(PROCESS)}>
             <div style={{ fontWeight: 600 }}>collect_news.py</div>
             <div style={{ fontSize: 10, color: "#888" }}>poll every 5min</div>
+            {processTag()}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle("#3a2a1e")}>
+          <div style={boxStyle(SERVICE)}>
             <div style={{ fontWeight: 600 }}>MongoDB</div>
             <div style={{ fontSize: 10, color: "#888" }}>dedup by URL</div>
             {serviceTag()}
           </div>
         </div>
 
-        {/* Backfill */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 10, color: "#888", width: 70 }}>Backfill: {processTag("one-off")}</span>
+          <span style={{ fontSize: 10, color: "#888", width: 55 }}>Backfill:</span>
           <div style={{ display: "flex", gap: 6 }}>
-            {["Finnhub (key)", "NewsAPI (key)"].map((s) => (
-              <div key={s} style={boxStyle("#2a2a4a")}>{s}</div>
+            {["Finnhub", "NewsAPI"].map((s) => (
+              <div key={s} style={boxStyle(SOURCE)}>{s}</div>
             ))}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle("#1e3a2e")}>
+          <div style={boxStyle(PROCESS)}>
             <div style={{ fontWeight: 600 }}>backfill_news.py</div>
             <div style={{ fontSize: 10, color: "#888" }}>historical, per symbol</div>
+            {processTag("one-off")}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle("#3a2a1e")}>
+          <div style={boxStyle(SERVICE)}>
             <div style={{ fontWeight: 600 }}>same collection</div>
             <div style={{ fontSize: 10, color: "#888" }}>backfilled: true</div>
             {serviceTag()}
@@ -124,21 +135,23 @@ export default function ArchitectureDiagram() {
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: "#22c55e", marginBottom: 8, fontWeight: 600 }}>Backtest Pipeline {processTag("runs inside FastAPI")}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={boxStyle("#2a2a4a")}>
+          <div style={boxStyle(SOURCE)}>
             <div style={{ fontWeight: 600 }}>News Events</div>
             <div style={{ fontSize: 10, color: "#888" }}>synthetic / real</div>
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle("#2a2a4a")}>
+          <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Analyzer</div>
+            {internalTag()}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle("#3a2a1e")}>
+          <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Backtest Engine</div>
             <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
+            {internalTag()}
           </div>
           <span style={arrow}>←</span>
-          <div style={boxStyle("#2a2a4a")}>
+          <div style={boxStyle(SOURCE)}>
             <div style={{ fontWeight: 600 }}>yfinance</div>
             <div style={{ fontSize: 10, color: "#888" }}>hourly / daily</div>
           </div>
@@ -149,20 +162,21 @@ export default function ArchitectureDiagram() {
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: "#f59e0b", marginBottom: 8, fontWeight: 600 }}>Dashboard</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={boxStyle("#2a2a4a")}>
+          <div style={boxStyle(PROCESS)}>
             <div style={{ fontWeight: 600 }}>React + Vite</div>
             <div style={{ fontSize: 10, color: "#888" }}>charts, controls</div>
-            <div>{processTag("npm run dev")}</div>
+            {processTag("npm run dev")}
           </div>
           <span style={arrow}>→ HTTP →</span>
-          <div style={boxStyle("#2a2a4a")}>
+          <div style={boxStyle(PROCESS)}>
             <div style={{ fontWeight: 600 }}>FastAPI</div>
             <div style={{ fontSize: 10, color: "#888" }}>/api/backtest</div>
-            <div>{processTag("uvicorn")}</div>
+            {processTag("uvicorn")}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle("#3a2a1e")}>
+          <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Backtest Engine</div>
+            {internalTag()}
           </div>
         </div>
       </div>
