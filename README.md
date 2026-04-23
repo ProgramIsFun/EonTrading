@@ -73,8 +73,16 @@ docs/                           # Reference material
 - [x] News feed tab with collector start/stop from dashboard
 - [x] News notification badge (polls every 30s)
 - [x] News collector: RSS + Reddit → MongoDB (EonTradingDB.news)
-- [x] Architecture diagram in dashboard (About tab)
+- [x] News backfill script: Finnhub + NewsAPI → MongoDB
+- [x] Architecture diagram in dashboard (About tab) with file paths
 - [x] Max hold days in live trader (off by default)
+- [x] Shared NewsPoller across NewsWatcher, collector, and API
+- [x] Split components into separate files (news_watcher, sentiment_trader, broker)
+- [x] Distributed mode: separate process runners via RedisEventBus
+- [x] Single process fallback via LocalEventBus
+- [x] TwitterSource interface (official API + alternative placeholder)
+- [x] Price-based backtest tab (SMA crossover, RSI mean reversion)
+- [x] 43 tests passing
 
 ### To Do — Strategy
 - [ ] LLM analyzer — keyword misses context ("growth slows" = bearish)
@@ -87,15 +95,14 @@ docs/                           # Reference material
 - [ ] Live mode: real-time positions and trade history
 
 ### To Do — Engine
-- [ ] Persist trades to MongoDB for history tracking
+- [ ] Persist positions/trades to MongoDB (survive restarts)
 - [ ] Multi-timeframe: daily sentiment + hourly execution
 
 ### To Do — Infra
-- [ ] Split live pipeline into separate processes (NewsWatcher, Analyzer, Trader, Executor) via RedisEventBus
 - [ ] Deploy API to Windows PC alongside ClickHouse
 - [ ] Telegram/webhook alerts before executing trades
 - [ ] Set up Ollama on Windows PC for free local LLM
-- [ ] Try `twscrape` library for TwitterSource implementation (track @elonmusk, @realDonaldTrump)
+- [ ] Try `twscrape` library for TwitterSource implementation
 
 ## Setup
 

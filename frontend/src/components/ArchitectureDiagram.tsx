@@ -49,7 +49,11 @@ export default function ArchitectureDiagram() {
 
       {/* Live Pipeline */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 12, color: "#818cf8", marginBottom: 8, fontWeight: 600 }}>Live Trading Pipeline {processTag("python3 -m src.live.news_trader")}</div>
+        <div style={{ fontSize: 12, color: "#818cf8", marginBottom: 8, fontWeight: 600 }}>
+          Live Trading Pipeline
+          {processTag("single: python3 -m src.live.news_trader")}
+          {processTag("distributed: run_watcher + run_trader + run_executor")}
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6 }}>
             {[
