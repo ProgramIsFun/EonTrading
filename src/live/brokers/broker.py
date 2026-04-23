@@ -17,6 +17,21 @@ class Broker(ABC):
         """Returns current positions as {symbol: shares}."""
         pass
 
+    @abstractmethod
+    async def place_stop_loss(self, symbol: str, shares: int, stop_price: float) -> bool:
+        """Place a stop-loss order. Broker monitors and executes when price hits stop_price."""
+        pass
+
+    @abstractmethod
+    async def place_take_profit(self, symbol: str, shares: int, target_price: float) -> bool:
+        """Place a take-profit order. Broker monitors and executes when price hits target_price."""
+        pass
+
+    @abstractmethod
+    async def cancel_orders(self, symbol: str) -> bool:
+        """Cancel all pending SL/TP orders for a symbol (e.g. when selling manually)."""
+        pass
+
 
 class FutuBroker(Broker):
     """Execute trades via Futu OpenD (HK market)."""
@@ -65,12 +80,28 @@ class FutuBroker(Broker):
             print(f"  ❌ Futu get_positions error: {e}")
             return {}
 
+    async def place_stop_loss(self, symbol: str, shares: int, stop_price: float) -> bool:
+        # TODO: Implement via Futu's conditional order API
+        print(f"  📋 Futu SL order: {symbol} {shares}sh @ ${stop_price:.2f}")
+        return True
+
+    async def place_take_profit(self, symbol: str, shares: int, target_price: float) -> bool:
+        # TODO: Implement via Futu's conditional order API
+        print(f"  📋 Futu TP order: {symbol} {shares}sh @ ${target_price:.2f}")
+        return True
+
+    async def cancel_orders(self, symbol: str) -> bool:
+        # TODO: Implement via Futu's order cancellation API
+        print(f"  📋 Futu cancel orders: {symbol}")
+        return True
+
 
 class LogBroker(Broker):
     """Dry-run broker that tracks positions in memory."""
 
     def __init__(self):
         self._positions: dict[str, int] = {}
+        self._orders: dict[str, list] = {}  # symbol → [{"type": "sl"/"tp", "price": ...}]
 
     async def execute(self, trade: TradeEvent) -> bool:
         print(f"  📝 [DRY RUN] {trade.action.upper()} {trade.symbol} | reason: {trade.reason}")
@@ -78,10 +109,27 @@ class LogBroker(Broker):
             self._positions[trade.symbol] = self._positions.get(trade.symbol, 0) + int(trade.size)
         elif trade.action == "sell":
             self._positions.pop(trade.symbol, None)
+            self._orders.pop(trade.symbol, None)  # cancel pending orders on sell
         return True
 
     async def get_positions(self) -> dict[str, int]:
         return dict(self._positions)
+
+    async def place_stop_loss(self, symbol: str, shares: int, stop_price: float) -> bool:
+        self._orders.setdefault(symbol, []).append({"type": "sl", "shares": shares, "price": stop_price})
+        print(f"  📝 [DRY RUN] SL order: {symbol} {shares}sh @ ${stop_price:.2f}")
+        return True
+
+    async def place_take_profit(self, symbol: str, shares: int, target_price: float) -> bool:
+        self._orders.setdefault(symbol, []).append({"type": "tp", "shares": shares, "price": target_price})
+        print(f"  📝 [DRY RUN] TP order: {symbol} {shares}sh @ ${target_price:.2f}")
+        return True
+
+    async def cancel_orders(self, symbol: str) -> bool:
+        removed = len(self._orders.pop(symbol, []))
+        if removed:
+            print(f"  📝 [DRY RUN] Cancelled {removed} orders for {symbol}")
+        return True
 
 
 class TradeExecutor:

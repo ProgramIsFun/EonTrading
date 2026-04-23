@@ -45,6 +45,15 @@ class MockBroker(Broker):
     async def get_positions(self) -> dict[str, int]:
         return {}
 
+    async def place_stop_loss(self, symbol: str, shares: int, stop_price: float) -> bool:
+        return True
+
+    async def place_take_profit(self, symbol: str, shares: int, target_price: float) -> bool:
+        return True
+
+    async def cancel_orders(self, symbol: str) -> bool:
+        return True
+
 
 # --- Keyword sentiment tests ---
 
