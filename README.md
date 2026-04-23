@@ -2,6 +2,8 @@
 
 Trading system: data collection, backtesting, and live execution.
 
+**Scope:** This project trades with cash only — no margin, no leverage, no borrowing from brokers. All positions are fully funded by available capital.
+
 ## Architecture
 
 ```
