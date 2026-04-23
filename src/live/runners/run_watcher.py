@@ -1,11 +1,10 @@
-"""Run NewsWatcher as its own process. Publishes to [news] and [sentiment] channels."""
+"""Run NewsWatcher as its own process. Publishes to [news] channel."""
 import asyncio, os
 from dotenv import load_dotenv
 load_dotenv()
 
 from src.common.event_bus import RedisEventBus
 from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource
-from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 from src.live.news_watcher import NewsWatcher
 
 
@@ -19,9 +18,7 @@ async def main():
     sources.append(RSSSource())
     sources.append(RedditSource())
 
-    analyzer = LLMSentimentAnalyzer() if os.getenv("OPENAI_API_KEY") else KeywordSentimentAnalyzer()
-
-    watcher = NewsWatcher(bus, sources=sources, analyzer=analyzer, interval_sec=120)
+    watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
     print("NewsWatcher process started")
     await watcher.run()
 

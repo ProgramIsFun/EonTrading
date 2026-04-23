@@ -6,6 +6,7 @@ Two modes:
 
 For distributed mode, run each runner in its own terminal:
   python3 -m src.live.runners.run_watcher
+  python3 -m src.live.runners.run_analyzer
   python3 -m src.live.runners.run_trader
   python3 -m src.live.runners.run_executor
 """
@@ -20,6 +21,7 @@ async def main_single():
     from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
     from src.live.news_watcher import NewsWatcher
+    from src.live.analyzer_service import AnalyzerService
     from src.live.sentiment_trader import SentimentTrader
     from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker
 
@@ -36,8 +38,11 @@ async def main_single():
     broker = FutuBroker(simulate=not os.getenv("FUTU_REAL")) if os.getenv("FUTU_LIVE") else LogBroker()
 
     trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15)
-    watcher = NewsWatcher(bus, sources=sources, analyzer=analyzer, interval_sec=120, get_positions=lambda: trader.holdings)
+    analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=lambda: trader.holdings)
+    watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
     executor = TradeExecutor(bus, broker)
+
+    await analyzer_svc.start()
     await trader.start()
     await executor.start()
 
@@ -49,6 +54,7 @@ if __name__ == "__main__":
     if "--distributed" in sys.argv:
         print("Distributed mode — run each runner separately:")
         print("  python3 -m src.live.runners.run_watcher")
+        print("  python3 -m src.live.runners.run_analyzer")
         print("  python3 -m src.live.runners.run_trader")
         print("  python3 -m src.live.runners.run_executor")
     else:
