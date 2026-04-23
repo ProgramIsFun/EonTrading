@@ -31,11 +31,9 @@ export default function ArchitectureDiagram() {
             <div style={{ fontSize: 10, color: "#888" }}>poll + dedup</div>
           </div>
           <span style={arrow}>→</span>
-          {label("[news]")}
-          <span style={arrow}>→</span>
           <div style={boxStyle("#2a2a4a")}>
             <div style={{ fontWeight: 600 }}>Sentiment Analyzer</div>
-            <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM</div>
+            <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM (direct call)</div>
           </div>
           <span style={arrow}>→</span>
           {label("[sentiment]")}
