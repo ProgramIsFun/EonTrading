@@ -19,11 +19,11 @@ from src.common.sample_news import SAMPLE_NEWS
 
 
 async def main(start: str, end: str):
-    from src.common.event_bus import RedisEventBus
+    from src.common.event_bus import RedisStreamBus
     from src.common.events import CHANNEL_NEWS, NewsEvent
 
     redis_host = os.getenv("REDIS_HOST", "localhost")
-    bus = RedisEventBus(host=redis_host, group="replay")
+    bus = RedisStreamBus(host=redis_host, group="replay")
     await bus.start()
 
     fills = []

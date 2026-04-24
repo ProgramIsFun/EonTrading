@@ -107,11 +107,11 @@ async def ping_components():
     """Real-time ping — asks all components to respond via event bus."""
     import os
     try:
-        from src.common.event_bus import LocalEventBus, RedisEventBus
+        from src.common.event_bus import LocalEventBus, RedisStreamBus
         from src.common.ping import collect_pongs
         redis_host = os.getenv("REDIS_HOST")
         if redis_host:
-            bus = RedisEventBus(host=redis_host, group="api")
+            bus = RedisStreamBus(host=redis_host, group="api")
         else:
             bus = LocalEventBus()
         await bus.start()

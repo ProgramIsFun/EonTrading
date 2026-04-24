@@ -37,14 +37,14 @@ class TestRedisStreamsLive:
     @pytest.mark.asyncio
     async def test_publish_and_consume(self):
         """Message published to stream is received by consumer."""
-        from src.common.event_bus import RedisEventBus
+        from src.common.event_bus import RedisStreamBus
 
         received = []
 
         async def handler(msg):
             received.append(msg)
 
-        bus = RedisEventBus(host="localhost", group="test-consume")
+        bus = RedisStreamBus(host="localhost", group="test-consume")
         await bus.subscribe("test_ch", handler)
         await bus.start()
 
@@ -60,7 +60,7 @@ class TestRedisStreamsLive:
     @pytest.mark.asyncio
     async def test_messages_survive_reconnect(self):
         """Messages published while consumer is down are delivered after reconnect."""
-        from src.common.event_bus import RedisEventBus
+        from src.common.event_bus import RedisStreamBus
         import redis.asyncio as aioredis
 
         stream_key = "stream:test_persist"
@@ -84,7 +84,7 @@ class TestRedisStreamsLive:
         async def handler(msg):
             received.append(msg)
 
-        bus = RedisEventBus(host="localhost", group=group)
+        bus = RedisStreamBus(host="localhost", group=group)
         await bus.subscribe("test_persist", handler)
         await bus.start()
         await asyncio.sleep(0.5)
@@ -98,13 +98,13 @@ class TestRedisStreamsLive:
     @pytest.mark.asyncio
     async def test_two_consumer_groups_both_receive(self):
         """Two different consumer groups each get a copy of every message."""
-        from src.common.event_bus import RedisEventBus
+        from src.common.event_bus import RedisStreamBus
 
         received_a = []
         received_b = []
 
-        bus_a = RedisEventBus(host="localhost", group="group-a")
-        bus_b = RedisEventBus(host="localhost", group="group-b")
+        bus_a = RedisStreamBus(host="localhost", group="group-a")
+        bus_b = RedisStreamBus(host="localhost", group="group-b")
 
         await bus_a.subscribe("test_multi", lambda msg: _async_append(received_a, msg))
         await bus_b.subscribe("test_multi", lambda msg: _async_append(received_b, msg))
@@ -125,11 +125,11 @@ class TestRedisStreamsLive:
     @pytest.mark.asyncio
     async def test_ping_pong_broadcast(self):
         """Ping/pong uses pub/sub — all subscribers receive the message."""
-        from src.common.event_bus import RedisEventBus
+        from src.common.event_bus import RedisStreamBus
 
         received = []
 
-        bus = RedisEventBus(host="localhost", group="test-ping")
+        bus = RedisStreamBus(host="localhost", group="test-ping")
         await bus.subscribe("pong", lambda msg: _async_append(received, msg))
         await bus.start()
         await asyncio.sleep(0.2)  # let pubsub subscription register
@@ -145,7 +145,7 @@ class TestRedisStreamsLive:
     @pytest.mark.asyncio
     async def test_message_acked_after_processing(self):
         """After processing, message should not be re-delivered."""
-        from src.common.event_bus import RedisEventBus
+        from src.common.event_bus import RedisStreamBus
 
         stream_key = "stream:test_ack"
         group = "test-ack"
@@ -157,7 +157,7 @@ class TestRedisStreamsLive:
             received.append(msg)
 
         # First consumer — processes the message
-        bus1 = RedisEventBus(host="localhost", group=group)
+        bus1 = RedisStreamBus(host="localhost", group=group)
         await bus1.subscribe("test_ack", handler)
         await bus1.start()
         await bus1.publish("test_ack", {"n": 1})
@@ -168,7 +168,7 @@ class TestRedisStreamsLive:
 
         # Second consumer in same group — should NOT get the message again
         received.clear()
-        bus2 = RedisEventBus(host="localhost", group=group)
+        bus2 = RedisStreamBus(host="localhost", group=group)
         await bus2.subscribe("test_ack", handler)
         await bus2.start()
         await asyncio.sleep(0.5)

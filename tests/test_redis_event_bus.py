@@ -1,4 +1,4 @@
-"""Tests for RedisEventBus with mocked Redis client.
+"""Tests for RedisStreamBus with mocked Redis client.
 
 Verifies stream/pubsub routing, serialization, consumer groups, and ack behavior.
 Runs in CI — no real Redis needed.
@@ -39,13 +39,13 @@ def mock_redis():
 
 @pytest.fixture
 def make_bus(mock_redis):
-    """Create a RedisEventBus with mocked Redis."""
+    """Create a RedisStreamBus with mocked Redis."""
     r, ps = mock_redis
 
     async def _make(group="test"):
-        with patch("src.common.event_bus.RedisEventBus.__init__", lambda self, **kw: None):
-            from src.common.event_bus import RedisEventBus
-            bus = RedisEventBus.__new__(RedisEventBus)
+        with patch("src.common.event_bus.RedisStreamBus.__init__", lambda self, **kw: None):
+            from src.common.event_bus import RedisStreamBus
+            bus = RedisStreamBus.__new__(RedisStreamBus)
             from collections import defaultdict
             bus._host = "localhost"
             bus._port = 6379

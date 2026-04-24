@@ -10,7 +10,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from src.common.event_bus import RedisEventBus
+from src.common.event_bus import RedisStreamBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
@@ -43,7 +43,7 @@ async def main():
     if missing:
         logger.warning("Missing env vars: %s — broker may fail", ", ".join(missing))
 
-    bus = RedisEventBus(group="executor")
+    bus = RedisStreamBus(group="executor")
     await bus.start()
 
     executor = TradeExecutor(bus, broker)

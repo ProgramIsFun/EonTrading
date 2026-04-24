@@ -10,7 +10,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from src.common.event_bus import RedisEventBus
+from src.common.event_bus import RedisStreamBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
@@ -29,7 +29,7 @@ async def main():
         "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
 
-    bus = RedisEventBus(group="monitor")
+    bus = RedisStreamBus(group="monitor")
     await bus.start()
 
     store = PositionStore()

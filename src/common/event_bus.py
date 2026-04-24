@@ -1,4 +1,9 @@
-"""Event bus: publish/subscribe for signals between components."""
+"""Event bus: publish/subscribe for signals between components.
+
+Implementations:
+  - LocalEventBus: in-memory, single process
+  - RedisStreamBus: Redis Streams (persistent message queue) + Pub/Sub for broadcast
+"""
 import asyncio
 import json
 import logging
@@ -53,8 +58,8 @@ class LocalEventBus(EventBus):
 _PUBSUB_CHANNELS = {"ping", "pong"}
 
 
-class RedisEventBus(EventBus):
-    """Redis Streams for pipeline channels (persistent, at-least-once delivery).
+class RedisStreamBus(EventBus):
+    """Redis Streams for pipeline channels (persistent message queue).
     Redis Pub/Sub for ephemeral broadcast channels (ping/pong).
 
     Each subscriber group gets its own consumer group on the stream.
@@ -166,3 +171,7 @@ def _log_task_exception(task: asyncio.Task):
     """Callback to log exceptions from fire-and-forget tasks."""
     if not task.cancelled() and task.exception():
         logger.error("Unhandled exception in event handler: %s", task.exception(), exc_info=task.exception())
+
+
+# Backward-compatible alias
+RedisEventBus = RedisStreamBus

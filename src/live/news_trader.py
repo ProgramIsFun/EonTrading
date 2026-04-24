@@ -2,7 +2,7 @@
 
 Two modes:
   python3 -m src.live.news_trader              # single process (LocalEventBus)
-  python3 -m src.live.news_trader --distributed # separate processes (RedisEventBus)
+  python3 -m src.live.news_trader --distributed # separate processes (RedisStreamBus)
 
 For distributed mode, run each runner in its own terminal:
   python3 -m src.live.runners.run_watcher
