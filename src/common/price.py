@@ -13,6 +13,41 @@ PRICE_SOURCE = os.getenv("PRICE_SOURCE", "yfinance").lower()
 
 
 _price_cache: dict[str, float] = {}
+_redis_cache = None
+
+
+def _get_redis():
+    global _redis_cache
+    if _redis_cache is not None:
+        return _redis_cache
+    try:
+        import redis
+        import os
+        host = os.getenv("REDIS_HOST")
+        if host:
+            _redis_cache = redis.Redis(host=host, port=6379, decode_responses=True)
+            _redis_cache.ping()
+            return _redis_cache
+    except Exception:
+        pass
+    _redis_cache = False  # mark as unavailable
+    return False
+
+
+def _cache_get(key: str) -> float | None:
+    r = _get_redis()
+    if r:
+        val = r.get(f"price:{key}")
+        if val:
+            return float(val)
+    return _price_cache.get(key)
+
+
+def _cache_set(key: str, price: float):
+    _price_cache[key] = price
+    r = _get_redis()
+    if r:
+        r.setex(f"price:{key}", 300, str(price))  # expire after 5 min
 
 
 def get_price(symbol: str, as_of: str = None) -> float:
@@ -20,16 +55,16 @@ def get_price(symbol: str, as_of: str = None) -> float:
 
     - as_of=None or recent timestamp (< 10min old): fetch latest live price
     - as_of=old timestamp: fetch historical price at that time
-    - Caches historical lookups to avoid repeated API calls
+    - Caches via Redis (if available) or in-memory dict
     """
     t = _parse_time(as_of)
     is_historical = t and (datetime.utcnow() - t).total_seconds() > 600
 
-    # Cache key for historical lookups
     if is_historical:
         cache_key = f"{symbol}:{t.strftime('%Y-%m-%d-%H')}"
-        if cache_key in _price_cache:
-            return _price_cache[cache_key]
+        cached = _cache_get(cache_key)
+        if cached:
+            return cached
 
     if PRICE_SOURCE == "clickhouse":
         price = _from_clickhouse(symbol, as_of if is_historical else None)
@@ -37,7 +72,7 @@ def get_price(symbol: str, as_of: str = None) -> float:
         price = _from_yfinance(symbol, as_of if is_historical else None)
 
     if is_historical and price > 0:
-        _price_cache[cache_key] = price
+        _cache_set(cache_key, price)
 
     return price
 
