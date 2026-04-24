@@ -13,10 +13,16 @@ PRICE_SOURCE = os.getenv("PRICE_SOURCE", "yfinance").lower()
 
 
 def get_price(symbol: str, as_of: str = None) -> float:
-    """Get price for a symbol. If as_of is provided (ISO string), fetch historical price."""
+    """Get price for a symbol.
+
+    - as_of=None or recent timestamp (< 10min old): fetch latest live price
+    - as_of=old timestamp: fetch historical price at that time
+    """
+    t = _parse_time(as_of)
+    is_historical = t and (datetime.utcnow() - t).total_seconds() > 600
     if PRICE_SOURCE == "clickhouse":
-        return _from_clickhouse(symbol, as_of)
-    return _from_yfinance(symbol, as_of)
+        return _from_clickhouse(symbol, as_of if is_historical else None)
+    return _from_yfinance(symbol, as_of if is_historical else None)
 
 
 def _parse_time(as_of: str = None) -> datetime | None:
