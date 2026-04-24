@@ -45,7 +45,7 @@ async def reconcile(broker, store: PositionStore = None) -> dict:
     logger.info("%s Reconciliation @ %s", status, result["timestamp"])
     logger.info("System positions: %s", list(our_symbols) or "none")
     logger.info("Broker positions: %s", dict(broker_positions) or "none")
-    logger.info("Broker cash: $%,.2f", broker_cash)
+    logger.info("Broker cash: $%s", f"{broker_cash:,.2f}")
     if issues:
         for i in issues:
             logger.warning("🚨 %s: %s", i["symbol"], i["issue"])

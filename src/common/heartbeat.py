@@ -28,7 +28,7 @@ class Heartbeat:
             logger.warning("Heartbeat MongoDB unavailable: %s", e)
 
     def beat(self):
-        if not self._col:
+        if self._col is None:
             return
         self._col.update_one(
             {"component": self.component},
