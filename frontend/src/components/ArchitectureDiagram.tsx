@@ -309,6 +309,17 @@ export default function ArchitectureDiagram() {
           <code style={{ fontSize: 9, color: "#818cf8", display: "block", marginTop: 4 }}>
             python -m src.live.replay --start 2025-01-01 --end 2025-06-01
           </code>
+          <div style={{ fontSize: 9, color: "#666", marginTop: 6 }}>
+            <div style={{ color: "#ccc", marginBottom: 2 }}>Backtest scripts:</div>
+            <code style={{ fontSize: 8, color: "#818cf8", display: "block" }}>
+              PRICE_SOURCE=clickhouse python3 scripts/backtest/live_pipeline_backtest.py
+            </code>
+            <div style={{ fontSize: 8, color: "#555" }}>↑ keyword analyzer</div>
+            <code style={{ fontSize: 8, color: "#818cf8", display: "block", marginTop: 2 }}>
+              PRICE_SOURCE=clickhouse SL_CHECK_HOURS=1 python3 scripts/backtest/live_pipeline_llm_backtest.py
+            </code>
+            <div style={{ fontSize: 8, color: "#555" }}>↑ pre-scored LLM sentiment, hourly SL/TP</div>
+          </div>
 
           {/* Live vs Replay differences */}
           <table style={{ fontSize: 9, color: "#888", borderCollapse: "collapse", width: "100%", marginTop: 8 }}>
