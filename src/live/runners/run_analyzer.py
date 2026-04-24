@@ -37,8 +37,8 @@ async def main():
     svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     await svc.start()
     print(f"  🟢 Started. Waiting for [news] events.\n")
-    asyncio.ensure_future(Heartbeat("analyzer", metadata={"analyzer": analyzer_name}).run())
-    ping = PingResponder(bus, ["analyzer"], metadata={"analyzer": {"analyzer": analyzer_name}})
+    asyncio.ensure_future(Heartbeat("analyzer", metadata={"analyzer": analyzer_name, "mode": "distributed"}).run())
+    ping = PingResponder(bus, ["analyzer"], metadata={"analyzer": {"analyzer": analyzer_name, "mode": "distributed"}})
     await ping.start()
     while True:
         await asyncio.sleep(3600)

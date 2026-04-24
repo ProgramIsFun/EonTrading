@@ -32,8 +32,8 @@ async def main():
                              trade_log=get_mongo_client()["EonTradingDB"]["trades"])
     await trader.start()
     print(f"  🟢 Started. Waiting for [sentiment] events.\n")
-    asyncio.ensure_future(Heartbeat("trader").run())
-    ping = PingResponder(bus, ["trader"])
+    asyncio.ensure_future(Heartbeat("trader", metadata={"mode": "distributed"}).run())
+    ping = PingResponder(bus, ["trader"], metadata={"trader": {"mode": "distributed"}})
     await ping.start()
     while True:
         await asyncio.sleep(3600)

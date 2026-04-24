@@ -89,9 +89,10 @@ async def main_single():
         asyncio.ensure_future(Heartbeat(name, metadata={"mode": "single"}).run())
 
     ping = PingResponder(bus, ["watcher", "analyzer", "trader", "executor"], metadata={
-        "watcher": {"sources": ", ".join(source_names)},
-        "analyzer": {"analyzer": analyzer_name},
-        "executor": {"broker": broker.__class__.__name__},
+        "watcher": {"sources": ", ".join(source_names), "mode": "single"},
+        "analyzer": {"analyzer": analyzer_name, "mode": "single"},
+        "trader": {"mode": "single"},
+        "executor": {"broker": broker.__class__.__name__, "mode": "single"},
     })
     await ping.start()
 

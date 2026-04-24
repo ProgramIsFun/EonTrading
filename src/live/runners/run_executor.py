@@ -42,8 +42,8 @@ async def main():
     executor = TradeExecutor(bus, broker)
     await executor.start()
     print(f"  🟢 Started. Waiting for [trade] events.\n")
-    asyncio.ensure_future(Heartbeat("executor", metadata={"broker": broker.__class__.__name__}).run())
-    ping = PingResponder(bus, ["executor"], metadata={"executor": {"broker": broker.__class__.__name__}})
+    asyncio.ensure_future(Heartbeat("executor", metadata={"broker": broker.__class__.__name__, "mode": "distributed"}).run())
+    ping = PingResponder(bus, ["executor"], metadata={"executor": {"broker": broker.__class__.__name__, "mode": "distributed"}})
     await ping.start()
     while True:
         await asyncio.sleep(3600)

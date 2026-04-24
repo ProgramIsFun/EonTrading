@@ -34,8 +34,8 @@ async def main():
 
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
     print(f"  🟢 Started. Polling every 120s.\n")
-    asyncio.ensure_future(Heartbeat("watcher", metadata={"sources": ", ".join(source_names)}).run())
-    ping = PingResponder(bus, ["watcher"], metadata={"watcher": {"sources": ", ".join(source_names)}})
+    asyncio.ensure_future(Heartbeat("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"}).run())
+    ping = PingResponder(bus, ["watcher"], metadata={"watcher": {"sources": ", ".join(source_names), "mode": "distributed"}})
     await ping.start()
     await watcher.run()
 
