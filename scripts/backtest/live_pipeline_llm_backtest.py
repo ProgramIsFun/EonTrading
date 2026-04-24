@@ -141,7 +141,7 @@ async def main():
                 checks_done += 1
                 if sold:
                     print(f"    ⏰ SL/TP @ {check_time.strftime('%Y-%m-%d %H:%M')} — sold {', '.join(sold)}")
-                    await asyncio.sleep(0.3)
+                    await asyncio.sleep(0.05)
                 elif checks_done % 50 == 0:
                     print(f"    ... {checks_done} SL/TP checks done (@ {check_time.strftime('%Y-%m-%d %H:%M')})")
                 check_time += timedelta(hours=SL_CHECK_INTERVAL)
@@ -151,7 +151,7 @@ async def main():
         # Check SL/TP at event time
         sold = await monitor.check_once(broker, as_of=doc["date"])
         if sold:
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.05)
 
         print(f"\n  📅 {doc['date']} — {doc['headline'][:65]}")
         print(f"     sentiment: {doc['sentiment']:+.1f}  confidence: {doc['confidence']}  symbols: {doc['symbols']}")

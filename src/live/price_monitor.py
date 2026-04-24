@@ -46,18 +46,22 @@ class PriceMonitor:
 
     async def check_once(self, broker=None, as_of: str = None) -> list[str]:
         """Check all positions against SL/TP. Returns list of symbols sold."""
-        positions = self.store.get_positions()
+        # Use _states directly if available (avoids MongoDB call in replay)
+        if self._states:
+            check_symbols = set(self._states.keys())
+        else:
+            positions = self.store.get_positions()
+            check_symbols = set(positions.keys())
+
         broker_positions = {}
         if broker:
             broker_positions = await broker.get_positions()
 
-        if not positions and not self._states:
+        if not check_symbols:
             return []
 
         ts = as_of or (datetime.utcnow().isoformat() + "Z")
         sold = []
-        # Check all symbols that have entry prices registered
-        check_symbols = set(positions.keys()) | set(self._states.keys())
         for symbol in list(check_symbols):
             if symbol not in self._states:
                 continue  # no entry price — can't check SL/TP
@@ -98,7 +102,7 @@ class PriceMonitor:
                 sold.append(symbol)
 
         # Clean up states for positions that no longer exist
-        active = set(positions.keys()) | set(broker_positions.keys())
+        active = check_symbols | set(broker_positions.keys())
         for sym in list(self._states.keys()):
             if sym not in active:
                 del self._states[sym]
