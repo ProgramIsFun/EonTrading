@@ -17,7 +17,11 @@ class SentimentTrader:
         self.logic = logic or TradingLogic(**kwargs)
         self.holdings: dict[str, datetime] = {}
         self.max_hold_days = max_hold_days
-        self.position_store = position_store  # optional, for distributed mode
+        self.position_store = position_store
+        if self.position_store:
+            self.holdings = self.position_store.get_positions()
+            if self.holdings:
+                print(f"  Restored {len(self.holdings)} position(s) from store: {list(self.holdings.keys())}")
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_SENTIMENT, self._on_sentiment)
@@ -40,6 +44,8 @@ class SentimentTrader:
                     print(f"  SELL {symbol} (max hold {self.max_hold_days}d reached)")
                     await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
                     del self.holdings[symbol]
+                    if self.position_store:
+                        self.position_store.set_positions(self.holdings)
             await asyncio.sleep(3600)
 
     async def _on_sentiment(self, msg: dict):
@@ -58,7 +64,7 @@ class SentimentTrader:
 
             if action:
                 if self.position_store:
-                    self.position_store.set_positions({s: 1 for s in self.holdings})
+                    self.position_store.set_positions(self.holdings)
                 trade = TradeEvent(
                     symbol=symbol, action=action,
                     reason=f"sentiment:{event.sentiment} on {event.headline[:60]}",

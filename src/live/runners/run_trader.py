@@ -14,10 +14,10 @@ async def main():
     await bus.subscribe("sentiment", lambda _: None)
     await bus.start()
 
-    store = PositionStore(host=redis_host)
+    store = PositionStore()
     trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store)
     await trader.start()
-    print("SentimentTrader process started (writing positions to Redis)")
+    print("SentimentTrader process started (positions in MongoDB)")
     while True:
         await asyncio.sleep(3600)
 

@@ -24,6 +24,7 @@ async def main_single():
     from src.live.analyzer_service import AnalyzerService
     from src.live.sentiment_trader import SentimentTrader
     from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker
+    from src.common.position_store import PositionStore
 
     bus = LocalEventBus()
     await bus.start()
@@ -36,8 +37,9 @@ async def main_single():
 
     analyzer = LLMSentimentAnalyzer() if os.getenv("OPENAI_API_KEY") else KeywordSentimentAnalyzer()
     broker = FutuBroker(simulate=not os.getenv("FUTU_REAL")) if os.getenv("FUTU_LIVE") else LogBroker()
+    store = PositionStore()
 
-    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15)
+    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=lambda: trader.holdings)
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
     executor = TradeExecutor(bus, broker)

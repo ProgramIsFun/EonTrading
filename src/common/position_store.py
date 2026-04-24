@@ -1,22 +1,32 @@
-"""Shared position state via Redis — used in distributed mode."""
-import json
-import redis
+"""Position state backed by MongoDB — works in both single-process and distributed mode."""
+from datetime import datetime
+from src.data.utils.db_helper import get_mongo_client
 
-
-POSITIONS_KEY = "eontrading:positions"
+COLLECTION = "positions"
+DB = "EonTradingDB"
 
 
 class PositionStore:
-    """Read/write current positions via Redis key. Used by Trader (write) and Analyzer (read)."""
+    """Read/write positions via MongoDB. One document per symbol."""
 
-    def __init__(self, host: str = "192.168.0.38", port: int = 6379):
-        self._redis = redis.Redis(host=host, port=port, decode_responses=True)
+    def __init__(self):
+        self._col = get_mongo_client()[DB][COLLECTION]
 
-    def set_positions(self, positions: dict):
-        """Trader calls this on every buy/sell."""
-        self._redis.set(POSITIONS_KEY, json.dumps(positions))
+    def set_positions(self, holdings: dict[str, datetime]):
+        """Upsert current holdings, remove closed positions."""
+        active = set(holdings.keys())
+        for symbol, entry_time in holdings.items():
+            self._col.update_one(
+                {"symbol": symbol},
+                {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(), "updatedAt": datetime.utcnow()}},
+                upsert=True,
+            )
+        self._col.delete_many({"symbol": {"$nin": list(active)}})
 
-    def get_positions(self) -> dict:
-        """Analyzer calls this before scoring."""
-        data = self._redis.get(POSITIONS_KEY)
-        return json.loads(data) if data else {}
+    def get_positions(self) -> dict[str, datetime]:
+        """Return {symbol: entry_time} for all open positions."""
+        return {
+            doc["symbol"]: datetime.fromisoformat(doc["entryTime"])
+            for doc in self._col.find()
+            if "entryTime" in doc
+        }

@@ -16,11 +16,11 @@ async def main():
     await bus.start()
 
     analyzer = LLMSentimentAnalyzer() if os.getenv("OPENAI_API_KEY") else KeywordSentimentAnalyzer()
-    store = PositionStore(host=redis_host)
+    store = PositionStore()
 
     svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     await svc.start()
-    print("AnalyzerService process started (reading positions from Redis)")
+    print("AnalyzerService process started (reading positions from MongoDB)")
     while True:
         await asyncio.sleep(3600)
 
