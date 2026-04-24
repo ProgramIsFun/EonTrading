@@ -27,6 +27,7 @@ async def main_single():
     from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
     from src.common.position_store import PositionStore
     from src.data.utils.db_helper import get_mongo_client
+    from src.common.heartbeat import Heartbeat
 
     # --- Sources ---
     sources = []
@@ -82,6 +83,9 @@ async def main_single():
     await analyzer_svc.start()
     await trader.start()
     await executor.start()
+
+    for name in ["watcher", "analyzer", "trader", "executor"]:
+        asyncio.ensure_future(Heartbeat(name, metadata={"mode": "single"}).run())
 
     print(f"\n  🟢 All components started. Polling every 120s.\n")
     await watcher.run()

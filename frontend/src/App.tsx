@@ -7,6 +7,7 @@ import TradeTable from "./components/TradeTable";
 import ParamsPanel from "./components/ParamsPanel";
 import PnlBySymbol from "./components/PnlBySymbol";
 import ArchitectureDiagram from "./components/ArchitectureDiagram";
+import SystemStatus from "./components/SystemStatus";
 import NewsFeed from "./components/NewsFeed";
 import PriceBacktest from "./components/PriceBacktest";
 
@@ -96,7 +97,7 @@ export default function App() {
 
         {tab === "news" && <NewsFeed />}
 
-        {tab === "about" && <ArchitectureDiagram />}
+        {tab === "about" && <><SystemStatus /><ArchitectureDiagram /></>}
 
         {tab === "backtest" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
