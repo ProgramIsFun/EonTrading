@@ -97,6 +97,12 @@ class SentimentTrader:
             shares = 0
             if self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, self.holdings):
                 action = "sell"
+                # Get shares held from broker for proper sell size
+                if self.broker:
+                    broker_positions = await self.broker.get_positions()
+                    shares = broker_positions.get(symbol, 1)
+                else:
+                    shares = 1
                 self.holdings.pop(symbol, None)
             elif symbol not in self.holdings:
                 # Use should_buy() for proper position sizing
@@ -121,9 +127,9 @@ class SentimentTrader:
 
             if action:
                 self.pending[symbol] = action
-                price = 0.0
-                if action == "buy":
-                    from src.common.price import get_price
+                from src.common.price import get_price
+                price = get_price(symbol) if action == "buy" or self.broker else 0.0
+                if action == "sell":
                     price = get_price(symbol)
                 trade = TradeEvent(
                     symbol=symbol, action=action,

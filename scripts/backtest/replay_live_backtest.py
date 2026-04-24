@@ -86,12 +86,33 @@ async def main():
     # Summary
     cash = await broker.get_cash()
     positions = await broker.get_positions()
+
+    # Price open positions at end of replay period
+    from src.common.price import get_price
+    clock.set_time(SAMPLE_NEWS[-1]["date"])  # price at last news date
+    portfolio_value = cash
     print(f"\n{'═' * 60}")
     print(f"  Replay Complete")
     print(f"{'─' * 60}")
-    print(f"  Cash remaining:  ${cash:,.2f}")
-    print(f"  Open positions:  {positions if positions else 'none'}")
-    print(f"  Holdings:        {list(trader.holdings.keys()) or 'none'}")
+    print(f"  {'Symbol':<8s} {'Qty':>5s} {'Avg Cost':>10s} {'Current':>10s} {'Value':>12s} {'P&L':>10s}")
+    print(f"  {'─'*8} {'─'*5} {'─'*10} {'─'*10} {'─'*12} {'─'*10}")
+    for symbol, qty in positions.items():
+        current_price = get_price(symbol)
+        value = current_price * qty
+        # cost basis from broker's tracked cash changes
+        portfolio_value += value
+        print(f"  {symbol:<8s} {qty:>5d} {'':>10s} ${current_price:>9.2f} ${value:>11,.2f}")
+
+    clock.reset()
+
+    pnl = portfolio_value - 70000
+    pnl_pct = (pnl / 70000) * 100
+    print(f"  {'─'*8} {'─'*5} {'─'*10} {'─'*10} {'─'*12} {'─'*10}")
+    print(f"  Cash remaining:    ${cash:,.2f}")
+    print(f"  Positions value:   ${portfolio_value - cash:,.2f}")
+    print(f"  Total value:       ${portfolio_value:,.2f}")
+    print(f"  P&L:               ${pnl:+,.2f} ({pnl_pct:+.1f}%)")
+    print(f"  Initial capital:   $70,000.00")
     print(f"{'═' * 60}\n")
 
 
