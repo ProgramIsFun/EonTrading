@@ -41,8 +41,14 @@ def _from_yfinance(symbol: str, as_of: str = None) -> float:
         if t:
             start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
             end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
-            print(f"    💲 Fetching {symbol} price @ {start}..{end}", end="", flush=True)
-            data = yf.download(symbol, start=start, end=end, progress=False)
+            print(f"    💲 Fetching {symbol} price @ {t.strftime('%Y-%m-%d %H:%M')}", end="", flush=True)
+            data = yf.download(symbol, start=start, end=end, interval="1h", progress=False)
+            if not data.empty:
+                # Find the closest candle at or before the target time
+                data.index = data.index.tz_localize(None) if data.index.tz is None else data.index.tz_convert(None)
+                mask = data.index <= t
+                if mask.any():
+                    data = data[mask]
         else:
             print(f"    💲 Fetching {symbol} latest price", end="", flush=True)
             data = yf.download(symbol, period="1d", interval="1m", progress=False)
