@@ -53,9 +53,13 @@ async def main():
     analyzer = KeywordSentimentAnalyzer()
     broker = LogBroker(initial_cash=70000)
     store = PositionStore()
+
+    # Clean slate — clear positions from previous runs
+    store.set_positions({})
+
     monitor = PriceMonitor(bus, store, logic, interval_sec=0)
 
-    trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor, position_store=store)
+    trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=lambda: trader.holdings)
     executor = TradeExecutor(bus, broker)
 
@@ -109,8 +113,6 @@ async def main():
         # cost basis from broker's tracked cash changes
         portfolio_value += value
         print(f"  {symbol:<8s} {qty:>5d} {'':>10s} ${current_price:>9.2f} ${value:>11,.2f}")
-
-    clock.reset()
 
     pnl = portfolio_value - 70000
     pnl_pct = (pnl / 70000) * 100
