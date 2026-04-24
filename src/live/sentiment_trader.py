@@ -13,14 +13,16 @@ class SentimentTrader:
     Uses shared TradingLogic from src/common/trading_logic.py — same logic as backtest.
     """
 
-    def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0, position_store=None, trade_log=None, **kwargs):
+    def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0,
+                 position_store=None, trade_log=None, broker=None, **kwargs):
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
         self.holdings: dict[str, datetime] = {}
         self.pending: dict[str, str] = {}  # symbol → "buy"/"sell" awaiting fill
         self.max_hold_days = max_hold_days
         self.position_store = position_store
-        self._trades_col = trade_log  # MongoDB collection or None
+        self._trades_col = trade_log
+        self.broker = broker  # for cash/price queries
         if self.position_store:
             self.holdings = self.position_store.get_positions()
             if self.holdings:
@@ -91,19 +93,38 @@ class SentimentTrader:
                 continue  # skip symbols with pending orders
 
             action = None
+            shares = 0
             if self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, self.holdings):
                 action = "sell"
                 self.holdings.pop(symbol, None)
-            elif event.confidence >= self.logic.min_confidence and event.sentiment >= self.logic.threshold and symbol not in self.holdings:
-                action = "buy"
-                self.holdings[symbol] = datetime.utcnow()
+            elif symbol not in self.holdings:
+                # Use should_buy() for proper position sizing
+                cash = await self.broker.get_cash() if self.broker else 0.0
+                if cash > 0:
+                    from src.common.price import get_price
+                    price = get_price(symbol)
+                    if price > 0:
+                        shares = self.logic.should_buy(
+                            event.sentiment, event.confidence, symbol,
+                            self.holdings, cash, price,
+                        )
+                        if shares > 0:
+                            action = "buy"
+                            self.holdings[symbol] = datetime.utcnow()
+                else:
+                    # No broker — fallback to threshold check (backward compat)
+                    if event.confidence >= self.logic.min_confidence and event.sentiment >= self.logic.threshold:
+                        action = "buy"
+                        shares = 1
+                        self.holdings[symbol] = datetime.utcnow()
 
             if action:
                 self.pending[symbol] = action
                 trade = TradeEvent(
                     symbol=symbol, action=action,
-                    reason=f"sentiment:{event.sentiment} on {event.headline[:60]}",
+                    reason=f"sentiment:{event.sentiment:.2f} on {event.headline[:60]}",
                     timestamp=datetime.utcnow().isoformat() + "Z",
+                    size=float(shares) if shares else 1.0,
                 )
-                print(f"  {action.upper()} {symbol} (sentiment: {event.sentiment}) — pending broker confirmation")
+                print(f"  {action.upper()} {symbol} qty={shares} (sentiment: {event.sentiment:.2f}) — pending broker confirmation")
                 await self.bus.publish(CHANNEL_TRADE, trade.to_dict())

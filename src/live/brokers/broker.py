@@ -42,6 +42,10 @@ class Broker(ABC):
     async def get_positions(self) -> dict[str, int]:
         pass
 
+    async def get_cash(self) -> float:
+        """Returns available cash. Override for real brokers."""
+        return 0.0
+
     async def place_stop_loss(self, symbol: str, shares: int, stop_price: float) -> bool:
         return False
 
@@ -58,19 +62,26 @@ class Broker(ABC):
 class LogBroker(Broker):
     """Dry-run broker — fills instantly."""
 
-    def __init__(self):
+    def __init__(self, initial_cash: float = 100000):
         self._positions: dict[str, int] = {}
+        self._cash = initial_cash
 
     async def execute(self, trade: TradeEvent):
-        print(f"  📝 [DRY RUN] {trade.action.upper()} {trade.symbol} | reason: {trade.reason}")
+        print(f"  📝 [DRY RUN] {trade.action.upper()} {trade.symbol} qty={int(trade.size)} @ ${trade.price:.2f} | reason: {trade.reason}")
         if trade.action == "buy":
+            cost = trade.price * trade.size
+            self._cash -= cost
             self._positions[trade.symbol] = self._positions.get(trade.symbol, 0) + int(trade.size)
         elif trade.action == "sell":
-            self._positions.pop(trade.symbol, None)
+            qty = self._positions.pop(trade.symbol, 0)
+            self._cash += trade.price * qty
         await self._publish_fill(trade.symbol, trade.action, True, "filled (dry run)")
 
     async def get_positions(self) -> dict[str, int]:
         return dict(self._positions)
+
+    async def get_cash(self) -> float:
+        return self._cash
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +153,19 @@ class FutuBroker(Broker):
             print(f"  ❌ Futu get_positions error: {e}")
             return {}
 
+    async def get_cash(self) -> float:
+        from futu import OpenSecTradeContext, TrdEnv
+        trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
+        try:
+            ctx = OpenSecTradeContext(host=self.host, port=self.port)
+            ret, data = ctx.accinfo_query(trd_env=trd_env)
+            ctx.close()
+            if ret == 0:
+                return float(data["cash"].iloc[0])
+        except Exception as e:
+            print(f"  ❌ Futu get_cash error: {e}")
+        return 0.0
+
 
 # ---------------------------------------------------------------------------
 # IBKRBroker — Interactive Brokers via ib_insync, confirms via callback
@@ -194,6 +218,16 @@ class IBKRBroker(Broker):
         except Exception as e:
             print(f"  ❌ IBKR get_positions error: {e}")
             return {}
+
+    async def get_cash(self) -> float:
+        try:
+            self._connect()
+            for av in self._ib.accountValues():
+                if av.tag == "CashBalance" and av.currency == "USD":
+                    return float(av.value)
+        except Exception as e:
+            print(f"  ❌ IBKR get_cash error: {e}")
+        return 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +282,14 @@ class AlpacaBroker(Broker):
         except Exception as e:
             print(f"  ❌ Alpaca get_positions error: {e}")
             return {}
+
+    async def get_cash(self) -> float:
+        try:
+            self._connect()
+            return float(self._api.get_account().cash)
+        except Exception as e:
+            print(f"  ❌ Alpaca get_cash error: {e}")
+        return 0.0
 
 
 # ---------------------------------------------------------------------------
