@@ -123,13 +123,21 @@ def _from_clickhouse(symbol: str, as_of: str = None) -> float:
         storage = ClickHouseStorage()
         start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
         end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
-        print(f"    💲 [ClickHouse] {symbol} @ {t.strftime('%Y-%m-%d')}", end="", flush=True)
-        df = storage.query_ohlcv(symbol, "1d", start, end)
-        if not df.empty:
-            price = float(df["close"].iloc[-1])
-            print(f" → ${price:.2f}")
-            return price
-        print(f" → no data")
+        # Try hourly first, fall back to daily
+        for interval in ["1h", "1d"]:
+            print(f"    💲 [ClickHouse] {symbol} @ {t.strftime('%Y-%m-%d %H:%M')} ({interval})", end="", flush=True)
+            df = storage.query_ohlcv(symbol, interval, start, end)
+            if not df.empty:
+                # For hourly, find closest candle at or before target time
+                if interval == "1h" and "timestamp" in df.columns:
+                    df["timestamp"] = df["timestamp"].dt.tz_localize(None) if df["timestamp"].dt.tz is not None else df["timestamp"]
+                    mask = df["timestamp"] <= t
+                    if mask.any():
+                        df = df[mask]
+                price = float(df["close"].iloc[-1])
+                print(f" → ${price:.2f}")
+                return price
+            print(f" → no data")
     except Exception as e:
         print(f" → error: {e}")
     return 0.0
