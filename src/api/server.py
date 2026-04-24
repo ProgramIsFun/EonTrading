@@ -111,7 +111,7 @@ async def ping_components():
         from src.common.ping import collect_pongs
         redis_host = os.getenv("REDIS_HOST")
         if redis_host:
-            bus = RedisEventBus(host=redis_host)
+            bus = RedisEventBus(host=redis_host, group="api")
         else:
             bus = LocalEventBus()
         await bus.start()

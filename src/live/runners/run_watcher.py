@@ -36,7 +36,7 @@ async def main():
         "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
 
-    bus = RedisEventBus()
+    bus = RedisEventBus(group="watcher")
     await bus.start()
 
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120)

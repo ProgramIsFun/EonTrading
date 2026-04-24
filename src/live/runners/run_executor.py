@@ -43,8 +43,7 @@ async def main():
     if missing:
         logger.warning("Missing env vars: %s — broker may fail", ", ".join(missing))
 
-    bus = RedisEventBus()
-    await bus.subscribe("trade", lambda _: None)
+    bus = RedisEventBus(group="executor")
     await bus.start()
 
     executor = TradeExecutor(bus, broker)

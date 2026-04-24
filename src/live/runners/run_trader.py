@@ -28,9 +28,7 @@ async def main():
         "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
 
-    bus = RedisEventBus()
-    await bus.subscribe("sentiment", lambda _: None)
-    await bus.subscribe("fill", lambda _: None)
+    bus = RedisEventBus(group="trader")
     await bus.start()
 
     store = PositionStore()

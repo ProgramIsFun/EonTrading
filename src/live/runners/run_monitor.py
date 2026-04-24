@@ -1,7 +1,14 @@
 """Run PriceMonitor as its own process. Watches positions, triggers SL/TP via [trade]."""
-import asyncio, os
+import asyncio, logging, os, signal
 from dotenv import load_dotenv
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
@@ -22,20 +29,29 @@ async def main():
         "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
 
-    redis_host = os.getenv("REDIS_HOST", "192.168.0.38")
-    bus = RedisEventBus(host=redis_host)
+    bus = RedisEventBus(group="monitor")
     await bus.start()
 
     store = PositionStore()
     logic = TradingLogic(stop_loss_pct=0.05, take_profit_pct=0.10)
     monitor = PriceMonitor(bus, store, logic, interval_sec=60)
 
-    asyncio.ensure_future(Heartbeat("monitor", metadata={"mode": "distributed"}).run())
+    asyncio.create_task(Heartbeat("monitor", metadata={"mode": "distributed"}).run())
     ping = PingResponder(bus, ["monitor"], metadata={"monitor": {"mode": "distributed"}})
     await ping.start()
 
-    print(f"  🟢 Started. Checking prices every 60s.\n")
-    await monitor.run()
+    logger.info("🟢 Started. Checking prices every 60s.")
+
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+
+    monitor_task = asyncio.create_task(monitor.run())
+    await stop_event.wait()
+    logger.info("Shutting down...")
+    monitor_task.cancel()
+    await bus.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())
