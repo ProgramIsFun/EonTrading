@@ -242,9 +242,7 @@ export default function ArchitectureDiagram() {
             <div style={{ fontSize: 9, color: "#666" }}>polls prices → publishes sell to [trade]</div>
             {internalTag()}
             {pathTag("src/live/price_monitor.py")}
-            {envOpt("PRICE_SOURCE")}
-            {envOpt("SL_CHECK_HOURS")}
-            <div style={{ fontSize: 8, color: "#555" }}>yfinance (default) or clickhouse</div>
+            <div style={{ fontSize: 8, color: "#555" }}>live: yfinance (latest prices)</div>
           </div>
           <span style={arrow}>→</span>
           {label("[trade]")}
@@ -257,6 +255,12 @@ export default function ArchitectureDiagram() {
           <div style={{ fontSize: 10, color: "#888" }}>
             Same pipeline, same code — but fed with historical news from MongoDB.
             Timestamps flow with events. Prices from ClickHouse (<code style={{ color: "#818cf8" }}>PRICE_SOURCE=clickhouse</code>) or yfinance.
+          </div>
+          <div style={{ fontSize: 9, color: "#666", marginTop: 4 }}>
+            {envOpt("PRICE_SOURCE")} <span>clickhouse (fast, local) or yfinance (default, API)</span>
+          </div>
+          <div style={{ fontSize: 9, color: "#666" }}>
+            {envOpt("SL_CHECK_HOURS")} <span>24 (default) or 1 for hourly SL/TP checks</span>
           </div>
           <code style={{ fontSize: 9, color: "#818cf8", display: "block", marginTop: 4 }}>
             python -m src.live.replay --start 2025-01-01 --end 2025-06-01
