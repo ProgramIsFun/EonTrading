@@ -7,6 +7,18 @@ from src.common.events import NewsEvent
 
 class NewsSource:
     """Base class for news sources."""
+    MAX_SEEN = 5000  # cap in-memory dedup set to prevent unbounded growth
+
+    def _check_seen(self, key: str) -> bool:
+        if not hasattr(self, "_seen"):
+            self._seen = set()
+        if key in self._seen:
+            return True
+        if len(self._seen) > self.MAX_SEEN:
+            self._seen.clear()
+        self._seen.add(key)
+        return False
+
     def fetch_latest(self) -> list[NewsEvent]:
         raise NotImplementedError
 
@@ -18,7 +30,6 @@ class NewsAPISource(NewsSource):
         self.api_key = api_key or os.getenv("NEWSAPI_KEY")
         self.base_url = "https://newsapi.org/v2"
         self.categories = categories or ["business"]
-        self._seen = set()
 
     def fetch_latest(self, query: str = "stock market OR trading OR tariff OR earnings") -> list[NewsEvent]:
         events = []
@@ -34,9 +45,8 @@ class NewsAPISource(NewsSource):
             data = resp.json()
             for article in data.get("articles", []):
                 url = article.get("url", "")
-                if url in self._seen:
+                if self._check_seen(url):
                     continue
-                self._seen.add(url)
                 events.append(NewsEvent(
                     source="newsapi",
                     headline=article.get("title", ""),

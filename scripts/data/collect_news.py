@@ -30,15 +30,16 @@ def get_collection():
 def collect_once(poller, col):
     total = 0
     for ev in poller.poll_once():
-        if ev.url and col.find_one({"url": ev.url}):
-            continue
-        col.insert_one({
-            "source": ev.source, "headline": ev.headline,
-            "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
-            "collected_at": datetime.utcnow().isoformat() + "Z",
-        })
-        total += 1
-        print(f"  + [{ev.source}] {ev.headline[:70]}")
+        try:
+            col.insert_one({
+                "source": ev.source, "headline": ev.headline,
+                "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
+                "collected_at": datetime.utcnow().isoformat() + "Z",
+            })
+            total += 1
+            print(f"  + [{ev.source}] {ev.headline[:70]}")
+        except Exception:
+            pass  # duplicate URL — already in collection
     return total
 
 
@@ -50,6 +51,7 @@ def main():
     poller = NewsPoller(
         sources=[RSSSource(), RedditSource()],
         interval_sec=POLL_INTERVAL,
+        persist_seen=True,
     )
     col = get_collection()
 

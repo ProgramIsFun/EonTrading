@@ -14,7 +14,6 @@ class RedditSource(NewsSource):
     def __init__(self, subreddits: list[str] = None, limit: int = 20):
         self.subreddits = subreddits or ["wallstreetbets", "stocks", "investing"]
         self.limit = limit
-        self._seen = set()
 
     def fetch_latest(self) -> list[NewsEvent]:
         events = []
@@ -28,9 +27,8 @@ class RedditSource(NewsSource):
                 for post in resp.json().get("data", {}).get("children", []):
                     d = post["data"]
                     pid = d.get("id", "")
-                    if pid in self._seen:
+                    if self._check_seen(pid):
                         continue
-                    self._seen.add(pid)
                     events.append(NewsEvent(
                         source=f"reddit/{sub}",
                         headline=d.get("title", ""),

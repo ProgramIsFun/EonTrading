@@ -25,6 +25,7 @@ async def main_single():
     from src.live.sentiment_trader import SentimentTrader
     from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
     from src.common.position_store import PositionStore
+    from src.data.utils.db_helper import get_mongo_client
 
     bus = LocalEventBus()
     await bus.start()
@@ -50,7 +51,8 @@ async def main_single():
         broker = LogBroker()
     store = PositionStore()
 
-    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store)
+    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store,
+                             trade_log=get_mongo_client()["EonTradingDB"]["trades"])
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
     executor = TradeExecutor(bus, broker)

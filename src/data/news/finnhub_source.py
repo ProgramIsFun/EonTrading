@@ -15,7 +15,6 @@ class FinnhubSource(NewsSource):
     def __init__(self, api_key: str = None, category: str = "general"):
         self.api_key = api_key or os.getenv("FINNHUB_KEY")
         self.category = category  # general, forex, crypto, merger
-        self._seen = set()
 
     def fetch_latest(self) -> list[NewsEvent]:
         if not self.api_key:
@@ -28,9 +27,8 @@ class FinnhubSource(NewsSource):
             }, timeout=10)
             for article in resp.json():
                 uid = article.get("id", article.get("url", ""))
-                if uid in self._seen:
+                if self._check_seen(uid):
                     continue
-                self._seen.add(uid)
                 events.append(NewsEvent(
                     source="finnhub",
                     headline=article.get("headline", ""),

@@ -5,6 +5,7 @@ load_dotenv()
 
 from src.common.event_bus import RedisEventBus
 from src.common.position_store import PositionStore
+from src.data.utils.db_helper import get_mongo_client
 from src.live.sentiment_trader import SentimentTrader
 
 
@@ -16,7 +17,8 @@ async def main():
     await bus.start()
 
     store = PositionStore()
-    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store)
+    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store,
+                             trade_log=get_mongo_client()["EonTradingDB"]["trades"])
     await trader.start()
     print("SentimentTrader process started (positions in MongoDB)")
     while True:

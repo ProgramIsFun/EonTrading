@@ -22,7 +22,6 @@ class TwitterSource(NewsSource):
         self.accounts = accounts or ["elonmusk", "realDonaldTrump"]
         self.bearer_token = bearer_token or os.getenv("TWITTER_BEARER_TOKEN")
         self.use_official = use_official
-        self._seen: set[str] = set()
 
     def fetch_latest(self) -> list[NewsEvent]:
         if self.use_official:
@@ -55,9 +54,8 @@ class TwitterSource(NewsSource):
                     continue
                 for tweet in tweets.data:
                     tid = str(tweet.id)
-                    if tid in self._seen:
+                    if self._check_seen(tid):
                         continue
-                    self._seen.add(tid)
                     events.append(NewsEvent(
                         source=f"twitter/{account}",
                         headline=tweet.text[:280],

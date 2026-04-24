@@ -21,7 +21,6 @@ class RSSSource(NewsSource):
             "https://feeds.finance.yahoo.com/rss/2.0/headline?region=US&lang=en-US",
             "https://www.cnbc.com/id/100003114/device/rss/rss.html",
         ]
-        self._seen = set()
 
     def fetch_latest(self) -> list[NewsEvent]:
         events = []
@@ -45,9 +44,8 @@ class RSSSource(NewsSource):
             pub = self._tag(item, "pubDate") or self._tag(item, "published") or self._tag(item, "updated")
             desc = self._tag(item, "description") or self._tag(item, "summary") or ""
 
-            if not title or link in self._seen:
+            if not title or self._check_seen(link):
                 continue
-            self._seen.add(link)
 
             # Strip HTML tags from description
             desc = re.sub(r"<[^>]+>", "", desc).strip()

@@ -4,7 +4,6 @@ from datetime import datetime
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL, SentimentEvent, TradeEvent, FillEvent
 from src.common.trading_logic import TradingLogic
-from src.data.utils.db_helper import get_mongo_client
 
 
 class SentimentTrader:
@@ -14,18 +13,14 @@ class SentimentTrader:
     Uses shared TradingLogic from src/common/trading_logic.py — same logic as backtest.
     """
 
-    def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0, position_store=None, **kwargs):
+    def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0, position_store=None, trade_log=None, **kwargs):
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
         self.holdings: dict[str, datetime] = {}
         self.pending: dict[str, str] = {}  # symbol → "buy"/"sell" awaiting fill
         self.max_hold_days = max_hold_days
         self.position_store = position_store
-        self._trades_col = None
-        try:
-            self._trades_col = get_mongo_client()["EonTradingDB"]["trades"]
-        except Exception:
-            pass  # MongoDB not available — skip trade logging
+        self._trades_col = trade_log  # MongoDB collection or None
         if self.position_store:
             self.holdings = self.position_store.get_positions()
             if self.holdings:
