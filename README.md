@@ -17,19 +17,44 @@ Everything flows through event channels (LocalEventBus or RedisEventBus). See th
 ## Quick Start
 
 ```bash
-# Install
+# 1. Copy .env.example to .env and fill in your values
+cp .env.example .env
+
+# 2. Install (for local dev / API server on host)
 pip install -e .
 
-# Run backtest dashboard
-cd frontend && npm install && npm run dev   # http://localhost:5174
-PYTHONPATH=. uvicorn src.api.server:app     # http://localhost:8000
+# 3. Start API server on host (manages Docker + serves dashboard)
+PYTHONPATH=. uvicorn src.api.server:app --host 0.0.0.0 --port 8000
 
-# Run live trader (single process, dry run)
-PYTHONPATH=. python -m src.live.news_trader
-
-# Run live trader with a real broker
-BROKER=alpaca ALPACA_API_KEY=xxx ALPACA_SECRET_KEY=xxx PYTHONPATH=. python -m src.live.news_trader
+# 4. Start pipeline in Docker (from dashboard or CLI)
+docker compose --profile distributed up -d    # all components + Redis
+docker compose up -d redis                    # just Redis (if starting components from dashboard)
 ```
+
+### Deployment layout
+
+```
+Host machine (Mac or Windows):
+  ├── FastAPI server (native Python, always running)
+  │   ├── Serves dashboard API + backtest
+  │   ├── Manages Docker containers via subprocess
+  │   └── Connects to Redis via localhost:6379 (REDIS_HOST=localhost)
+  │
+  └── Docker containers (managed by API or CLI)
+      ├── redis        (port 6379, exposed to host)
+      ├── watcher      (connects to redis:6379 via Docker DNS)
+      ├── analyzer     (connects to redis:6379 via Docker DNS)
+      ├── trader       (connects to redis:6379 via Docker DNS)
+      └── executor     (connects to redis:6379 via Docker DNS)
+
+Browser (same machine or remote):
+  └── Dashboard → http://<host>:8000
+      ├── Monitor: heartbeat + real-time ping via Redis
+      └── Control: start/stop/restart containers
+```
+
+**Important:** The API server's `.env` must have `REDIS_HOST=localhost` (host port mapping).
+Docker containers get `REDIS_HOST=redis` automatically from `docker-compose.yml`.
 
 ## Architecture
 
