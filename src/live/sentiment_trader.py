@@ -1,6 +1,7 @@
 """SentimentTrader: listens to sentiment events, decides trades, publishes trade events."""
 import asyncio
 from datetime import datetime
+from src.common.clock import clock
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL, SentimentEvent, TradeEvent, FillEvent
 from src.common.trading_logic import TradingLogic
@@ -47,7 +48,7 @@ class SentimentTrader:
             if self._trades_col:
                 self._trades_col.insert_one({
                     "symbol": symbol, "action": pending_action,
-                    "reason": event.reason, "timestamp": datetime.utcnow(),
+                    "reason": event.reason, "timestamp": clock.now(),
                 })
             if self.position_store:
                 if pending_action == "buy":
@@ -60,12 +61,12 @@ class SentimentTrader:
             if pending_action == "buy":
                 self.holdings.pop(symbol, None)
             elif pending_action == "sell":
-                self.holdings[symbol] = datetime.utcnow()  # re-add (entry time lost, but safe)
+                self.holdings[symbol] = clock.now()  # re-add (entry time lost, but safe)
 
     async def _hold_checker(self):
         """Background task: close positions that exceed max hold period."""
         while True:
-            now = datetime.utcnow()
+            now = clock.now()
             for symbol in list(self.holdings.keys()):
                 if symbol in self.pending:
                     continue  # skip symbols with pending orders
@@ -110,20 +111,20 @@ class SentimentTrader:
                         )
                         if shares > 0:
                             action = "buy"
-                            self.holdings[symbol] = datetime.utcnow()
+                            self.holdings[symbol] = clock.now()
                 else:
                     # No broker — fallback to threshold check (backward compat)
                     if event.confidence >= self.logic.min_confidence and event.sentiment >= self.logic.threshold:
                         action = "buy"
                         shares = 1
-                        self.holdings[symbol] = datetime.utcnow()
+                        self.holdings[symbol] = clock.now()
 
             if action:
                 self.pending[symbol] = action
                 trade = TradeEvent(
                     symbol=symbol, action=action,
                     reason=f"sentiment:{event.sentiment:.2f} on {event.headline[:60]}",
-                    timestamp=datetime.utcnow().isoformat() + "Z",
+                    timestamp=clock.now().isoformat() + "Z",
                     size=float(shares) if shares else 1.0,
                 )
                 print(f"  {action.upper()} {symbol} qty={shares} (sentiment: {event.sentiment:.2f}) — pending broker confirmation")
