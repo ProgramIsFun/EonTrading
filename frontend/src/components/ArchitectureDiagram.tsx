@@ -102,96 +102,130 @@ export default function ArchitectureDiagram() {
       <div style={section}>
         {sectionTitle("Live Trading Pipeline", "#818cf8")}
 
-        {/* Row 1: Sources → Watcher → [news] → Analyzer → [sentiment] */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            {[
-              { name: "NewsAPI", path: "src/data/news/newsapi_source.py", env: "NEWSAPI_KEY" },
-              { name: "Finnhub", path: "src/data/news/finnhub_source.py", env: "FINNHUB_KEY" },
-              { name: "RSS", path: "src/data/news/rss_source.py", env: null },
-              { name: "Reddit", path: "src/data/news/reddit_source.py", env: null },
-            ].map((s) => (
-              <div key={s.name} style={boxStyle(SOURCE)}>
-                {s.name}
-                {pathTag(s.path)}
-                {s.env ? envOpt(s.env) : <div style={{ fontSize: 8, color: "#555", marginTop: 1 }}>always on</div>}
-              </div>
-            ))}
-            <div style={boxStyle(SOURCE)}>
-              Twitter/X
-              {pathTag("src/data/news/twitter_source.py")}
-              {envOpt("TWITTER_BEARER_TOKEN")}
+        {/* Host: API Server */}
+        <div style={{ background: "#1a2a1a", borderRadius: 8, padding: 10, marginBottom: 12, border: "1px dashed #22c55e44" }}>
+          <div style={{ fontSize: 10, color: "#22c55e", marginBottom: 6 }}>🖥 Host (native Python — not in Docker)</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={boxStyle(PROCESS)}>
+              <div style={{ fontWeight: 600 }}>FastAPI Server</div>
+              <div style={{ fontSize: 10, color: "#888" }}>dashboard + backtest + docker control</div>
+              {processTag("uvicorn")}
+              {pathTag("src/api/server.py")}
+              {envReq("REDIS_HOST=localhost")}
             </div>
+            <span style={{ fontSize: 10, color: "#666" }}>→ manages containers, pings via Redis →</span>
           </div>
-          <span style={arrow}>→</span>
-          <div style={boxStyle(INTERNAL)}>
-            <div style={{ fontWeight: 600 }}>NewsWatcher</div>
-            <div style={{ fontSize: 10, color: "#888" }}>uses NewsPoller</div>
-            {internalTag()}
-            {pathTag("src/live/news_watcher.py")}
-            {pathTag("src/common/news_poller.py")}
-          </div>
-          <span style={arrow}>→</span>
-          {label("[news]")}
-          <span style={arrow}>→</span>
-          <div>
-            <div style={boxStyle(INTERNAL)}>
-              <div style={{ fontWeight: 600 }}>AnalyzerService</div>
-              <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM + positions</div>
-              {internalTag()}
-              {pathTag("src/live/analyzer_service.py")}
-              {pathTag("src/strategies/sentiment.py")}
-              {envOpt("OPENAI_API_KEY")}
-              <div style={{ fontSize: 8, color: "#555" }}>default: keyword (free)</div>
-            </div>
-            <div style={arrowDown}>↑ reads</div>
-            {mongoBox("positions", "get open positions")}
-          </div>
-          <span style={arrow}>→</span>
-          {label("[sentiment]")}
         </div>
 
-        {/* Row 2: → Trader → [trade] → Executor/Broker → [fill] → back to Trader */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-          <span style={arrow}>→</span>
-          <div style={boxStyle(INTERNAL)}>
-            <div style={{ fontWeight: 600 }}>SentimentTrader</div>
-            <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
-            <div style={{ fontSize: 9, color: "#888" }}>tracks pending orders</div>
-            {internalTag()}
-            {pathTag("src/live/sentiment_trader.py")}
+        {/* Docker boundary */}
+        <div style={{ background: "#1a1a2e", borderRadius: 8, padding: 12, border: "2px dashed #818cf844", position: "relative" as const }}>
+          <div style={{ fontSize: 10, color: "#818cf8", marginBottom: 8 }}>
+            🐳 Docker containers
+            <span style={{ color: "#555", marginLeft: 8 }}>REDIS_HOST=redis (Docker DNS)</span>
           </div>
-          <span style={arrow}>→</span>
-          {label("[trade]")}
-          <span style={arrow}>→</span>
-          <div style={boxStyle(INTERNAL)}>
-            <div style={{ fontWeight: 600 }}>Executor</div>
-            {internalTag()}
-            {pathTag("src/live/brokers/broker.py")}
-          </div>
-          <span style={arrow}>→</span>
-          <div style={boxStyle(PROCESS)}>
-            <div style={{ fontWeight: 600 }}>Broker</div>
-            <div style={{ fontSize: 10, color: "#888" }}>Log / Futu / IBKR / Alpaca</div>
-            <div style={{ fontSize: 9, color: "#666" }}>each confirms in its own way</div>
-            <div style={{ fontSize: 9, color: "#555", marginTop: 2 }}>polling · callback · instant</div>
-            {envOpt("BROKER")}
-            {envOpt("ALPACA_API_KEY")}
-            {envOpt("ALPACA_SECRET_KEY")}
-            {envOpt("FUTU_LIVE / FUTU_REAL")}
-            <div style={{ fontSize: 8, color: "#555" }}>default: LogBroker (dry run)</div>
-          </div>
-          <span style={arrow}>→</span>
-          {label("[fill]")}
-          <span style={arrow}>→</span>
-          <div>
-            <div style={{ ...boxStyle(INTERNAL), border: "1px solid #22c55e66" }}>
-              <div style={{ fontWeight: 600 }}>SentimentTrader</div>
-              <div style={{ fontSize: 10, color: "#22c55e" }}>✅ filled → persist</div>
-              <div style={{ fontSize: 10, color: "#ef4444" }}>❌ rejected → rollback</div>
+
+          {/* Redis */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+            <div style={boxStyle(SERVICE)}>
+              <div style={{ fontWeight: 600 }}>Redis</div>
+              <div style={{ fontSize: 10, color: "#888" }}>event bus + ping/pong</div>
+              {serviceTag()}
+              <div style={{ fontSize: 8, color: "#555", marginTop: 2 }}>port 6379 → host</div>
             </div>
-            <div style={arrowDown}>↓ on fill</div>
-            {mongoBox("positions", "open/close position")}
+            <span style={{ fontSize: 9, color: "#555" }}>channels: [news] [sentiment] [trade] [fill] [ping] [pong]</span>
+          </div>
+
+          {/* Row 1: Sources → Watcher → [news] → Analyzer → [sentiment] */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[
+                { name: "NewsAPI", path: "src/data/news/newsapi_source.py", env: "NEWSAPI_KEY" },
+                { name: "Finnhub", path: "src/data/news/finnhub_source.py", env: "FINNHUB_KEY" },
+                { name: "RSS", path: "src/data/news/rss_source.py", env: null },
+                { name: "Reddit", path: "src/data/news/reddit_source.py", env: null },
+              ].map((s) => (
+                <div key={s.name} style={boxStyle(SOURCE)}>
+                  {s.name}
+                  {pathTag(s.path)}
+                  {s.env ? envOpt(s.env) : <div style={{ fontSize: 8, color: "#555", marginTop: 1 }}>always on</div>}
+                </div>
+              ))}
+              <div style={boxStyle(SOURCE)}>
+                Twitter/X
+                {pathTag("src/data/news/twitter_source.py")}
+                {envOpt("TWITTER_BEARER_TOKEN")}
+              </div>
+            </div>
+            <span style={arrow}>→</span>
+            <div style={boxStyle(INTERNAL)}>
+              <div style={{ fontWeight: 600 }}>NewsWatcher</div>
+              <div style={{ fontSize: 10, color: "#888" }}>uses NewsPoller</div>
+              {internalTag()}
+              {pathTag("src/live/news_watcher.py")}
+              {pathTag("src/common/news_poller.py")}
+            </div>
+            <span style={arrow}>→</span>
+            {label("[news]")}
+            <span style={arrow}>→</span>
+            <div>
+              <div style={boxStyle(INTERNAL)}>
+                <div style={{ fontWeight: 600 }}>AnalyzerService</div>
+                <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM + positions</div>
+                {internalTag()}
+                {pathTag("src/live/analyzer_service.py")}
+                {pathTag("src/strategies/sentiment.py")}
+                {envOpt("OPENAI_API_KEY")}
+                <div style={{ fontSize: 8, color: "#555" }}>default: keyword (free)</div>
+              </div>
+              <div style={arrowDown}>↑ reads</div>
+              {mongoBox("positions", "get open positions")}
+            </div>
+            <span style={arrow}>→</span>
+            {label("[sentiment]")}
+          </div>
+
+          {/* Row 2: → Trader → [trade] → Executor/Broker → [fill] → back to Trader */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            <span style={arrow}>→</span>
+            <div style={boxStyle(INTERNAL)}>
+              <div style={{ fontWeight: 600 }}>SentimentTrader</div>
+              <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
+              <div style={{ fontSize: 9, color: "#888" }}>tracks pending orders</div>
+              {internalTag()}
+              {pathTag("src/live/sentiment_trader.py")}
+            </div>
+            <span style={arrow}>→</span>
+            {label("[trade]")}
+            <span style={arrow}>→</span>
+            <div style={boxStyle(INTERNAL)}>
+              <div style={{ fontWeight: 600 }}>Executor</div>
+              {internalTag()}
+              {pathTag("src/live/brokers/broker.py")}
+            </div>
+            <span style={arrow}>→</span>
+            <div style={boxStyle(PROCESS)}>
+              <div style={{ fontWeight: 600 }}>Broker</div>
+              <div style={{ fontSize: 10, color: "#888" }}>Log / Futu / IBKR / Alpaca</div>
+              <div style={{ fontSize: 9, color: "#666" }}>each confirms in its own way</div>
+              <div style={{ fontSize: 9, color: "#555", marginTop: 2 }}>polling · callback · instant</div>
+              {envOpt("BROKER")}
+              {envOpt("ALPACA_API_KEY")}
+              {envOpt("ALPACA_SECRET_KEY")}
+              {envOpt("FUTU_LIVE / FUTU_REAL")}
+              <div style={{ fontSize: 8, color: "#555" }}>default: LogBroker (dry run)</div>
+            </div>
+            <span style={arrow}>→</span>
+            {label("[fill]")}
+            <span style={arrow}>→</span>
+            <div>
+              <div style={{ ...boxStyle(INTERNAL), border: "1px solid #22c55e66" }}>
+                <div style={{ fontWeight: 600 }}>SentimentTrader</div>
+                <div style={{ fontSize: 10, color: "#22c55e" }}>✅ filled → persist</div>
+                <div style={{ fontSize: 10, color: "#ef4444" }}>❌ rejected → rollback</div>
+              </div>
+              <div style={arrowDown}>↓ on fill</div>
+              {mongoBox("positions", "open/close position")}
+            </div>
           </div>
         </div>
 
