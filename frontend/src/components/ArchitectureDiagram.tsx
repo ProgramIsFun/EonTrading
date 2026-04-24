@@ -298,6 +298,37 @@ export default function ArchitectureDiagram() {
           <code style={{ fontSize: 9, color: "#818cf8", display: "block", marginTop: 4 }}>
             python -m src.live.replay --start 2025-01-01 --end 2025-06-01
           </code>
+
+          {/* Live vs Replay differences */}
+          <table style={{ fontSize: 9, color: "#888", borderCollapse: "collapse", width: "100%", marginTop: 8 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #333", color: "#ccc" }}>
+                <th style={{ textAlign: "left", padding: "3px 6px" }}>Aspect</th>
+                <th style={{ textAlign: "left", padding: "3px 6px" }}>🔴 Live (real money)</th>
+                <th style={{ textAlign: "left", padding: "3px 6px" }}>♻️ Replay (backtest)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["News source", "RSS, Reddit, NewsAPI, Finnhub, Twitter", "Historical from MongoDB or hardcoded"],
+                ["Prices", "Latest market price (yfinance)", "Historical at event timestamp (ClickHouse/yfinance)"],
+                ["Broker", "Futu / IBKR / Alpaca (real orders)", "PaperBroker (simulated, instant fill)"],
+                ["Fill confirmation", "Async — broker polls/callback", "Instant — PaperBroker always succeeds"],
+                ["SL/TP monitoring", "PriceMonitor polls every 60s (live prices)", "Stepped through historical timestamps between events"],
+                ["Transaction costs", "Real broker fees", "CostModel (US_STOCKS: 0.05% slippage)"],
+                ["Reconciliation", "Compares system vs broker on startup", "Not used"],
+                ["Execution", "Distributed (Docker + Redis)", "Single process (LocalEventBus)"],
+                ["NewsWatcher", "Active — polls sources every 120s", "Not used — events injected directly"],
+                ["Positions", "Persisted to MongoDB", "Persisted to MongoDB (cleared before run)"],
+              ].map(([aspect, live, replay]) => (
+                <tr key={aspect} style={{ borderBottom: "1px solid #222" }}>
+                  <td style={{ padding: "2px 6px", color: "#ccc" }}>{aspect}</td>
+                  <td style={{ padding: "2px 6px" }}>{live}</td>
+                  <td style={{ padding: "2px 6px" }}>{replay}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
