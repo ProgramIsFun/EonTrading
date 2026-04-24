@@ -7,6 +7,7 @@ from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
+from src.common.clock import clock
 from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
 
 
@@ -38,6 +39,7 @@ async def main():
     bus = RedisEventBus(host=os.getenv("REDIS_HOST", "192.168.0.38"))
     await bus.subscribe("trade", lambda _: None)
     await bus.start()
+    await clock.subscribe_to_bus(bus)
 
     executor = TradeExecutor(bus, broker)
     await executor.start()

@@ -6,6 +6,10 @@ Usage:
   clock.now()                    # live: datetime.utcnow()
   clock.set_time("2025-04-03T14:00:00Z")  # replay: returns that time
   clock.reset()                  # back to live mode
+
+Distributed replay:
+  Clock can subscribe to a [clock] channel on the event bus to receive
+  time updates from the replay controller.
 """
 from datetime import datetime
 
@@ -36,6 +40,16 @@ class Clock:
     def is_replay(self) -> bool:
         return self._simulated is not None
 
+    async def subscribe_to_bus(self, bus):
+        """Subscribe to [clock] channel for distributed replay."""
+        async def _on_clock(msg: dict):
+            t = msg.get("time")
+            if t == "reset":
+                self.reset()
+            elif t:
+                self.set_time(t)
+        await bus.subscribe("clock", _on_clock)
 
-# Global singleton — import this everywhere
+
+# Global singleton
 clock = Clock()
