@@ -86,7 +86,27 @@ async def main():
     print(f"  News events: {len(SCORED_NEWS)}")
     print(f"{'═' * 60}\n")
 
+    import os
+    VERBOSE = os.getenv("VERBOSE", "")
+    
+    # Suppress price logs unless VERBOSE=1
+    if not VERBOSE:
+        import src.common.price as _price_mod
+        _orig_yf = _price_mod._from_yfinance
+        _orig_ch = _price_mod._from_clickhouse
+        def _quiet_yf(symbol, as_of=None):
+            import io, sys
+            old = sys.stdout; sys.stdout = io.StringIO()
+            r = _orig_yf(symbol, as_of); sys.stdout = old; return r
+        def _quiet_ch(symbol, as_of=None):
+            import io, sys
+            old = sys.stdout; sys.stdout = io.StringIO()
+            r = _orig_ch(symbol, as_of); sys.stdout = old; return r
+        _price_mod._from_yfinance = _quiet_yf
+        _price_mod._from_clickhouse = _quiet_ch
+
     prev_date = None
+    checks_done = 0
     for doc in SCORED_NEWS:
         curr = datetime.fromisoformat(doc["date"])
 
@@ -95,9 +115,12 @@ async def main():
             check_time = prev_date + timedelta(hours=SL_CHECK_INTERVAL)
             while check_time < curr:
                 sold = await monitor.check_once(broker, as_of=check_time.isoformat())
+                checks_done += 1
                 if sold:
-                    print(f"    ⏰ SL/TP check @ {check_time.strftime('%Y-%m-%d')}")
+                    print(f"    ⏰ SL/TP @ {check_time.strftime('%Y-%m-%d %H:%M')} — sold {', '.join(sold)}")
                     await asyncio.sleep(0.3)
+                elif checks_done % 50 == 0:
+                    print(f"    ... {checks_done} SL/TP checks done (@ {check_time.strftime('%Y-%m-%d %H:%M')})")
                 check_time += timedelta(hours=SL_CHECK_INTERVAL)
 
         prev_date = curr
