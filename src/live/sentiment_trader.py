@@ -2,6 +2,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL, SentimentEvent, TradeEvent, FillEvent
 from src.common.trading_logic import TradingLogic
@@ -69,11 +70,11 @@ class SentimentTrader:
             if action == "buy":
                 self.holdings.pop(symbol, None)
             elif action == "sell":
-                self.holdings[symbol] = datetime.utcnow()
+                self.holdings[symbol] = utcnow()
 
     async def _hold_checker(self):
         while True:
-            now = datetime.utcnow()
+            now = utcnow()
             for symbol in list(self.holdings.keys()):
                 if symbol in self.pending:
                     continue
@@ -134,7 +135,7 @@ class SentimentTrader:
                     shares = 1
                 if shares > 0:
                     action = "buy"
-                    self.holdings[symbol] = datetime.utcnow()
+                    self.holdings[symbol] = utcnow()
 
             if action:
                 self.pending[symbol] = {"action": action, "price": price, "shares": shares}

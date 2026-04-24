@@ -3,7 +3,12 @@
 Used only by the single-process replay controller to set simulated time.
 In the pipeline, timestamps flow with events via as_of parameters.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def utcnow() -> datetime:
+    """Timezone-aware UTC now. Use this instead of datetime.utcnow()."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Clock:
@@ -11,7 +16,7 @@ class Clock:
         self._simulated: datetime | None = None
 
     def now(self) -> datetime:
-        return self._simulated if self._simulated else datetime.utcnow()
+        return self._simulated if self._simulated else utcnow()
 
     def set_time(self, t):
         if isinstance(t, str):

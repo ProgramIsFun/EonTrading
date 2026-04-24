@@ -2,6 +2,7 @@
 from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from src.common.clock import utcnow
 from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.costs import US_STOCKS
 from src.data.utils.db_helper import get_mongo_client
@@ -36,7 +37,7 @@ def _run_collector():
             col.insert_one({
                 "source": ev.source, "headline": ev.headline,
                 "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
-                "collected_at": datetime.utcnow().isoformat() + "Z",
+                "collected_at": utcnow().isoformat() + "Z",
             })
         if _collector_stop.wait(timeout=300):
             break
@@ -66,24 +67,7 @@ def collector_stop():
     _collector_stop.set()
     return {"status": "stopped"}
 
-# Sample news for demo — replace with DB later
-SAMPLE_NEWS = [
-    {"date": "2025-01-06T10:00:00", "headline": "Nvidia unveils new Blackwell GPU chips at CES, stock rallies"},
-    {"date": "2025-01-27T09:30:00", "headline": "DeepSeek AI model shocks market, Nvidia stock crashes on cheaper AI fears"},
-    {"date": "2025-01-29T16:30:00", "headline": "Meta Q4 earnings beat estimates, ad revenue growth accelerates"},
-    {"date": "2025-01-30T16:30:00", "headline": "Apple reports record Q1 revenue of $124B, beating estimates"},
-    {"date": "2025-02-06T16:30:00", "headline": "Amazon Q4 earnings beat estimates, AWS revenue growth accelerates"},
-    {"date": "2025-02-14T10:00:00", "headline": "Meta announces massive AI spending increase to $65B, stock drops on cost fears"},
-    {"date": "2025-02-26T16:30:00", "headline": "Nvidia Q4 earnings smash records, data center revenue surges 93%"},
-    {"date": "2025-03-12T10:00:00", "headline": "Google acquires cloud security firm Wiz for $32B, biggest deal ever"},
-    {"date": "2025-04-03T14:00:00", "headline": "Trump announces sweeping tariffs on China, Apple supply chain at risk"},
-    {"date": "2025-04-09T15:00:00", "headline": "Trump pauses tariffs for 90 days, Apple stock surges on relief rally"},
-    {"date": "2025-04-23T10:00:00", "headline": "Elon Musk says he will reduce DOGE role to focus on Tesla, stock surges"},
-    {"date": "2025-04-24T16:30:00", "headline": "Alphabet Q1 earnings beat estimates, cloud revenue surges, stock rallies"},
-    {"date": "2025-04-30T16:30:00", "headline": "Meta Q1 earnings crush expectations, revenue up 16% on strong ad demand"},
-    {"date": "2025-04-30T16:30:00", "headline": "Microsoft Q3 earnings crush estimates, Azure growth reaccelerates to 35%"},
-    {"date": "2025-05-01T16:30:00", "headline": "Apple Q2 earnings beat expectations, services revenue hits record"},
-]
+from src.common.sample_news import SAMPLE_NEWS
 
 
 @app.get("/api/health")
@@ -93,7 +77,7 @@ def health():
         db = client["EonTradingDB"]
         positions = list(db["positions"].find({}, {"_id": 0}))
         heartbeats = list(db["heartbeats"].find({}, {"_id": 0}))
-        now = datetime.utcnow()
+        now = utcnow()
         components = []
         for hb in heartbeats:
             last = hb.get("lastBeat")
@@ -114,8 +98,8 @@ def health():
             "positions": [{"symbol": p.get("symbol"), "entryTime": p.get("entryTime")} for p in positions],
             "components": components,
         }
-    except Exception:
-        return {"status": "ok", "collector_running": _collector_running}
+    except Exception as e:
+        return {"status": "ok", "collector_running": _collector_running, "db_error": str(e)}
 
 
 @app.get("/api/ping")

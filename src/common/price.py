@@ -9,7 +9,7 @@ Set via: PRICE_SOURCE=clickhouse or PRICE_SOURCE=yfinance (default)
 import logging
 import os
 from datetime import datetime, timedelta
-
+from src.common.clock import utcnow
 logger = logging.getLogger(__name__)
 PRICE_SOURCE = os.getenv("PRICE_SOURCE", "yfinance").lower()
 _YFINANCE_TIMEOUT = int(os.getenv("PRICE_TIMEOUT", "15"))
@@ -61,7 +61,7 @@ def get_price(symbol: str, as_of: str = None) -> float:
     - Caches via Redis (if available) or in-memory dict
     """
     t = _parse_time(as_of)
-    is_historical = t and (datetime.utcnow() - t).total_seconds() > 600
+    is_historical = t and (utcnow() - t).total_seconds() > 600
 
     if is_historical:
         cache_key = f"{symbol}:{t.strftime('%Y-%m-%d-%H')}"
@@ -121,7 +121,7 @@ def _from_yfinance(symbol: str, as_of: str = None) -> float:
 def _from_clickhouse(symbol: str, as_of: str = None) -> float:
     try:
         from src.data.storage.clickhouse_storage import ClickHouseStorage
-        t = _parse_time(as_of) or datetime.utcnow()
+        t = _parse_time(as_of) or utcnow()
         storage = ClickHouseStorage()
         start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
         end = (t + timedelta(days=1)).strftime("%Y-%m-%d")

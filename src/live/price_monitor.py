@@ -6,6 +6,7 @@ Uses the same TradingLogic as backtest — identical SL/TP behavior.
 import asyncio
 import logging
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
 from src.common.price import get_price
@@ -33,8 +34,8 @@ class PriceMonitor:
                     self._states[sym] = PositionState(symbol=sym, shares=0, entry_price=price)
             if self._states:
                 logger.info("PriceMonitor restored %d entry price(s): %s", len(self._states), list(self._states.keys()))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("PriceMonitor failed to restore entry prices: %s", e)
         # Allow injecting known entry prices (for testing)
         if entry_prices:
             for sym, price in entry_prices.items():
@@ -89,7 +90,7 @@ class PriceMonitor:
         if not check_symbols:
             return []
 
-        ts = as_of or (datetime.utcnow().isoformat() + "Z")
+        ts = as_of or (utcnow().isoformat() + "Z")
         sold = []
         for symbol in list(check_symbols):
             if symbol not in self._states:

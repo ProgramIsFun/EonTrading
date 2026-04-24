@@ -1,5 +1,6 @@
 """Position state backed by MongoDB — works in both single-process and distributed mode."""
 from datetime import datetime
+from src.common.clock import utcnow
 from src.data.utils.db_helper import get_mongo_client
 
 COLLECTION = "positions"
@@ -18,7 +19,7 @@ class PositionStore:
         for symbol, entry_time in holdings.items():
             self._col.update_one(
                 {"symbol": symbol},
-                {"$set": {"entryTime": entry_time.isoformat(), "updatedAt": datetime.utcnow()}},
+                {"$set": {"entryTime": entry_time.isoformat(), "updatedAt": utcnow()}},
                 upsert=True,
             )
         if active:
@@ -31,7 +32,7 @@ class PositionStore:
         self._col.update_one(
             {"symbol": symbol},
             {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(),
-                      "entryPrice": entry_price, "updatedAt": datetime.utcnow()}},
+                      "entryPrice": entry_price, "updatedAt": utcnow()}},
             upsert=True,
         )
 

@@ -9,6 +9,7 @@ import os
 import requests
 import re
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.events import NewsEvent
 from .newsapi_source import NewsSource
 
@@ -54,7 +55,7 @@ class RSSSource(NewsSource):
             events.append(NewsEvent(
                 source="rss",
                 headline=title,
-                timestamp=pub or datetime.utcnow().isoformat() + "Z",
+                timestamp=pub or utcnow().isoformat() + "Z",
                 url=link or "",
                 body=desc[:500],
             ))

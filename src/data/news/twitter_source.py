@@ -11,6 +11,7 @@ Usage:
 """
 import os
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.events import NewsEvent
 from .newsapi_source import NewsSource
 
@@ -60,7 +61,7 @@ class TwitterSource(NewsSource):
                     events.append(NewsEvent(
                         source=f"twitter/{account}",
                         headline=tweet.text[:280],
-                        timestamp=tweet.created_at.isoformat() if tweet.created_at else datetime.utcnow().isoformat() + "Z",
+                        timestamp=tweet.created_at.isoformat() if tweet.created_at else utcnow().isoformat() + "Z",
                         url=f"https://x.com/{account}/status/{tweet.id}",
                         body=tweet.text,
                     ))

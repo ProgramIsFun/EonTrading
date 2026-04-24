@@ -1,6 +1,7 @@
 """Ping/pong health check via event bus — real-time component status."""
 import asyncio
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 
 CHANNEL_PING = "ping"
@@ -27,7 +28,7 @@ class PingResponder:
         for name in self.components:
             await self.bus.publish(CHANNEL_PONG, {
                 "component": name,
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": utcnow().isoformat() + "Z",
                 **self.metadata.get(name, {}),
             })
 
@@ -40,6 +41,6 @@ async def collect_pongs(bus: EventBus, timeout: float = 1.0) -> list[dict]:
         responses.append(msg)
 
     await bus.subscribe(CHANNEL_PONG, _on_pong)
-    await bus.publish(CHANNEL_PING, {"ts": datetime.utcnow().isoformat()})
+    await bus.publish(CHANNEL_PING, {"ts": utcnow().isoformat()})
     await asyncio.sleep(timeout)
     return responses

@@ -2,6 +2,7 @@
 import os
 import requests
 from datetime import datetime, timedelta
+from src.common.clock import utcnow
 from src.common.events import NewsEvent
 
 
@@ -48,7 +49,7 @@ class NewsAPISource(NewsSource):
                 "language": "en",
                 "sortBy": "publishedAt",
                 "pageSize": 20,
-                "from": (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "from": (utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
             }, timeout=10)
             data = resp.json()
             for article in data.get("articles", []):

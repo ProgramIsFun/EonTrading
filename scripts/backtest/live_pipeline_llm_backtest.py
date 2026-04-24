@@ -7,6 +7,7 @@ Usage:
   REDIS_HOST=localhost PRICE_SOURCE=clickhouse PYTHONPATH=. python3 scripts/backtest/live_pipeline_llm_backtest.py
 """
 import asyncio
+import logging
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -121,21 +122,9 @@ async def main():
     print(f"  News events: {len(SCORED_NEWS)}")
     print(f"{'═' * 60}\n")
 
-    # Suppress price logs unless VERBOSE=1
+    # Suppress verbose price logs unless VERBOSE=1
     if not VERBOSE:
-        import src.common.price as _price_mod
-        _orig_yf = _price_mod._from_yfinance
-        _orig_ch = _price_mod._from_clickhouse
-        def _quiet_yf(symbol, as_of=None):
-            import io, sys
-            old = sys.stdout; sys.stdout = io.StringIO()
-            r = _orig_yf(symbol, as_of); sys.stdout = old; return r
-        def _quiet_ch(symbol, as_of=None):
-            import io, sys
-            old = sys.stdout; sys.stdout = io.StringIO()
-            r = _orig_ch(symbol, as_of); sys.stdout = old; return r
-        _price_mod._from_yfinance = _quiet_yf
-        _price_mod._from_clickhouse = _quiet_ch
+        logging.getLogger("src.common.price").setLevel(logging.WARNING)
 
     prev_date = None
     checks_done = 0

@@ -4,6 +4,7 @@ import logging
 import os
 import platform
 from datetime import datetime
+from src.common.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,8 @@ class Heartbeat:
         try:
             from src.data.utils.db_helper import get_mongo_client
             self._col = get_mongo_client()[DB][COLLECTION]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Heartbeat MongoDB unavailable: %s", e)
 
     def beat(self):
         if not self._col:
@@ -33,7 +34,7 @@ class Heartbeat:
             {"component": self.component},
             {"$set": {
                 "component": self.component,
-                "lastBeat": datetime.utcnow(),
+                "lastBeat": utcnow(),
                 "host": platform.node(),
                 "pid": os.getpid(),
                 **self.metadata,

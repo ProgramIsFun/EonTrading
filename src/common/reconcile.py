@@ -2,8 +2,12 @@
 
 Run daily or on startup to catch discrepancies.
 """
+import logging
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.position_store import PositionStore
+
+logger = logging.getLogger(__name__)
 
 
 async def reconcile(broker, store: PositionStore = None) -> dict:
@@ -28,7 +32,7 @@ async def reconcile(broker, store: PositionStore = None) -> dict:
                         "broker_qty": broker_positions[sym]})
 
     result = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": utcnow().isoformat() + "Z",
         "our_positions": list(our_symbols),
         "broker_positions": {s: q for s, q in broker_positions.items()},
         "broker_cash": broker_cash,
@@ -37,16 +41,15 @@ async def reconcile(broker, store: PositionStore = None) -> dict:
         "ok": len(issues) == 0,
     }
 
-    # Print summary
     status = "✅" if result["ok"] else "⚠️"
-    print(f"\n  {status} Reconciliation @ {result['timestamp']}")
-    print(f"  System positions: {list(our_symbols) or 'none'}")
-    print(f"  Broker positions: {dict(broker_positions) or 'none'}")
-    print(f"  Broker cash: ${broker_cash:,.2f}")
+    logger.info("%s Reconciliation @ %s", status, result["timestamp"])
+    logger.info("System positions: %s", list(our_symbols) or "none")
+    logger.info("Broker positions: %s", dict(broker_positions) or "none")
+    logger.info("Broker cash: $%,.2f", broker_cash)
     if issues:
         for i in issues:
-            print(f"  🚨 {i['symbol']}: {i['issue']}")
+            logger.warning("🚨 %s: %s", i["symbol"], i["issue"])
     else:
-        print(f"  All {len(matched)} position(s) match.")
+        logger.info("All %d position(s) match.", len(matched))
 
     return result

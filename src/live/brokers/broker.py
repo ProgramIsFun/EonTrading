@@ -12,6 +12,7 @@ To add a new broker:
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, CHANNEL_FILL, TradeEvent, FillEvent
 
@@ -32,7 +33,7 @@ class Broker(ABC):
         fill = FillEvent(
             symbol=symbol, action=action, success=success,
             reason=reason or ("filled" if success else "broker rejected"),
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=utcnow().isoformat() + "Z",
         )
         await self._bus.publish(CHANNEL_FILL, fill.to_dict())
 

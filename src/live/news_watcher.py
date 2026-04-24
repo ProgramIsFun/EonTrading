@@ -2,6 +2,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_NEWS
 from src.common.news_poller import NewsPoller
@@ -22,7 +23,7 @@ class NewsWatcher:
         logger.info("NewsWatcher started, polling every %ds", self.poller.interval)
         while True:
             events = self.poller.poll_once()
-            self.last_poll = datetime.utcnow()
+            self.last_poll = utcnow()
             self.last_poll_count = len(events)
             for news in events:
                 await self.bus.publish(CHANNEL_NEWS, news.to_dict())

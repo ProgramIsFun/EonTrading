@@ -5,6 +5,7 @@ import os
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from ..common.clock import utcnow
 from ..common.events import NewsEvent, SentimentEvent
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
         return SentimentEvent(
             source=event.source, headline=event.headline,
             timestamp=event.timestamp,
-            analyzed_at=datetime.utcnow().isoformat() + "Z",
+            analyzed_at=utcnow().isoformat() + "Z",
             symbols=symbols, sector=sector,
             sentiment=round(sentiment, 3),
             confidence=round(confidence, 3),
@@ -179,7 +180,7 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
             return SentimentEvent(
                 source=event.source, headline=event.headline,
                 timestamp=event.timestamp,
-                analyzed_at=datetime.utcnow().isoformat() + "Z",
+                analyzed_at=utcnow().isoformat() + "Z",
                 symbols=data.get("symbols", []),
                 sector=data.get("sector", ""),
                 sentiment=round(float(data.get("sentiment", 0)), 3),
@@ -191,5 +192,5 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
             return SentimentEvent(
                 source=event.source, headline=event.headline,
                 timestamp=event.timestamp,
-                analyzed_at=datetime.utcnow().isoformat() + "Z",
+                analyzed_at=utcnow().isoformat() + "Z",
             )
