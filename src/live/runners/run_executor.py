@@ -6,6 +6,7 @@ load_dotenv()
 from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
+from src.common.ping import PingResponder
 from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
 
 
@@ -42,6 +43,8 @@ async def main():
     await executor.start()
     print(f"  🟢 Started. Waiting for [trade] events.\n")
     asyncio.ensure_future(Heartbeat("executor", metadata={"broker": broker.__class__.__name__}).run())
+    ping = PingResponder(bus, ["executor"], metadata={"executor": {"broker": broker.__class__.__name__}})
+    await ping.start()
     while True:
         await asyncio.sleep(3600)
 

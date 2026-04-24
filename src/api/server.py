@@ -115,6 +115,26 @@ def health():
         return {"status": "ok", "collector_running": _collector_running}
 
 
+@app.get("/api/ping")
+async def ping_components():
+    """Real-time ping — asks all components to respond via event bus."""
+    import os
+    try:
+        from src.common.event_bus import LocalEventBus, RedisEventBus
+        from src.common.ping import collect_pongs
+        redis_host = os.getenv("REDIS_HOST")
+        if redis_host:
+            bus = RedisEventBus(host=redis_host)
+        else:
+            bus = LocalEventBus()
+        await bus.start()
+        responses = await collect_pongs(bus, timeout=1.5)
+        await bus.stop()
+        return {"components": responses, "count": len(responses)}
+    except Exception as e:
+        return {"components": [], "count": 0, "error": str(e)}
+
+
 @app.get("/api/trades")
 def trades(limit: int = 100):
     """Return recent confirmed trades from the trades collection."""

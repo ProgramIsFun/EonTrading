@@ -6,6 +6,7 @@ load_dotenv()
 from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
+from src.common.ping import PingResponder
 from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource, TwitterSource
 from src.live.news_watcher import NewsWatcher
 
@@ -34,6 +35,8 @@ async def main():
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
     print(f"  🟢 Started. Polling every 120s.\n")
     asyncio.ensure_future(Heartbeat("watcher", metadata={"sources": ", ".join(source_names)}).run())
+    ping = PingResponder(bus, ["watcher"], metadata={"watcher": {"sources": ", ".join(source_names)}})
+    await ping.start()
     await watcher.run()
 
 if __name__ == "__main__":

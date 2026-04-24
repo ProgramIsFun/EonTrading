@@ -6,6 +6,7 @@ load_dotenv()
 from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
+from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
 from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 from src.live.analyzer_service import AnalyzerService
@@ -37,6 +38,8 @@ async def main():
     await svc.start()
     print(f"  🟢 Started. Waiting for [news] events.\n")
     asyncio.ensure_future(Heartbeat("analyzer", metadata={"analyzer": analyzer_name}).run())
+    ping = PingResponder(bus, ["analyzer"], metadata={"analyzer": {"analyzer": analyzer_name}})
+    await ping.start()
     while True:
         await asyncio.sleep(3600)
 

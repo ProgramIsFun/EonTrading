@@ -28,6 +28,7 @@ async def main_single():
     from src.common.position_store import PositionStore
     from src.data.utils.db_helper import get_mongo_client
     from src.common.heartbeat import Heartbeat
+    from src.common.ping import PingResponder
 
     # --- Sources ---
     sources = []
@@ -86,6 +87,13 @@ async def main_single():
 
     for name in ["watcher", "analyzer", "trader", "executor"]:
         asyncio.ensure_future(Heartbeat(name, metadata={"mode": "single"}).run())
+
+    ping = PingResponder(bus, ["watcher", "analyzer", "trader", "executor"], metadata={
+        "watcher": {"sources": ", ".join(source_names)},
+        "analyzer": {"analyzer": analyzer_name},
+        "executor": {"broker": broker.__class__.__name__},
+    })
+    await ping.start()
 
     print(f"\n  🟢 All components started. Polling every 120s.\n")
     await watcher.run()

@@ -6,6 +6,7 @@ load_dotenv()
 from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
+from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
 from src.data.utils.db_helper import get_mongo_client
 from src.live.sentiment_trader import SentimentTrader
@@ -32,6 +33,8 @@ async def main():
     await trader.start()
     print(f"  🟢 Started. Waiting for [sentiment] events.\n")
     asyncio.ensure_future(Heartbeat("trader").run())
+    ping = PingResponder(bus, ["trader"])
+    await ping.start()
     while True:
         await asyncio.sleep(3600)
 
