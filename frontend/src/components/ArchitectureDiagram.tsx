@@ -113,6 +113,13 @@ export default function ArchitectureDiagram() {
               {pathTag("src/api/server.py")}
               {envReq("REDIS_HOST=localhost")}
             </div>
+            <div style={boxStyle(INTERNAL)}>
+              <div style={{ fontWeight: 600 }}>Reconciliation</div>
+              <div style={{ fontSize: 10, color: "#888" }}>system vs broker check</div>
+              <div style={{ fontSize: 9, color: "#666" }}>on startup + GET /api/reconcile</div>
+              {pathTag("src/common/reconcile.py")}
+              <div style={{ fontSize: 8, color: "#ef4444", marginTop: 2 }}>live only — not used in replay</div>
+            </div>
             <span style={{ fontSize: 10, color: "#666" }}>→ manages containers, pings via Redis →</span>
           </div>
         </div>
