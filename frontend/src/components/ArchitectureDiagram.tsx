@@ -128,7 +128,7 @@ export default function ArchitectureDiagram() {
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
             <div style={boxStyle(SERVICE)}>
               <div style={{ fontWeight: 600 }}>Redis</div>
-              <div style={{ fontSize: 10, color: "#888" }}>event bus + ping/pong</div>
+              <div style={{ fontSize: 10, color: "#888" }}>event bus + ping/pong + price cache</div>
               {serviceTag()}
               <div style={{ fontSize: 8, color: "#555", marginTop: 2 }}>port 6379 → host</div>
             </div>
@@ -242,6 +242,9 @@ export default function ArchitectureDiagram() {
             <div style={{ fontSize: 9, color: "#666" }}>polls prices → publishes sell to [trade]</div>
             {internalTag()}
             {pathTag("src/live/price_monitor.py")}
+            {envOpt("PRICE_SOURCE")}
+            {envOpt("SL_CHECK_HOURS")}
+            <div style={{ fontSize: 8, color: "#555" }}>yfinance (default) or clickhouse</div>
           </div>
           <span style={arrow}>→</span>
           {label("[trade]")}
@@ -252,8 +255,8 @@ export default function ArchitectureDiagram() {
         <div style={{ background: "#1a2a2a", borderRadius: 6, padding: 10, marginTop: 12, border: "1px dashed #22c55e44" }}>
           <div style={{ fontSize: 11, color: "#22c55e", fontWeight: 600, marginBottom: 4 }}>♻️ Replay Mode (backtest via live pipeline)</div>
           <div style={{ fontSize: 10, color: "#888" }}>
-            Same pipeline, same code — but fed with historical news from MongoDB and a simulated clock.
-            Prices fetched at historical timestamps via yfinance. PriceMonitor checks SL/TP between events.
+            Same pipeline, same code — but fed with historical news from MongoDB.
+            Timestamps flow with events. Prices from ClickHouse (<code style={{ color: "#818cf8" }}>PRICE_SOURCE=clickhouse</code>) or yfinance.
           </div>
           <code style={{ fontSize: 9, color: "#818cf8", display: "block", marginTop: 4 }}>
             python -m src.live.replay --start 2025-01-01 --end 2025-06-01
