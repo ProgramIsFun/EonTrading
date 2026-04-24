@@ -44,6 +44,32 @@ class PriceMonitor:
         state.shares = shares
         return state
 
+    def check_once_sync(self, as_of: str = None) -> list[str]:
+        """Fast synchronous SL/TP check — for backtesting only. No async, no MongoDB, no broker calls."""
+        from src.common.price import get_price
+        if not self._states:
+            return []
+        ts = as_of or ""
+        sold = []
+        for symbol in list(self._states.keys()):
+            state = self._states[symbol]
+            price = get_price(symbol, as_of=as_of)
+            if price <= 0:
+                continue
+            self.logic.update_peak(state, price)
+            sl = self.logic.check_stop_loss(state, price)
+            if sl:
+                print(f"  🛑 SL triggered: SELL {symbol} {state.shares}sh @ ${sl:.2f}")
+                self._states.pop(symbol)
+                sold.append((symbol, sl, state.shares))
+                continue
+            tp = self.logic.check_take_profit(state, price)
+            if tp:
+                print(f"  🎯 TP triggered: SELL {symbol} {state.shares}sh @ ${tp:.2f}")
+                self._states.pop(symbol)
+                sold.append((symbol, tp, state.shares))
+        return sold
+
     async def check_once(self, broker=None, as_of: str = None) -> list[str]:
         """Check all positions against SL/TP. Returns list of symbols sold."""
         # Use _states directly if available (avoids MongoDB call in replay)

@@ -148,12 +148,18 @@ async def main():
             while check_time < curr:
                 if not monitor._states:
                     break
-                sold = await monitor.check_once(broker, as_of=check_time.isoformat())
+                sold = monitor.check_once_sync(as_of=check_time.isoformat())
                 checks_done += 1
                 if sold:
-                    print(f"    ⏰ SL/TP @ {check_time.strftime('%Y-%m-%d %H:%M')} — sold {', '.join(sold)}")
+                    for sym, price, qty in sold:
+                        from src.common.events import TradeEvent, CHANNEL_TRADE
+                        trade = TradeEvent(symbol=sym, action="sell",
+                                           reason=f"SL/TP @ ${price:.2f}",
+                                           timestamp=check_time.isoformat(), price=price, size=float(qty))
+                        await bus.publish(CHANNEL_TRADE, trade.to_dict())
+                    print(f"    ⏰ SL/TP @ {check_time.strftime('%Y-%m-%d %H:%M')} — sold {', '.join(s[0] for s in sold)}")
                     await asyncio.sleep(0.05)
-                elif checks_done % 50 == 0:
+                elif checks_done % 500 == 0:
                     print(f"    {elapsed()} ... {checks_done} SL/TP checks (@ {check_time.strftime('%Y-%m-%d %H:%M')})")
                 check_time += timedelta(hours=SL_CHECK_INTERVAL)
 
