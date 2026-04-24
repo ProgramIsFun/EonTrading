@@ -15,7 +15,7 @@ class SentimentTrader:
     """
 
     def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0,
-                 position_store=None, trade_log=None, broker=None, **kwargs):
+                 position_store=None, trade_log=None, broker=None, price_monitor=None, **kwargs):
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
         self.holdings: dict[str, datetime] = {}
@@ -23,7 +23,8 @@ class SentimentTrader:
         self.max_hold_days = max_hold_days
         self.position_store = position_store
         self._trades_col = trade_log
-        self.broker = broker  # for cash/price queries
+        self.broker = broker
+        self.price_monitor = price_monitor
         if self.position_store:
             self.holdings = self.position_store.get_positions()
             if self.holdings:
@@ -53,6 +54,11 @@ class SentimentTrader:
             if self.position_store:
                 if pending_action == "buy":
                     self.position_store.open_position(symbol, self.holdings[symbol])
+                    # Register entry price with PriceMonitor for SL/TP tracking
+                    if self.price_monitor and self.broker:
+                        from src.common.price import get_price
+                        bp = await self.broker.get_positions()
+                        self.price_monitor.register_entry(symbol, get_price(symbol), bp.get(symbol, 1))
                 elif pending_action == "sell":
                     self.position_store.close_position(symbol)
         else:

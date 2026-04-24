@@ -26,6 +26,7 @@ async def main_single():
     from src.live.sentiment_trader import SentimentTrader
     from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
     from src.common.position_store import PositionStore
+    from src.common.trading_logic import TradingLogic
     from src.data.utils.db_helper import get_mongo_client
     from src.common.heartbeat import Heartbeat
     from src.common.ping import PingResponder
@@ -74,9 +75,15 @@ async def main_single():
     bus = LocalEventBus()
     await bus.start()
 
+    from src.live.price_monitor import PriceMonitor
+
     store = PositionStore()
-    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store,
-                             trade_log=get_mongo_client()["EonTradingDB"]["trades"], broker=broker)
+    logic = TradingLogic(threshold=0.4, min_confidence=0.15, max_allocation=0.2,
+                         stop_loss_pct=0.05, take_profit_pct=0.10)
+    monitor = PriceMonitor(bus, store, logic, interval_sec=60)
+    trader = SentimentTrader(bus, logic=logic, position_store=store,
+                             trade_log=get_mongo_client()["EonTradingDB"]["trades"],
+                             broker=broker, price_monitor=monitor)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
     executor = TradeExecutor(bus, broker)
@@ -84,8 +91,9 @@ async def main_single():
     await analyzer_svc.start()
     await trader.start()
     await executor.start()
+    asyncio.ensure_future(monitor.run(broker))
 
-    for name in ["watcher", "analyzer", "trader", "executor"]:
+    for name in ["watcher", "analyzer", "trader", "executor", "monitor"]:
         asyncio.ensure_future(Heartbeat(name, metadata={"mode": "single"}).run())
 
     ping = PingResponder(bus, ["watcher", "analyzer", "trader", "executor"], metadata={

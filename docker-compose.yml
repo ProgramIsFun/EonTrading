@@ -75,6 +75,17 @@ services:
     restart: unless-stopped
     profiles: ["distributed"]
 
+  monitor:
+    build: .
+    command: python3 -m src.live.runners.run_monitor
+    env_file: .env
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+    restart: unless-stopped
+    profiles: ["distributed"]
+
   # --- Dashboard (both modes) ---
   api:
     build: .

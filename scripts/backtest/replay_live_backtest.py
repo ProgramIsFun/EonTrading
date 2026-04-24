@@ -48,10 +48,15 @@ async def main():
     bus = LocalEventBus()
     await bus.start()
 
+    from src.live.price_monitor import PriceMonitor
+    from src.common.position_store import PositionStore
+
     analyzer = KeywordSentimentAnalyzer()
     broker = LogBroker(initial_cash=70000)
+    store = PositionStore()
+    monitor = PriceMonitor(bus, store, logic, interval_sec=0)
 
-    trader = SentimentTrader(bus, logic=logic, broker=broker)
+    trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor, position_store=store)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=lambda: trader.holdings)
     executor = TradeExecutor(bus, broker)
 
@@ -62,12 +67,18 @@ async def main():
     print(f"\n{'═' * 60}")
     print(f"  Replay Backtest via Live Pipeline")
     print(f"  Capital: $70,000 | Threshold: 0.4 | Max alloc: 20%")
+    print(f"  SL: 5% | TP: 10%")
     print(f"  Analyzer: Keyword | Broker: LogBroker (dry run)")
     print(f"  News events: {len(SAMPLE_NEWS)}")
     print(f"{'═' * 60}\n")
 
     for doc in SAMPLE_NEWS:
         clock.set_time(doc["date"])
+
+        # Check SL/TP at this timestamp before processing news
+        await monitor.check_once(broker)
+        await asyncio.sleep(0.1)
+
         print(f"\n  📅 {clock.now().strftime('%Y-%m-%d %H:%M')} — {doc['headline'][:70]}")
 
         event = NewsEvent(
