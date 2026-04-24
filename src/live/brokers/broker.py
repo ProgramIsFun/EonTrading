@@ -296,7 +296,11 @@ class AlpacaBroker(Broker):
 # TradeExecutor — routes [trade] events to the configured broker
 # ---------------------------------------------------------------------------
 class TradeExecutor:
-    """Listens to trade events and forwards to broker. Broker publishes fill results."""
+    """Listens to trade events and forwards to broker. Broker publishes fill results.
+
+    Safety: in replay mode (clock.is_replay), real brokers are blocked.
+    Only LogBroker is allowed during backtest replay.
+    """
 
     def __init__(self, bus: EventBus, broker: Broker):
         self.bus = bus
@@ -307,5 +311,12 @@ class TradeExecutor:
         await self.bus.subscribe(CHANNEL_TRADE, self._on_trade)
 
     async def _on_trade(self, msg: dict):
+        from src.common.clock import clock
         trade = TradeEvent.from_dict(msg)
-        await self.broker.execute(trade)
+        if clock.is_replay and not isinstance(self.broker, LogBroker):
+            print(f"  ⚠️ Replay mode — blocking real broker, using LogBroker for {trade.action} {trade.symbol}")
+            fallback = LogBroker()
+            fallback.set_bus(self.bus)
+            await fallback.execute(trade)
+        else:
+            await self.broker.execute(trade)
