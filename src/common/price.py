@@ -12,17 +12,34 @@ from datetime import datetime, timedelta
 PRICE_SOURCE = os.getenv("PRICE_SOURCE", "yfinance").lower()
 
 
+_price_cache: dict[str, float] = {}
+
+
 def get_price(symbol: str, as_of: str = None) -> float:
     """Get price for a symbol.
 
     - as_of=None or recent timestamp (< 10min old): fetch latest live price
     - as_of=old timestamp: fetch historical price at that time
+    - Caches historical lookups to avoid repeated API calls
     """
     t = _parse_time(as_of)
     is_historical = t and (datetime.utcnow() - t).total_seconds() > 600
+
+    # Cache key for historical lookups
+    if is_historical:
+        cache_key = f"{symbol}:{t.strftime('%Y-%m-%d-%H')}"
+        if cache_key in _price_cache:
+            return _price_cache[cache_key]
+
     if PRICE_SOURCE == "clickhouse":
-        return _from_clickhouse(symbol, as_of if is_historical else None)
-    return _from_yfinance(symbol, as_of if is_historical else None)
+        price = _from_clickhouse(symbol, as_of if is_historical else None)
+    else:
+        price = _from_yfinance(symbol, as_of if is_historical else None)
+
+    if is_historical and price > 0:
+        _price_cache[cache_key] = price
+
+    return price
 
 
 def _parse_time(as_of: str = None) -> datetime | None:
