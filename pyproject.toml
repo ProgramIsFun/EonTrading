@@ -20,3 +20,9 @@ backtest = ["backtesting>=0.6.5"]
 futu = ["futu-api>=9.1"]
 redis = ["redis>=5.0.0"]
 dev = ["ipykernel>=7.1.0", "jupyter>=1.0.0"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+markers = [
+    "redis: tests requiring a running Redis instance (deselect with '-m not redis')",
+]

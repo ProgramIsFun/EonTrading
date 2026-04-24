@@ -90,9 +90,9 @@ class RedisEventBus(EventBus):
             task.cancel()
         if self._pubsub:
             await self._pubsub.unsubscribe()
-            await self._pubsub.close()
+            await self._pubsub.aclose()
         if self._redis:
-            await self._redis.close()
+            await self._redis.aclose()
 
     async def publish(self, channel: str, message: dict):
         if channel in _PUBSUB_CHANNELS:
