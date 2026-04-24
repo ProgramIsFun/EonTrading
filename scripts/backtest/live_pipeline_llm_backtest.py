@@ -78,6 +78,9 @@ async def main():
 
     SL_CHECK_INTERVAL = int(os.getenv("SL_CHECK_HOURS", "24"))
 
+    import os as _os
+    VERBOSE = _os.getenv("VERBOSE", "")
+
     print(f"\n{'═' * 60}")
     print(f"  Replay Backtest — Pre-scored LLM Sentiment")
     print(f"  Capital: $70,000 | Threshold: 0.4 | Max alloc: 20%")
@@ -86,9 +89,6 @@ async def main():
     print(f"  News events: {len(SCORED_NEWS)}")
     print(f"{'═' * 60}\n")
 
-    import os
-    VERBOSE = os.getenv("VERBOSE", "")
-    
     # Suppress price logs unless VERBOSE=1
     if not VERBOSE:
         import src.common.price as _price_mod
