@@ -60,21 +60,28 @@ class Broker(ABC):
 # LogBroker — dry run, instant fill
 # ---------------------------------------------------------------------------
 class LogBroker(Broker):
-    """Dry-run broker — fills instantly."""
+    """Dry-run broker — fills instantly. Optionally applies transaction costs."""
 
-    def __init__(self, initial_cash: float = 100000):
+    def __init__(self, initial_cash: float = 100000, cost_model=None):
         self._positions: dict[str, int] = {}
         self._cash = initial_cash
+        self.cost_model = cost_model
 
     async def execute(self, trade: TradeEvent):
-        print(f"  📝 [DRY RUN] {trade.action.upper()} {trade.symbol} qty={int(trade.size)} @ ${trade.price:.2f} | reason: {trade.reason}")
+        qty = int(trade.size)
         if trade.action == "buy":
-            cost = trade.price * trade.size
-            self._cash -= cost
-            self._positions[trade.symbol] = self._positions.get(trade.symbol, 0) + int(trade.size)
+            cost = trade.price * qty
+            fees = self.cost_model.buy_cost(trade.price, qty) if self.cost_model else 0
+            total = cost + fees
+            self._cash -= total
+            self._positions[trade.symbol] = self._positions.get(trade.symbol, 0) + qty
+            print(f"  📝 [DRY RUN] BUY {trade.symbol} {qty}sh @ ${trade.price:.2f} (fees: ${fees:.2f}) | {trade.reason}")
         elif trade.action == "sell":
             qty = self._positions.pop(trade.symbol, 0)
-            self._cash += trade.price * qty
+            proceeds = trade.price * qty
+            fees = self.cost_model.sell_cost(trade.price, qty) if self.cost_model else 0
+            self._cash += proceeds - fees
+            print(f"  📝 [DRY RUN] SELL {trade.symbol} {qty}sh @ ${trade.price:.2f} (fees: ${fees:.2f}) | {trade.reason}")
         await self._publish_fill(trade.symbol, trade.action, True, "filled (dry run)")
 
     async def get_positions(self) -> dict[str, int]:

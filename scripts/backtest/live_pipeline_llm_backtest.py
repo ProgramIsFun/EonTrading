@@ -52,6 +52,7 @@ async def main():
     from src.common.events import CHANNEL_SENTIMENT, SentimentEvent
     from src.live.sentiment_trader import SentimentTrader
     from src.live.brokers.broker import TradeExecutor, LogBroker
+    from src.common.costs import US_STOCKS
     from src.common.trading_logic import TradingLogic
     from src.live.price_monitor import PriceMonitor
     from src.common.position_store import PositionStore
@@ -64,7 +65,7 @@ async def main():
     bus = LocalEventBus()
     await bus.start()
 
-    broker = LogBroker(initial_cash=70000)
+    broker = LogBroker(initial_cash=70000, cost_model=US_STOCKS)
     store = PositionStore()
     store.set_positions({})  # clean slate
 

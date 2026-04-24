@@ -35,6 +35,7 @@ async def main():
     from src.live.sentiment_trader import SentimentTrader
     from src.live.brokers.broker import TradeExecutor, LogBroker
     from src.common.trading_logic import TradingLogic
+    from src.common.costs import US_STOCKS
 
     # Same settings as the backtest API
     logic = TradingLogic(
@@ -52,7 +53,7 @@ async def main():
     from src.common.position_store import PositionStore
 
     analyzer = KeywordSentimentAnalyzer()
-    broker = LogBroker(initial_cash=70000)
+    broker = LogBroker(initial_cash=70000, cost_model=US_STOCKS)
     store = PositionStore()
 
     # Clean slate — clear positions from previous runs
