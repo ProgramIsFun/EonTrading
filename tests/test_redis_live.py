@@ -76,7 +76,7 @@ class TestRedisStreamsLive:
         except Exception:
             pass
         await r.xadd(stream_key, {"data": json.dumps({"msg": "while-you-were-away"})})
-        await r.close()
+        await r.aclose()
 
         # Now start consumer — should pick up the pending message
         received = []
