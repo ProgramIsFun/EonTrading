@@ -63,7 +63,24 @@ const sectionTitle = (text: string, color: string) => (
 
 const section = { marginBottom: 24, borderBottom: "1px solid #333", paddingBottom: 20 };
 
+import { useState, useEffect } from "react";
+
 export default function ArchitectureDiagram() {
+  const [redisUp, setRedisUp] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const check = () =>
+      fetch("/api/docker/status")
+        .then((r) => r.json())
+        .then((d) => {
+          const redis = (d.containers || []).find((c: { name: string; state: string }) => c.name === "redis");
+          setRedisUp(redis ? redis.state === "running" : false);
+        })
+        .catch(() => setRedisUp(null));
+    check();
+    const id = setInterval(check, 15000);
+    return () => clearInterval(id);
+  }, []);
   return (
     <div style={{ background: "#1e1e2e", borderRadius: 8, padding: 24 }}>
       <div style={{ fontSize: 14, color: "#888", marginBottom: 4 }}>System Architecture</div>
@@ -134,11 +151,19 @@ export default function ArchitectureDiagram() {
 
           {/* Redis */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
-            <div style={boxStyle(SERVICE)}>
-              <div style={{ fontWeight: 600 }}>Redis</div>
+            <div style={{
+              ...boxStyle(SERVICE),
+              border: `1px solid ${redisUp ? "#22c55e66" : redisUp === false ? "#ef444466" : "#33333366"}`,
+            }}>
+              <div style={{ fontWeight: 600 }}>
+                {redisUp === true ? "🟢" : redisUp === false ? "🔴" : "⚫"} Redis
+              </div>
               <div style={{ fontSize: 10, color: "#888" }}>event bus + ping/pong + price cache</div>
               {serviceTag()}
               <div style={{ fontSize: 8, color: "#555", marginTop: 2 }}>port 6379 → host</div>
+              <div style={{ fontSize: 8, color: redisUp ? "#22c55e" : "#555", marginTop: 2 }}>
+                {redisUp === true ? "running" : redisUp === false ? "stopped" : "unknown"}
+              </div>
             </div>
             <span style={{ fontSize: 9, color: "#555" }}>channels: [news] [sentiment] [trade] [fill] [ping] [pong]</span>
           </div>
