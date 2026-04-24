@@ -135,6 +135,45 @@ async def ping_components():
         return {"components": [], "count": 0, "error": str(e)}
 
 
+@app.get("/api/docker/status")
+def docker_status():
+    """Get status of all Docker Compose services."""
+    from src.common.docker_ctl import container_status
+    return {"containers": container_status()}
+
+
+@app.post("/api/docker/start/{name}")
+def docker_start(name: str):
+    """Start a component container. Use 'all' for full distributed pipeline."""
+    from src.common.docker_ctl import start_component
+    result = start_component(name)
+    return {"component": name, **result}
+
+
+@app.post("/api/docker/stop/{name}")
+def docker_stop(name: str):
+    """Stop a component container. Use 'all' to stop everything."""
+    from src.common.docker_ctl import stop_component
+    result = stop_component(name)
+    return {"component": name, **result}
+
+
+@app.post("/api/docker/restart/{name}")
+def docker_restart(name: str):
+    """Restart a component container."""
+    from src.common.docker_ctl import restart_component
+    result = restart_component(name)
+    return {"component": name, **result}
+
+
+@app.get("/api/docker/logs/{name}")
+def docker_logs(name: str, lines: int = 50):
+    """Get recent logs for a component."""
+    from src.common.docker_ctl import view_logs
+    result = view_logs(name, lines)
+    return {"component": name, **result}
+
+
 @app.get("/api/trades")
 def trades(limit: int = 100):
     """Return recent confirmed trades from the trades collection."""
