@@ -150,12 +150,12 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
     def __init__(
         self,
         api_key: str = None,
-        base_url: str = "https://api.openai.com/v1",
-        model: str = "gpt-4o-mini",
+        base_url: str = None,
+        model: str = None,
     ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url
-        self.model = model
+        self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
     def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         import requests
