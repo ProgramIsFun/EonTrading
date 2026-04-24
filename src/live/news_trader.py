@@ -18,6 +18,7 @@ load_dotenv()
 async def main_single():
     """All components in one process via LocalEventBus."""
     from src.common.event_bus import LocalEventBus
+    from src.common.startup import banner, env_status
     from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource, TwitterSource
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
     from src.live.news_watcher import NewsWatcher
@@ -27,19 +28,27 @@ async def main_single():
     from src.common.position_store import PositionStore
     from src.data.utils.db_helper import get_mongo_client
 
-    bus = LocalEventBus()
-    await bus.start()
-
+    # --- Sources ---
     sources = []
-    if os.getenv("NEWSAPI_KEY"): sources.append(NewsAPISource())
-    if os.getenv("FINNHUB_KEY"): sources.append(FinnhubSource())
-    if os.getenv("TWITTER_BEARER_TOKEN"): sources.append(TwitterSource())
+    source_names = ["RSS", "Reddit"]
+    if os.getenv("NEWSAPI_KEY"):
+        sources.append(NewsAPISource()); source_names.append("NewsAPI")
+    if os.getenv("FINNHUB_KEY"):
+        sources.append(FinnhubSource()); source_names.append("Finnhub")
+    if os.getenv("TWITTER_BEARER_TOKEN"):
+        sources.append(TwitterSource()); source_names.append("Twitter")
     sources.append(RSSSource())
     sources.append(RedditSource())
 
-    analyzer = LLMSentimentAnalyzer() if os.getenv("OPENAI_API_KEY") else KeywordSentimentAnalyzer()
+    # --- Analyzer ---
+    if os.getenv("OPENAI_API_KEY"):
+        analyzer = LLMSentimentAnalyzer()
+        analyzer_name = f"LLM ({analyzer.model})"
+    else:
+        analyzer = KeywordSentimentAnalyzer()
+        analyzer_name = "Keyword (free)"
 
-    # Broker selection via BROKER env var: futu, ibkr, alpaca, log (default)
+    # --- Broker ---
     broker_name = os.getenv("BROKER", "log").lower()
     if broker_name == "futu":
         broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
@@ -49,8 +58,21 @@ async def main_single():
         broker = AlpacaBroker()
     else:
         broker = LogBroker()
-    store = PositionStore()
 
+    # --- Startup banner ---
+    banner("EonTrading — Single Process Mode", {
+        "Bus": "LocalEventBus (in-memory)",
+        "Sources": ", ".join(source_names),
+        "Analyzer": analyzer_name,
+        "Broker": broker.__class__.__name__,
+    })
+    env_status()
+
+    # --- Wire up ---
+    bus = LocalEventBus()
+    await bus.start()
+
+    store = PositionStore()
     trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store,
                              trade_log=get_mongo_client()["EonTradingDB"]["trades"])
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
@@ -61,7 +83,7 @@ async def main_single():
     await trader.start()
     await executor.start()
 
-    print("Running single-process mode (LocalEventBus)...")
+    print(f"\n  🟢 All components started. Polling every 120s.\n")
     await watcher.run()
 
 
