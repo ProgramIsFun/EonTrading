@@ -374,22 +374,52 @@ export default function ArchitectureDiagram() {
         </div>
       </div>
 
-      {/* Requirements */}
+      {/* Requirements — per component */}
       <div style={{ background: "#1a1a2e", borderRadius: 8, padding: 12, border: "1px solid #333" }}>
-        {sectionTitle("Requirements", "#f59e0b")}
-        <div style={{ display: "flex", gap: 24, fontSize: 11, color: "#888", flexWrap: "wrap" }}>
-          <div>
-            <div style={{ color: "#ccc", fontWeight: 600, marginBottom: 4 }}>API Keys (env vars)</div>
-            {["NEWSAPI_KEY", "FINNHUB_KEY", "OPENAI_API_KEY (for LLM analyzer)", "TWITTER_BEARER_TOKEN"].map((k) => (
-              <div key={k} style={{ fontFamily: "monospace", fontSize: 10 }}>{k}</div>
+        {sectionTitle("Environment Variables — by Component", "#f59e0b")}
+        <div style={{ fontSize: 9, color: "#666", marginBottom: 10 }}>
+          <span style={{ color: "#ef4444" }}>● required</span>
+          <span style={{ marginLeft: 10, color: "#22c55e" }}>● optional (enables feature)</span>
+        </div>
+        <table style={{ fontSize: 10, color: "#888", borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #333", color: "#ccc" }}>
+              <th style={{ textAlign: "left", padding: "4px 8px" }}>Env var</th>
+              <th style={{ textAlign: "left", padding: "4px 8px" }}>Component</th>
+              <th style={{ textAlign: "center", padding: "4px 8px" }}>Required?</th>
+              <th style={{ textAlign: "left", padding: "4px 8px" }}>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { var: "MONGODB_URI", comp: "All", req: true, desc: "MongoDB Atlas connection" },
+              { var: "MONGODB_USER", comp: "All", req: true, desc: "MongoDB username" },
+              { var: "MONGODB_PASS", comp: "All", req: true, desc: "MongoDB password" },
+              { var: "MONGODB_CLUSTERNAME", comp: "All", req: true, desc: "MongoDB cluster name" },
+              { var: "REDIS_HOST", comp: "All (distributed)", req: true, desc: "Redis host for RedisEventBus" },
+              { var: "NEWSAPI_KEY", comp: "Watcher", req: false, desc: "Enables NewsAPI source" },
+              { var: "FINNHUB_KEY", comp: "Watcher", req: false, desc: "Enables Finnhub source" },
+              { var: "TWITTER_BEARER_TOKEN", comp: "Watcher", req: false, desc: "Enables Twitter/X source" },
+              { var: "OPENAI_API_KEY", comp: "Analyzer", req: false, desc: "LLM analyzer (default: keyword)" },
+              { var: "BROKER", comp: "Executor", req: false, desc: "log (default), futu, ibkr, alpaca" },
+              { var: "ALPACA_API_KEY", comp: "Executor", req: false, desc: "Required if BROKER=alpaca" },
+              { var: "ALPACA_SECRET_KEY", comp: "Executor", req: false, desc: "Required if BROKER=alpaca" },
+              { var: "FUTU_LIVE", comp: "Executor", req: false, desc: "Enable Futu broker" },
+              { var: "FUTU_REAL", comp: "Executor", req: false, desc: "Futu real trading (default: simulate)" },
+            ].map((row) => (
+              <tr key={row.var} style={{ borderBottom: "1px solid #222" }}>
+                <td style={{ padding: "3px 8px", fontFamily: "monospace", color: "#ccc" }}>{row.var}</td>
+                <td style={{ padding: "3px 8px" }}>{row.comp}</td>
+                <td style={{ padding: "3px 8px", textAlign: "center", color: row.req ? "#ef4444" : "#22c55e" }}>
+                  {row.req ? "● required" : "● optional"}
+                </td>
+                <td style={{ padding: "3px 8px" }}>{row.desc}</td>
+              </tr>
             ))}
-          </div>
-          <div>
-            <div style={{ color: "#ccc", fontWeight: 600, marginBottom: 4 }}>Services</div>
-            <div style={{ fontSize: 10 }}>MongoDB — all persistent state (news, positions, OHLCV, symbols)</div>
-            <div style={{ fontSize: 10 }}>Redis — distributed mode only (event bus)</div>
-            <div style={{ fontSize: 10 }}>Futu OpenD / Interactive Brokers / Alpaca (optional, defaults to LogBroker)</div>
-          </div>
+          </tbody>
+        </table>
+        <div style={{ fontSize: 9, color: "#555", marginTop: 8 }}>
+          RSS and Reddit sources are always on — no API key needed. LogBroker (dry run) is the default broker.
         </div>
       </div>
 
@@ -399,7 +429,6 @@ export default function ArchitectureDiagram() {
         {internalTag()} <span>runs inside parent process</span>
         {serviceTag()} <span>external service / MongoDB</span>
         {stateTag()} <span>ephemeral state</span>
-        {disabledTag()} <span>defined but not yet connected</span>
       </div>
     </div>
   );
