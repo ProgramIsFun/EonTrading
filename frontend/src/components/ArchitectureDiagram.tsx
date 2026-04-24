@@ -111,7 +111,7 @@ export default function ArchitectureDiagram() {
           ))}
         </div>
         <div style={{ fontSize: 10, color: "#666", textAlign: "center" }}>
-          Same channels whether LocalEventBus (in-memory) or RedisEventBus (cross-process).
+          Same channels whether LocalEventBus (in-memory) or RedisStreamBus (persistent message queue).
         </div>
       </div>
 
@@ -169,14 +169,14 @@ export default function ArchitectureDiagram() {
               <div style={{ fontWeight: 600 }}>
                 {redisUp === true ? "🟢" : redisUp === false ? "🔴" : "⚫"} Redis
               </div>
-              <div style={{ fontSize: 10, color: "#888" }}>event bus + ping/pong + price cache</div>
+              <div style={{ fontSize: 10, color: "#888" }}>streams (pipeline) + pub/sub (ping/pong) + price cache</div>
               {serviceTag()}
               <div style={{ fontSize: 8, color: "#555", marginTop: 2 }}>port 6379 → host</div>
               <div style={{ fontSize: 8, color: redisUp ? "#22c55e" : "#555", marginTop: 2, fontWeight: redisUp ? 600 : 400 }}>
                 {redisUp === true ? "● running" : redisUp === false ? "● stopped" : "● unknown"}
               </div>
             </div>
-            <span style={{ fontSize: 9, color: "#555" }}>channels: [news] [sentiment] [trade] [fill] [ping] [pong]</span>
+            <span style={{ fontSize: 9, color: "#555" }}>streams: [news] [sentiment] [trade] [fill] · pub/sub: [ping] [pong]</span>
           </div>
 
           {/* Row 1: Sources → Watcher → [news] → Analyzer → [sentiment] */}
@@ -535,7 +535,7 @@ export default function ArchitectureDiagram() {
           <div>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>🔵 Distributed (separate processes)</div>
             <div style={{ color: "#888" }}>Each component runs independently.</div>
-            <div style={{ color: "#888" }}>Uses RedisEventBus (cross-process).</div>
+            <div style={{ color: "#888" }}>Uses RedisStreamBus (persistent message queue).</div>
             {envReq("REDIS_HOST")}
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_watcher</code>
