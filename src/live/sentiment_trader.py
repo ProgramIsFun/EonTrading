@@ -121,10 +121,15 @@ class SentimentTrader:
 
             if action:
                 self.pending[symbol] = action
+                price = 0.0
+                if action == "buy":
+                    from src.common.price import get_price
+                    price = get_price(symbol)
                 trade = TradeEvent(
                     symbol=symbol, action=action,
                     reason=f"sentiment:{event.sentiment:.2f} on {event.headline[:60]}",
                     timestamp=clock.now().isoformat() + "Z",
+                    price=price,
                     size=float(shares) if shares else 1.0,
                 )
                 print(f"  {action.upper()} {symbol} qty={shares} (sentiment: {event.sentiment:.2f}) — pending broker confirmation")
