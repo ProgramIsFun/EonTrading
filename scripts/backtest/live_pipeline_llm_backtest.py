@@ -146,6 +146,8 @@ async def main():
         if prev_date and monitor._states:
             check_time = prev_date + timedelta(hours=SL_CHECK_INTERVAL)
             while check_time < curr:
+                if not monitor._states:
+                    break
                 sold = await monitor.check_once(broker, as_of=check_time.isoformat())
                 checks_done += 1
                 if sold:
