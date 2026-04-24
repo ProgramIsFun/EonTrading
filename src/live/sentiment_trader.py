@@ -4,6 +4,7 @@ from datetime import datetime
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL, SentimentEvent, TradeEvent, FillEvent
 from src.common.trading_logic import TradingLogic
+from src.data.utils.db_helper import get_mongo_client
 
 
 class SentimentTrader:
@@ -20,6 +21,11 @@ class SentimentTrader:
         self.pending: dict[str, str] = {}  # symbol → "buy"/"sell" awaiting fill
         self.max_hold_days = max_hold_days
         self.position_store = position_store
+        self._trades_col = None
+        try:
+            self._trades_col = get_mongo_client()["EonTradingDB"]["trades"]
+        except Exception:
+            pass  # MongoDB not available — skip trade logging
         if self.position_store:
             self.holdings = self.position_store.get_positions()
             if self.holdings:
@@ -41,6 +47,11 @@ class SentimentTrader:
 
         if event.success:
             print(f"  ✅ {event.action.upper()} {symbol} confirmed by broker")
+            if self._trades_col:
+                self._trades_col.insert_one({
+                    "symbol": symbol, "action": pending_action,
+                    "reason": event.reason, "timestamp": datetime.utcnow(),
+                })
             if self.position_store:
                 if pending_action == "buy":
                     self.position_store.open_position(symbol, self.holdings[symbol])

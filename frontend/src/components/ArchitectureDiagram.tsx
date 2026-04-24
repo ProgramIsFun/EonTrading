@@ -111,9 +111,8 @@ export default function ArchitectureDiagram() {
                 {pathTag(s.path)}
               </div>
             ))}
-            <div style={boxStyle(DISABLED)}>
+            <div style={boxStyle(SOURCE)}>
               Twitter/X
-              {disabledTag()}
               {pathTag("src/data/news/twitter_source.py")}
             </div>
           </div>
@@ -339,7 +338,9 @@ export default function ArchitectureDiagram() {
             { name: "news", desc: "Articles — written by collect/backfill scripts, read by backtest" },
             { name: "ohlcv", desc: "Price candles — written by ingest/migrations, read by backtest" },
             { name: "positions", desc: "Open trades — written on broker fill, read by Analyzer" },
+            { name: "trades", desc: "Confirmed trade history — written on broker fill, read by API" },
             { name: "symbols", desc: "Stock list — written by update_sp500.py, read by API & scripts" },
+            { name: "seen_urls", desc: "Dedup — written/read by NewsPoller, survives restarts" },
           ].map((c) => (
             <div key={c.name} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
               <code style={{ color: "#f59e0b", fontWeight: 600, minWidth: 65 }}>{c.name}</code>
@@ -379,7 +380,7 @@ export default function ArchitectureDiagram() {
         <div style={{ display: "flex", gap: 24, fontSize: 11, color: "#888", flexWrap: "wrap" }}>
           <div>
             <div style={{ color: "#ccc", fontWeight: 600, marginBottom: 4 }}>API Keys (env vars)</div>
-            {["NEWSAPI_KEY", "FINNHUB_KEY", "OPENAI_API_KEY (for LLM analyzer)", "TWITTER_BEARER_TOKEN (not wired yet)"].map((k) => (
+            {["NEWSAPI_KEY", "FINNHUB_KEY", "OPENAI_API_KEY (for LLM analyzer)", "TWITTER_BEARER_TOKEN"].map((k) => (
               <div key={k} style={{ fontFamily: "monospace", fontSize: 10 }}>{k}</div>
             ))}
           </div>

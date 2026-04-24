@@ -18,7 +18,7 @@ load_dotenv()
 async def main_single():
     """All components in one process via LocalEventBus."""
     from src.common.event_bus import LocalEventBus
-    from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource
+    from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource, TwitterSource
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
     from src.live.news_watcher import NewsWatcher
     from src.live.analyzer_service import AnalyzerService
@@ -32,6 +32,7 @@ async def main_single():
     sources = []
     if os.getenv("NEWSAPI_KEY"): sources.append(NewsAPISource())
     if os.getenv("FINNHUB_KEY"): sources.append(FinnhubSource())
+    if os.getenv("TWITTER_BEARER_TOKEN"): sources.append(TwitterSource())
     sources.append(RSSSource())
     sources.append(RedditSource())
 

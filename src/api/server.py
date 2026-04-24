@@ -84,7 +84,33 @@ SAMPLE_NEWS = [
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    try:
+        client = get_mongo_client()
+        db = client["EonTradingDB"]
+        positions = list(db["positions"].find({}, {"_id": 0}))
+        return {
+            "status": "ok",
+            "collector_running": _collector_running,
+            "open_positions": len(positions),
+            "positions": [{
+                "symbol": p.get("symbol"),
+                "entryTime": p.get("entryTime"),
+            } for p in positions],
+        }
+    except Exception:
+        return {"status": "ok", "collector_running": _collector_running}
+
+
+@app.get("/api/trades")
+def trades(limit: int = 100):
+    """Return recent confirmed trades from the trades collection."""
+    try:
+        client = get_mongo_client()
+        col = client["EonTradingDB"]["trades"]
+        docs = list(col.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit))
+        return docs
+    except Exception:
+        return []
 
 
 @app.get("/api/price-backtest")

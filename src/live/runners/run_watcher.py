@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.common.event_bus import RedisEventBus
-from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource
+from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource, TwitterSource
 from src.live.news_watcher import NewsWatcher
 
 
@@ -15,6 +15,7 @@ async def main():
     sources = []
     if os.getenv("NEWSAPI_KEY"): sources.append(NewsAPISource())
     if os.getenv("FINNHUB_KEY"): sources.append(FinnhubSource())
+    if os.getenv("TWITTER_BEARER_TOKEN"): sources.append(TwitterSource())
     sources.append(RSSSource())
     sources.append(RedditSource())
 
