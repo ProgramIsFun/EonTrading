@@ -27,7 +27,6 @@ SAMPLE_NEWS = [
 
 
 async def main():
-    from src.common.clock import clock
     from src.common.event_bus import LocalEventBus
     from src.common.events import CHANNEL_NEWS, NewsEvent
     from src.strategies.sentiment import KeywordSentimentAnalyzer
@@ -73,13 +72,11 @@ async def main():
     print(f"{'═' * 60}\n")
 
     for doc in SAMPLE_NEWS:
-        clock.set_time(doc["date"])
-
         # Check SL/TP at this timestamp before processing news
-        await monitor.check_once(broker)
+        await monitor.check_once(broker, as_of=doc["date"])
         await asyncio.sleep(0.1)
 
-        print(f"\n  📅 {clock.now().strftime('%Y-%m-%d %H:%M')} — {doc['headline'][:70]}")
+        print(f"\n  📅 {doc['date']} — {doc['headline'][:70]}")
 
         event = NewsEvent(
             source="replay",
@@ -92,7 +89,6 @@ async def main():
         await asyncio.sleep(0.2)  # let pipeline process
 
     await asyncio.sleep(0.5)
-    clock.reset()
 
     # Summary
     cash = await broker.get_cash()
@@ -100,7 +96,7 @@ async def main():
 
     # Price open positions at end of replay period
     from src.common.price import get_price
-    clock.set_time(SAMPLE_NEWS[-1]["date"])  # price at last news date
+    last_date = SAMPLE_NEWS[-1]["date"]
     portfolio_value = cash
     print(f"\n{'═' * 60}")
     print(f"  Replay Complete")
@@ -108,7 +104,7 @@ async def main():
     print(f"  {'Symbol':<8s} {'Qty':>5s} {'Avg Cost':>10s} {'Current':>10s} {'Value':>12s} {'P&L':>10s}")
     print(f"  {'─'*8} {'─'*5} {'─'*10} {'─'*10} {'─'*12} {'─'*10}")
     for symbol, qty in positions.items():
-        current_price = get_price(symbol)
+        current_price = get_price(symbol, as_of=last_date)
         value = current_price * qty
         # cost basis from broker's tracked cash changes
         portfolio_value += value

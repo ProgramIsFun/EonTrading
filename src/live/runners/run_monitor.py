@@ -7,7 +7,6 @@ from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
-from src.common.clock import clock
 from src.common.position_store import PositionStore
 from src.common.trading_logic import TradingLogic
 from src.live.price_monitor import PriceMonitor
@@ -26,7 +25,6 @@ async def main():
     redis_host = os.getenv("REDIS_HOST", "192.168.0.38")
     bus = RedisEventBus(host=redis_host)
     await bus.start()
-    await clock.subscribe_to_bus(bus)
 
     store = PositionStore()
     logic = TradingLogic(stop_loss_pct=0.05, take_profit_pct=0.10)

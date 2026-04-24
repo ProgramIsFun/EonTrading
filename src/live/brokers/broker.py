@@ -311,12 +311,5 @@ class TradeExecutor:
         await self.bus.subscribe(CHANNEL_TRADE, self._on_trade)
 
     async def _on_trade(self, msg: dict):
-        from src.common.clock import clock
         trade = TradeEvent.from_dict(msg)
-        if clock.is_replay and not isinstance(self.broker, LogBroker):
-            print(f"  ⚠️ Replay mode — blocking real broker, using LogBroker for {trade.action} {trade.symbol}")
-            fallback = LogBroker()
-            fallback.set_bus(self.bus)
-            await fallback.execute(trade)
-        else:
-            await self.broker.execute(trade)
+        await self.broker.execute(trade)

@@ -7,7 +7,6 @@ from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
-from src.common.clock import clock
 from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource, TwitterSource
 from src.live.news_watcher import NewsWatcher
 
@@ -32,7 +31,6 @@ async def main():
 
     bus = RedisEventBus(host=os.getenv("REDIS_HOST", "192.168.0.38"))
     await bus.start()
-    await clock.subscribe_to_bus(bus)
 
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
     print(f"  🟢 Started. Polling every 120s.\n")

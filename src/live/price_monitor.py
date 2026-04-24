@@ -4,7 +4,7 @@ Runs as a standalone component (own container in distributed mode).
 Uses the same TradingLogic as backtest — identical SL/TP behavior.
 """
 import asyncio
-from src.common.clock import clock
+from datetime import datetime
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
 from src.common.price import get_price
@@ -35,32 +35,31 @@ class PriceMonitor:
         state.shares = shares
         return state
 
-    async def check_once(self, broker=None) -> list[str]:
+    async def check_once(self, broker=None, as_of: str = None) -> list[str]:
         """Check all positions against SL/TP. Returns list of symbols sold."""
         positions = self.store.get_positions()
         broker_positions = {}
         if broker:
             broker_positions = await broker.get_positions()
 
+        ts = as_of or (datetime.utcnow().isoformat() + "Z")
         sold = []
         for symbol in list(positions.keys()):
-            price = get_price(symbol)
+            price = get_price(symbol, as_of=as_of)
             if price <= 0:
                 continue
 
             shares = broker_positions.get(symbol, 1)
             state = self._get_or_create_state(symbol, price, shares)
 
-            # Update peak for trailing SL
             self.logic.update_peak(state, price)
 
-            # Check stop loss
             sl_price = self.logic.check_stop_loss(state, price)
             if sl_price:
                 trade = TradeEvent(
                     symbol=symbol, action="sell",
                     reason=f"stop loss @ ${sl_price:.2f}",
-                    timestamp=clock.now().isoformat() + "Z",
+                    timestamp=ts,
                     price=sl_price, size=float(shares),
                 )
                 print(f"  🛑 SL triggered: SELL {symbol} {shares}sh @ ${sl_price:.2f}")
@@ -69,13 +68,12 @@ class PriceMonitor:
                 sold.append(symbol)
                 continue
 
-            # Check take profit
             tp_price = self.logic.check_take_profit(state, price)
             if tp_price:
                 trade = TradeEvent(
                     symbol=symbol, action="sell",
                     reason=f"take profit @ ${tp_price:.2f}",
-                    timestamp=clock.now().isoformat() + "Z",
+                    timestamp=ts,
                     price=tp_price, size=float(shares),
                 )
                 print(f"  🎯 TP triggered: SELL {symbol} {shares}sh @ ${tp_price:.2f}")

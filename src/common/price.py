@@ -7,24 +7,32 @@ Sources:
 Set via: PRICE_SOURCE=clickhouse or PRICE_SOURCE=yfinance (default)
 """
 import os
-from datetime import timedelta
-from src.common.clock import clock
+from datetime import datetime, timedelta
 
 PRICE_SOURCE = os.getenv("PRICE_SOURCE", "yfinance").lower()
 
 
-def get_price(symbol: str) -> float:
-    """Get price for a symbol. Uses clock — live gets latest, replay gets historical."""
+def get_price(symbol: str, as_of: str = None) -> float:
+    """Get price for a symbol. If as_of is provided (ISO string), fetch historical price."""
     if PRICE_SOURCE == "clickhouse":
-        return _from_clickhouse(symbol)
-    return _from_yfinance(symbol)
+        return _from_clickhouse(symbol, as_of)
+    return _from_yfinance(symbol, as_of)
 
 
-def _from_yfinance(symbol: str) -> float:
+def _parse_time(as_of: str = None) -> datetime | None:
+    if not as_of:
+        return None
+    try:
+        return datetime.fromisoformat(as_of.replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception:
+        return None
+
+
+def _from_yfinance(symbol: str, as_of: str = None) -> float:
     import yfinance as yf
     try:
-        if clock.is_replay:
-            t = clock.now()
+        t = _parse_time(as_of)
+        if t:
             start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
             end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
             data = yf.download(symbol, start=start, end=end, progress=False)
@@ -38,11 +46,11 @@ def _from_yfinance(symbol: str) -> float:
     return 0.0
 
 
-def _from_clickhouse(symbol: str) -> float:
+def _from_clickhouse(symbol: str, as_of: str = None) -> float:
     try:
         from src.data.storage.clickhouse_storage import ClickHouseStorage
+        t = _parse_time(as_of) or datetime.utcnow()
         storage = ClickHouseStorage()
-        t = clock.now()
         start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
         end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
         df = storage.query_ohlcv(symbol, "1d", start, end)

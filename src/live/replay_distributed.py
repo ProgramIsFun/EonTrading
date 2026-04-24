@@ -2,19 +2,16 @@
 
 Usage:
   1. Start distributed containers: docker compose --profile distributed up -d
+     (make sure BROKER=log for safety)
   2. Run this controller:
      REDIS_HOST=localhost PYTHONPATH=. python -m src.live.replay_distributed --start 2025-01-01 --end 2025-06-01
 
-The controller:
-  - Broadcasts simulated time via [clock] channel
-  - Publishes news events to [news] channel
-  - Waits for [fill] events before advancing to next news event
-  - Distributed components (analyzer, trader, executor, monitor) process events normally
+Timestamps flow with the events — no clock sync needed.
+Each component uses the event's timestamp for price lookups.
 """
 import asyncio
 import argparse
 import os
-from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -39,64 +36,48 @@ SAMPLE_NEWS = [
 
 async def main(start: str, end: str):
     from src.common.event_bus import RedisEventBus
-    from src.common.events import CHANNEL_NEWS, CHANNEL_FILL, NewsEvent
+    from src.common.events import CHANNEL_NEWS, NewsEvent
 
     redis_host = os.getenv("REDIS_HOST", "localhost")
     bus = RedisEventBus(host=redis_host)
     await bus.subscribe("fill", lambda _: None)
     await bus.start()
 
-    # Collect fills
     fills = []
-
     async def on_fill(msg):
         fills.append(msg)
-
     await bus.subscribe("fill", on_fill)
 
     print(f"\n{'═' * 60}")
     print(f"  Distributed Replay Controller")
     print(f"  Redis: {redis_host}")
     print(f"  News events: {len(SAMPLE_NEWS)}")
-    print(f"  Broadcasting clock + news to distributed containers")
+    print(f"  ⚠️  Make sure BROKER=log in executor container!")
     print(f"{'═' * 60}\n")
 
-    for i, doc in enumerate(SAMPLE_NEWS):
-        ts = doc["date"]
-
-        # Broadcast simulated time to all containers
-        await bus.publish("clock", {"time": ts})
-        await asyncio.sleep(0.3)  # let clock propagate
-
-        print(f"  📅 {ts} — {doc['headline'][:65]}")
+    for doc in SAMPLE_NEWS:
+        print(f"  📅 {doc['date']} — {doc['headline'][:65]}")
 
         event = NewsEvent(
             source="replay",
             headline=doc["headline"],
-            timestamp=ts,
+            timestamp=doc["date"],
             url="",
             body=doc["headline"],
         )
         await bus.publish(CHANNEL_NEWS, event.to_dict())
 
-        # Wait for pipeline to process (fills may come back)
         prev_fills = len(fills)
-        await asyncio.sleep(2.0)  # give distributed pipeline time
+        await asyncio.sleep(2.0)
 
-        new_fills = fills[prev_fills:]
-        for f in new_fills:
+        for f in fills[prev_fills:]:
             status = "✅" if f.get("success") else "❌"
             print(f"    {status} {f.get('action', '').upper()} {f.get('symbol')} — {f.get('reason')}")
 
-    # Final wait for any trailing fills
     await asyncio.sleep(3.0)
 
-    # Reset clock
-    await bus.publish("clock", {"time": "reset"})
-
     print(f"\n{'═' * 60}")
-    print(f"  Distributed Replay Complete")
-    print(f"  Total fills received: {len(fills)}")
+    print(f"  Distributed Replay Complete — {len(fills)} fills")
     for f in fills:
         status = "✅" if f.get("success") else "❌"
         print(f"    {status} {f.get('action', '').upper()} {f.get('symbol')} — {f.get('reason')}")
@@ -106,7 +87,7 @@ async def main(start: str, end: str):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Distributed replay via Redis")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--start", default="2025-01-01")
     parser.add_argument("--end", default="2025-06-01")
     args = parser.parse_args()

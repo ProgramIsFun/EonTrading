@@ -7,7 +7,6 @@ from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
-from src.common.clock import clock
 from src.common.position_store import PositionStore
 from src.data.utils.db_helper import get_mongo_client
 from src.live.sentiment_trader import SentimentTrader
@@ -27,7 +26,6 @@ async def main():
     await bus.subscribe("sentiment", lambda _: None)
     await bus.subscribe("fill", lambda _: None)
     await bus.start()
-    await clock.subscribe_to_bus(bus)
 
     store = PositionStore()
     trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store,

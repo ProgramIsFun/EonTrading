@@ -7,7 +7,6 @@ from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
-from src.common.clock import clock
 from src.common.position_store import PositionStore
 from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 from src.live.analyzer_service import AnalyzerService
@@ -33,7 +32,6 @@ async def main():
     bus = RedisEventBus(host=redis_host)
     await bus.subscribe("news", lambda _: None)
     await bus.start()
-    await clock.subscribe_to_bus(bus)
 
     store = PositionStore()
     svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
