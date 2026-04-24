@@ -331,7 +331,7 @@ class TestFillConfirmation:
         trades = []
         await bus.subscribe(CHANNEL_TRADE, lambda msg: trades.append(msg))
         # The trade was already published before we subscribed, check pending
-        assert trader.pending.get("AAPL") == "buy"
+        assert trader.pending.get("AAPL")["action"] == "buy"
 
     @pytest.mark.asyncio
     async def test_sell_confirmed_removes_from_holdings(self, setup_with_mock):

@@ -18,7 +18,7 @@ class SentimentTrader:
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
         self.holdings: dict[str, datetime] = {}
-        self.pending: dict[str, str] = {}
+        self.pending: dict[str, dict] = {}  # symbol → {"action", "price", "shares"}
         self.max_hold_days = max_hold_days
         self.position_store = position_store
         self._trades_col = trade_log
@@ -38,32 +38,34 @@ class SentimentTrader:
     async def _on_fill(self, msg: dict):
         event = FillEvent.from_dict(msg)
         symbol = event.symbol
-        pending_action = self.pending.pop(symbol, None)
-        if not pending_action:
+        pending = self.pending.pop(symbol, None)
+        if not pending:
             return
 
+        action = pending["action"]
+        entry_price = pending.get("price", 0.0)
+        shares = pending.get("shares", 1)
+
         if event.success:
-            print(f"  ✅ {event.action.upper()} {symbol} confirmed by broker")
+            print(f"  ✅ {action.upper()} {symbol} confirmed by broker")
             if self._trades_col:
                 self._trades_col.insert_one({
-                    "symbol": symbol, "action": pending_action,
+                    "symbol": symbol, "action": action,
+                    "price": entry_price, "shares": shares,
                     "reason": event.reason, "timestamp": event.timestamp,
                 })
             if self.position_store:
-                if pending_action == "buy":
-                    from src.common.price import get_price
-                    price = get_price(symbol, event.timestamp)
-                    self.position_store.open_position(symbol, self.holdings[symbol], entry_price=price)
+                if action == "buy":
+                    self.position_store.open_position(symbol, self.holdings[symbol], entry_price=entry_price)
                     if self.price_monitor:
-                        bp = await self.broker.get_positions() if self.broker else {}
-                        self.price_monitor.register_entry(symbol, price, bp.get(symbol, 1))
-                elif pending_action == "sell":
+                        self.price_monitor.register_entry(symbol, entry_price, shares)
+                elif action == "sell":
                     self.position_store.close_position(symbol)
         else:
-            print(f"  ⚠️ {event.action.upper()} {symbol} rejected by broker: {event.reason}")
-            if pending_action == "buy":
+            print(f"  ⚠️ {action.upper()} {symbol} rejected by broker: {event.reason}")
+            if action == "buy":
                 self.holdings.pop(symbol, None)
-            elif pending_action == "sell":
+            elif action == "sell":
                 self.holdings[symbol] = datetime.utcnow()
 
     async def _hold_checker(self):
@@ -76,7 +78,7 @@ class SentimentTrader:
                 held_days = (now - entry_time).total_seconds() / 86400
                 if held_days >= self.max_hold_days:
                     del self.holdings[symbol]
-                    self.pending[symbol] = "sell"
+                    self.pending[symbol] = {"action": "sell", "price": 0, "shares": 0}
                     trade = TradeEvent(
                         symbol=symbol, action="sell",
                         reason=f"max hold {self.max_hold_days}d reached",
@@ -91,7 +93,6 @@ class SentimentTrader:
         if not event.symbols:
             return
 
-        # Use the event's timestamp — flows from news through the pipeline
         event_ts = event.timestamp
 
         for symbol in event.symbols:
@@ -100,6 +101,8 @@ class SentimentTrader:
 
             action = None
             shares = 0
+            price = 0.0
+
             if self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, self.holdings):
                 action = "sell"
                 if self.broker:
@@ -107,6 +110,8 @@ class SentimentTrader:
                     shares = broker_positions.get(symbol, 1)
                 else:
                     shares = 1
+                from src.common.price import get_price
+                price = get_price(symbol, as_of=event_ts)
                 self.holdings.pop(symbol, None)
             elif symbol not in self.holdings:
                 cash = await self.broker.get_cash() if self.broker else 0.0
@@ -128,9 +133,7 @@ class SentimentTrader:
                         self.holdings[symbol] = datetime.utcnow()
 
             if action:
-                self.pending[symbol] = action
-                from src.common.price import get_price
-                price = get_price(symbol, as_of=event_ts) if action == "sell" else get_price(symbol, as_of=event_ts)
+                self.pending[symbol] = {"action": action, "price": price, "shares": shares}
                 trade = TradeEvent(
                     symbol=symbol, action=action,
                     reason=f"sentiment:{event.sentiment:.2f} on {event.headline[:60]}",
@@ -138,5 +141,5 @@ class SentimentTrader:
                     price=price,
                     size=float(shares) if shares else 1.0,
                 )
-                print(f"  {action.upper()} {symbol} qty={shares} (sentiment: {event.sentiment:.2f}) — pending broker confirmation")
+                print(f"  {action.upper()} {symbol} qty={shares} @ ${price:.2f} (sentiment: {event.sentiment:.2f}) — pending broker confirmation")
                 await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
