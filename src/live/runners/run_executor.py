@@ -7,7 +7,7 @@ from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
-from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
+from src.live.brokers.broker import TradeExecutor, PaperBroker, FutuBroker, IBKRBroker, AlpacaBroker
 
 
 async def main():
@@ -20,7 +20,7 @@ async def main():
     elif broker_name == "alpaca":
         broker = AlpacaBroker()
     else:
-        broker = LogBroker()
+        broker = PaperBroker()
 
     required = {"futu": ["FUTU_LIVE"], "ibkr": [], "alpaca": ["ALPACA_API_KEY", "ALPACA_SECRET_KEY"]}
     missing = [v for v in required.get(broker_name, []) if not os.getenv(v)]

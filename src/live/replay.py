@@ -29,14 +29,14 @@ async def main(start: str, end: str):
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
     from src.live.analyzer_service import AnalyzerService
     from src.live.sentiment_trader import SentimentTrader
-    from src.live.brokers.broker import TradeExecutor, LogBroker
+    from src.live.brokers.broker import TradeExecutor, PaperBroker
     from src.common.position_store import PositionStore
     from src.data.utils.db_helper import get_mongo_client
 
     banner("EonTrading — Replay Mode", {
         "Period": f"{start} → {end}",
         "Analyzer": "LLM" if os.getenv("OPENAI_API_KEY") else "Keyword",
-        "Broker": "LogBroker (dry run)",
+        "Broker": "PaperBroker (dry run)",
         "Clock": "simulated (follows news timestamps)",
     })
 
@@ -44,7 +44,7 @@ async def main(start: str, end: str):
     await bus.start()
 
     analyzer = LLMSentimentAnalyzer() if os.getenv("OPENAI_API_KEY") else KeywordSentimentAnalyzer()
-    broker = LogBroker()
+    broker = PaperBroker()
     store = PositionStore()
     db = get_mongo_client()["EonTradingDB"]
 

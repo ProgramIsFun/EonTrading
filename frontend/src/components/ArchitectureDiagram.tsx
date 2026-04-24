@@ -245,7 +245,7 @@ export default function ArchitectureDiagram() {
               {envOpt("ALPACA_API_KEY")}
               {envOpt("ALPACA_SECRET_KEY")}
               {envOpt("FUTU_LIVE / FUTU_REAL")}
-              <div style={{ fontSize: 8, color: "#555" }}>default: LogBroker (dry run)</div>
+              <div style={{ fontSize: 8, color: "#555" }}>default: PaperBroker (dry run)</div>
             </div>
             <span style={arrow}>→</span>
             {label("[fill]")}
@@ -511,7 +511,7 @@ export default function ArchitectureDiagram() {
             <div><span style={{ color: "#ef4444" }}>●</span> = required</div>
             <div><span style={{ color: "#22c55e" }}>○</span> = optional (enables feature)</div>
             <div style={{ marginTop: 4 }}>RSS + Reddit are always on, no key needed.</div>
-            <div>Default broker: LogBroker (dry run).</div>
+            <div>Default broker: PaperBroker (dry run).</div>
             <div>Default analyzer: Keyword (free).</div>
           </div>
         </div>

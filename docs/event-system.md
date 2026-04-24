@@ -78,7 +78,7 @@ Each arrow is an EventBus channel. Components are decoupled — they only know a
 2. Publishes `TradeEvent` to `[trade]`
 3. Executor forwards to Broker
 4. Broker confirms/rejects (each broker does this differently):
-   - `LogBroker`: instant
+   - `PaperBroker`: instant
    - `FutuBroker`: polls order status
    - `IBKRBroker`: callback via ib_insync
    - `AlpacaBroker`: polls REST API

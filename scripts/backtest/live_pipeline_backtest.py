@@ -33,7 +33,7 @@ async def main():
     from src.strategies.sentiment import KeywordSentimentAnalyzer
     from src.live.analyzer_service import AnalyzerService
     from src.live.sentiment_trader import SentimentTrader
-    from src.live.brokers.broker import TradeExecutor, LogBroker
+    from src.live.brokers.broker import TradeExecutor, PaperBroker
     from src.common.trading_logic import TradingLogic
     from src.common.costs import US_STOCKS
 
@@ -53,7 +53,7 @@ async def main():
     from src.common.position_store import PositionStore
 
     analyzer = KeywordSentimentAnalyzer()
-    broker = LogBroker(initial_cash=70000, cost_model=US_STOCKS)
+    broker = PaperBroker(initial_cash=70000, cost_model=US_STOCKS)
     store = PositionStore()
 
     # Clean slate — clear positions from previous runs
@@ -73,7 +73,7 @@ async def main():
     print(f"  Replay Backtest via Live Pipeline")
     print(f"  Capital: $70,000 | Threshold: 0.4 | Max alloc: 20%")
     print(f"  SL: 5% | TP: 10%")
-    print(f"  Analyzer: Keyword | Broker: LogBroker (dry run)")
+    print(f"  Analyzer: Keyword | Broker: PaperBroker (dry run)")
     print(f"  News events: {len(SAMPLE_NEWS)}")
     print(f"{'═' * 60}\n")
 

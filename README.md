@@ -109,7 +109,7 @@ Sources (NewsAPI, Finnhub, RSS, Reddit, Twitter)
 
 | Broker | Confirmation | Install | Env vars |
 |--------|-------------|---------|----------|
-| LogBroker (default) | Instant (dry run) | — | — |
+| PaperBroker (default) | Instant (dry run) | — | — |
 | Futu | Polls order status | `pip install futu-api` | `BROKER=futu` |
 | Interactive Brokers | Callback via ib_insync | `pip install ib_insync` | `BROKER=ibkr` |
 | Alpaca | Polls REST API | `pip install alpaca-trade-api` | `BROKER=alpaca ALPACA_API_KEY ALPACA_SECRET_KEY` |
@@ -205,7 +205,7 @@ src/
 │   ├── analyzer_service.py          # [news] → score → [sentiment]
 │   ├── sentiment_trader.py          # [sentiment] → decide → [trade], [fill] → persist/rollback
 │   ├── news_trader.py               # Single-process entry point
-│   ├── brokers/broker.py            # LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
+│   ├── brokers/broker.py            # PaperBroker, FutuBroker, IBKRBroker, AlpacaBroker
 │   └── runners/                     # Distributed mode entry points
 └── strategies/                      # SMA, RSI, sentiment analyzers
 frontend/                            # React + Vite dashboard
@@ -218,7 +218,7 @@ tests/                               # 66 unit tests
 ### Done
 - [x] Live pipeline: news → sentiment → trade → fill (4-channel event bus)
 - [x] 5 news sources: NewsAPI, Finnhub, RSS, Reddit, Twitter
-- [x] 4 brokers: LogBroker, Futu, IBKR, Alpaca
+- [x] 4 brokers: PaperBroker, Futu, IBKR, Alpaca
 - [x] Fill confirmation: broker confirms → persist, rejects → rollback
 - [x] Pending order tracking (no duplicate orders per symbol)
 - [x] MongoDB position persistence (survives restarts)

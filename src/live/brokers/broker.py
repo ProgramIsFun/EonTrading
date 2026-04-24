@@ -4,7 +4,7 @@ To add a new broker:
   1. Subclass Broker
   2. Implement execute() — submit order, then call self._publish_fill() when confirmed
   3. Each broker handles confirmation differently:
-     - LogBroker: instant (dry run)
+     - PaperBroker: instant (dry run)
      - FutuBroker: polls order status
      - IBKRBroker: callback via ib_insync
      - AlpacaBroker: REST polling or websocket
@@ -57,9 +57,9 @@ class Broker(ABC):
 
 
 # ---------------------------------------------------------------------------
-# LogBroker — dry run, instant fill
+# PaperBroker — dry run, instant fill
 # ---------------------------------------------------------------------------
-class LogBroker(Broker):
+class PaperBroker(Broker):
     """Dry-run broker — fills instantly. Optionally applies transaction costs."""
 
     def __init__(self, initial_cash: float = 100000, cost_model=None):
@@ -371,7 +371,7 @@ class TradeExecutor:
     """Listens to trade events and forwards to broker. Broker publishes fill results.
 
     Safety: in replay mode (clock.is_replay), real brokers are blocked.
-    Only LogBroker is allowed during backtest replay.
+    Only PaperBroker is allowed during backtest replay.
     """
 
     def __init__(self, bus: EventBus, broker: Broker):

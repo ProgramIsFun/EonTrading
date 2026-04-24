@@ -141,7 +141,7 @@ async def reconcile_positions():
     import os
     try:
         from src.common.reconcile import reconcile
-        from src.live.brokers.broker import LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
+        from src.live.brokers.broker import PaperBroker, FutuBroker, IBKRBroker, AlpacaBroker
         broker_name = os.getenv("BROKER", "log").lower()
         if broker_name == "futu":
             broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
@@ -150,7 +150,7 @@ async def reconcile_positions():
         elif broker_name == "alpaca":
             broker = AlpacaBroker()
         else:
-            broker = LogBroker()
+            broker = PaperBroker()
         return await reconcile(broker)
     except Exception as e:
         return {"ok": False, "error": str(e)}

@@ -24,7 +24,7 @@ async def main_single():
     from src.live.news_watcher import NewsWatcher
     from src.live.analyzer_service import AnalyzerService
     from src.live.sentiment_trader import SentimentTrader
-    from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
+    from src.live.brokers.broker import TradeExecutor, PaperBroker, FutuBroker, IBKRBroker, AlpacaBroker
     from src.common.position_store import PositionStore
     from src.common.trading_logic import TradingLogic
     from src.data.utils.db_helper import get_mongo_client
@@ -61,7 +61,7 @@ async def main_single():
     elif broker_name == "alpaca":
         broker = AlpacaBroker()
     else:
-        broker = LogBroker()
+        broker = PaperBroker()
 
     # --- Startup banner ---
     banner("EonTrading — Single Process Mode", {
