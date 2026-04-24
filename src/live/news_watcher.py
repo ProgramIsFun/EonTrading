@@ -1,9 +1,12 @@
 """NewsWatcher: polls news sources, publishes raw news to event bus."""
 import asyncio
+import logging
 from datetime import datetime
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_NEWS
 from src.common.news_poller import NewsPoller
+
+logger = logging.getLogger(__name__)
 
 
 class NewsWatcher:
@@ -16,7 +19,7 @@ class NewsWatcher:
         self.last_poll_count: int = 0
 
     async def run(self):
-        print(f"NewsWatcher started, polling every {self.poller.interval}s")
+        logger.info("NewsWatcher started, polling every %ds", self.poller.interval)
         while True:
             events = self.poller.poll_once()
             self.last_poll = datetime.utcnow()
@@ -24,5 +27,5 @@ class NewsWatcher:
             for news in events:
                 await self.bus.publish(CHANNEL_NEWS, news.to_dict())
             if not events:
-                print(f"  ℹ️ No new articles at {self.last_poll.strftime('%H:%M:%S')}")
+                logger.info("No new articles at %s", self.last_poll.strftime('%H:%M:%S'))
             await asyncio.sleep(self.poller.interval)

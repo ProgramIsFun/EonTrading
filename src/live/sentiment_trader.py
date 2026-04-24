@@ -1,9 +1,12 @@
 """SentimentTrader: listens to sentiment events, decides trades, publishes trade events."""
 import asyncio
+import logging
 from datetime import datetime
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL, SentimentEvent, TradeEvent, FillEvent
 from src.common.trading_logic import TradingLogic
+
+logger = logging.getLogger(__name__)
 
 
 class SentimentTrader:
@@ -27,13 +30,13 @@ class SentimentTrader:
         if self.position_store:
             self.holdings = self.position_store.get_positions()
             if self.holdings:
-                print(f"  Restored {len(self.holdings)} position(s) from store: {list(self.holdings.keys())}")
+                logger.info("Restored %d position(s) from store: %s", len(self.holdings), list(self.holdings.keys()))
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_SENTIMENT, self._on_sentiment)
         await self.bus.subscribe(CHANNEL_FILL, self._on_fill)
         if self.max_hold_days > 0:
-            asyncio.ensure_future(self._hold_checker())
+            self._hold_task = asyncio.create_task(self._hold_checker())
 
     async def _on_fill(self, msg: dict):
         event = FillEvent.from_dict(msg)
@@ -47,7 +50,7 @@ class SentimentTrader:
         shares = pending.get("shares", 1)
 
         if event.success:
-            print(f"  ✅ {action.upper()} {symbol} confirmed by broker")
+            logger.info("✅ %s %s confirmed by broker", action.upper(), symbol)
             if self._trades_col:
                 self._trades_col.insert_one({
                     "symbol": symbol, "action": action,
@@ -62,7 +65,7 @@ class SentimentTrader:
                 elif action == "sell":
                     self.position_store.close_position(symbol)
         else:
-            print(f"  ⚠️ {action.upper()} {symbol} rejected by broker: {event.reason}")
+            logger.warning("⚠️ %s %s rejected by broker: %s", action.upper(), symbol, event.reason)
             if action == "buy":
                 self.holdings.pop(symbol, None)
             elif action == "sell":
@@ -84,7 +87,7 @@ class SentimentTrader:
                         reason=f"max hold {self.max_hold_days}d reached",
                         timestamp=now.isoformat() + "Z",
                     )
-                    print(f"  SELL {symbol} (max hold {self.max_hold_days}d reached) — pending broker confirmation")
+                    logger.info("SELL %s (max hold %dd reached) — pending broker confirmation", symbol, self.max_hold_days)
                     await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
             await asyncio.sleep(3600)
 
@@ -114,23 +117,24 @@ class SentimentTrader:
                 price = get_price(symbol, as_of=event_ts)
                 self.holdings.pop(symbol, None)
             elif symbol not in self.holdings:
+                if event.confidence < self.logic.min_confidence or event.sentiment < self.logic.threshold:
+                    continue
+                from src.common.price import get_price
+                price = get_price(symbol, as_of=event_ts)
+                if price <= 0:
+                    continue
                 cash = await self.broker.get_cash() if self.broker else 0.0
                 if cash > 0:
-                    from src.common.price import get_price
-                    price = get_price(symbol, as_of=event_ts)
-                    if price > 0:
-                        shares = self.logic.should_buy(
-                            event.sentiment, event.confidence, symbol,
-                            self.holdings, cash, price,
-                        )
-                        if shares > 0:
-                            action = "buy"
-                            self.holdings[symbol] = datetime.utcnow()
+                    shares = self.logic.should_buy(
+                        event.sentiment, event.confidence, symbol,
+                        self.holdings, cash, price,
+                    )
                 else:
-                    if event.confidence >= self.logic.min_confidence and event.sentiment >= self.logic.threshold:
-                        action = "buy"
-                        shares = 1
-                        self.holdings[symbol] = datetime.utcnow()
+                    # No broker or no cash info — buy 1 share as fallback
+                    shares = 1
+                if shares > 0:
+                    action = "buy"
+                    self.holdings[symbol] = datetime.utcnow()
 
             if action:
                 self.pending[symbol] = {"action": action, "price": price, "shares": shares}
@@ -141,5 +145,6 @@ class SentimentTrader:
                     price=price,
                     size=float(shares) if shares else 1.0,
                 )
-                print(f"  {action.upper()} {symbol} qty={shares} @ ${price:.2f} (sentiment: {event.sentiment:.2f}) — pending broker confirmation")
+                logger.info("%s %s qty=%d @ $%.2f (sentiment: %.2f) — pending broker confirmation",
+                            action.upper(), symbol, shares, price, event.sentiment)
                 await self.bus.publish(CHANNEL_TRADE, trade.to_dict())

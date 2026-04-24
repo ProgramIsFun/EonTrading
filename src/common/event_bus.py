@@ -1,9 +1,12 @@
 """Event bus: publish/subscribe for signals between components."""
 import asyncio
 import json
+import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from typing import Callable, Any
+
+logger = logging.getLogger(__name__)
 
 
 class EventBus(ABC):
@@ -33,7 +36,8 @@ class LocalEventBus(EventBus):
 
     async def publish(self, channel: str, message: dict):
         for handler in self._subscribers.get(channel, []):
-            asyncio.create_task(handler(message))
+            task = asyncio.create_task(handler(message))
+            task.add_done_callback(_log_task_exception)
 
     async def subscribe(self, channel: str, handler: Callable):
         self._subscribers[channel].append(handler)
@@ -90,6 +94,13 @@ class RedisEventBus(EventBus):
                     channel = msg["channel"]
                     data = json.loads(msg["data"])
                     for handler in self._subscribers.get(channel, []):
-                        asyncio.create_task(handler(data))
+                        task = asyncio.create_task(handler(data))
+                        task.add_done_callback(_log_task_exception)
         except asyncio.CancelledError:
             pass
+
+
+def _log_task_exception(task: asyncio.Task):
+    """Callback to log exceptions from fire-and-forget tasks."""
+    if not task.cancelled() and task.exception():
+        logger.error("Unhandled exception in event handler: %s", task.exception(), exc_info=task.exception())

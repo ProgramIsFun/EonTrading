@@ -1,8 +1,11 @@
 """Component heartbeat — each runner writes its status to MongoDB periodically."""
 import asyncio
+import logging
 import os
 import platform
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 COLLECTION = "heartbeats"

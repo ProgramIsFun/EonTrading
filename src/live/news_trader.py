@@ -10,9 +10,16 @@ For distributed mode, run each runner in its own terminal:
   python3 -m src.live.runners.run_trader
   python3 -m src.live.runners.run_executor
 """
-import asyncio, os, sys
+import asyncio, logging, os, signal, sys
 from dotenv import load_dotenv
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 async def main_single():
@@ -92,10 +99,10 @@ async def main_single():
     await analyzer_svc.start()
     await trader.start()
     await executor.start()
-    asyncio.ensure_future(monitor.run(broker))
+    monitor_task = asyncio.create_task(monitor.run(broker))
 
     for name in ["watcher", "analyzer", "trader", "executor", "monitor"]:
-        asyncio.ensure_future(Heartbeat(name, metadata={"mode": "single"}).run())
+        asyncio.create_task(Heartbeat(name, metadata={"mode": "single"}).run())
 
     ping = PingResponder(bus, ["watcher", "analyzer", "trader", "executor"], metadata={
         "watcher": {"sources": ", ".join(source_names), "mode": "single"},
@@ -105,14 +112,26 @@ async def main_single():
     })
     await ping.start()
 
-    print(f"\n  🟢 All components started. Polling every 120s.")
+    logger.info("🟢 All components started. Polling every 120s.")
 
     # Reconcile on startup
     from src.common.reconcile import reconcile
     await reconcile(broker, store)
-    print()
 
-    await watcher.run()
+    # Graceful shutdown
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+
+    watcher_task = asyncio.create_task(watcher.run())
+
+    await stop_event.wait()
+    logger.info("Shutting down...")
+    watcher_task.cancel()
+    monitor_task.cancel()
+    await bus.stop()
+    logger.info("Shutdown complete.")
 
 
 if __name__ == "__main__":

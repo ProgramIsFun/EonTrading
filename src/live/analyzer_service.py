@@ -1,7 +1,10 @@
 """AnalyzerService: subscribes to [news], queries positions, scores sentiment, publishes to [sentiment]."""
+import logging
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_NEWS, CHANNEL_SENTIMENT, NewsEvent
 from src.strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
+
+logger = logging.getLogger(__name__)
 
 
 class AnalyzerService:
@@ -21,4 +24,4 @@ class AnalyzerService:
         sentiment = self.analyzer.analyze(event, positions=positions)
         if sentiment.confidence > 0:
             await self.bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
-            print(f"  [{sentiment.sentiment:+.2f}] {sentiment.headline[:80]}")
+            logger.info("[%+.2f] %s", sentiment.sentiment, sentiment.headline[:80])

@@ -9,10 +9,13 @@ To add a new broker:
      - IBKRBroker: callback via ib_insync
      - AlpacaBroker: REST polling or websocket
 """
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, CHANNEL_FILL, TradeEvent, FillEvent
+
+logger = logging.getLogger(__name__)
 
 
 class Broker(ABC):
@@ -75,13 +78,13 @@ class PaperBroker(Broker):
             total = cost + fees
             self._cash -= total
             self._positions[trade.symbol] = self._positions.get(trade.symbol, 0) + qty
-            print(f"  📝 [DRY RUN] BUY {trade.symbol} {qty}sh @ ${trade.price:.2f} (fees: ${fees:.2f}) | {trade.reason}")
+            logger.info("📝 [DRY RUN] BUY %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, trade.price, fees, trade.reason)
         elif trade.action == "sell":
             qty = self._positions.pop(trade.symbol, 0)
             proceeds = trade.price * qty
             fees = self.cost_model.sell_cost(trade.price, qty) if self.cost_model else 0
             self._cash += proceeds - fees
-            print(f"  📝 [DRY RUN] SELL {trade.symbol} {qty}sh @ ${trade.price:.2f} (fees: ${fees:.2f}) | {trade.reason}")
+            logger.info("📝 [DRY RUN] SELL %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, trade.price, fees, trade.reason)
         await self._publish_fill(trade.symbol, trade.action, True, "filled (dry run)")
 
     async def get_positions(self) -> dict[str, int]:
@@ -142,7 +145,7 @@ class FutuBroker(Broker):
                 return
 
             order_id = data["order_id"].iloc[0]
-            print(f"  📤 Futu order placed: {trade.action.upper()} {trade.symbol} (polling...)")
+            logger.info("📤 Futu order placed: %s %s (polling...)", trade.action.upper(), trade.symbol)
 
             elapsed = 0.0
             while elapsed < self.poll_timeout:
@@ -203,7 +206,7 @@ class FutuBroker(Broker):
                 await self._publish_fill(trade.symbol, trade.action, False, "order rejected")
                 return
 
-            print(f"  📤 Futu order placed: {trade.action.upper()} {trade.symbol} (waiting for callback...)")
+            logger.info("📤 Futu order placed: %s %s (waiting for callback...)", trade.action.upper(), trade.symbol)
 
             try:
                 reason, success = await asyncio.wait_for(result_future, timeout=self.poll_timeout)
@@ -223,7 +226,7 @@ class FutuBroker(Broker):
                 return {}
             return {row["code"]: int(row["qty"]) for _, row in data.iterrows() if int(row["qty"]) > 0}
         except Exception as e:
-            print(f"  ❌ Futu get_positions error: {e}")
+            logger.error("Futu get_positions error: %s", e)
             return {}
 
     async def get_cash(self) -> float:
@@ -235,7 +238,7 @@ class FutuBroker(Broker):
             if ret == 0:
                 return float(data["cash"].iloc[0])
         except Exception as e:
-            print(f"  ❌ Futu get_cash error: {e}")
+            logger.error("Futu get_cash error: %s", e)
         return 0.0
 
 
@@ -288,7 +291,7 @@ class IBKRBroker(Broker):
             self._connect()
             return {p.contract.symbol: int(p.position) for p in self._ib.positions() if p.position > 0}
         except Exception as e:
-            print(f"  ❌ IBKR get_positions error: {e}")
+            logger.error("IBKR get_positions error: %s", e)
             return {}
 
     async def get_cash(self) -> float:
@@ -298,7 +301,7 @@ class IBKRBroker(Broker):
                 if av.tag == "CashBalance" and av.currency == "USD":
                     return float(av.value)
         except Exception as e:
-            print(f"  ❌ IBKR get_cash error: {e}")
+            logger.error("IBKR get_cash error: %s", e)
         return 0.0
 
 
@@ -352,7 +355,7 @@ class AlpacaBroker(Broker):
             self._connect()
             return {p.symbol: int(p.qty) for p in self._api.list_positions()}
         except Exception as e:
-            print(f"  ❌ Alpaca get_positions error: {e}")
+            logger.error("Alpaca get_positions error: %s", e)
             return {}
 
     async def get_cash(self) -> float:
@@ -360,7 +363,7 @@ class AlpacaBroker(Broker):
             self._connect()
             return float(self._api.get_account().cash)
         except Exception as e:
-            print(f"  ❌ Alpaca get_cash error: {e}")
+            logger.error("Alpaca get_cash error: %s", e)
         return 0.0
 
 

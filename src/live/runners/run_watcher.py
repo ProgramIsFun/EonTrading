@@ -1,7 +1,14 @@
 """Run NewsWatcher as its own process. Publishes to [news] channel."""
-import asyncio, os
+import asyncio, logging, os, signal
 from dotenv import load_dotenv
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
@@ -29,15 +36,25 @@ async def main():
         "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
 
-    bus = RedisEventBus(host=os.getenv("REDIS_HOST", "192.168.0.38"))
+    bus = RedisEventBus()
     await bus.start()
 
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
-    print(f"  🟢 Started. Polling every 120s.\n")
-    asyncio.ensure_future(Heartbeat("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"}).run())
+    logger.info("🟢 Started. Polling every 120s.")
+    asyncio.create_task(Heartbeat("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"}).run())
     ping = PingResponder(bus, ["watcher"], metadata={"watcher": {"sources": ", ".join(source_names), "mode": "distributed"}})
     await ping.start()
-    await watcher.run()
+
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+
+    watcher_task = asyncio.create_task(watcher.run())
+    await stop_event.wait()
+    logger.info("Shutting down...")
+    watcher_task.cancel()
+    await bus.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -4,12 +4,15 @@ Runs as a standalone component (own container in distributed mode).
 Uses the same TradingLogic as backtest — identical SL/TP behavior.
 """
 import asyncio
+import logging
 from datetime import datetime
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
 from src.common.price import get_price
 from src.common.position_store import PositionStore
 from src.common.trading_logic import TradingLogic, PositionState
+
+logger = logging.getLogger(__name__)
 
 
 class PriceMonitor:
@@ -29,7 +32,7 @@ class PriceMonitor:
                 if price > 0:
                     self._states[sym] = PositionState(symbol=sym, shares=0, entry_price=price)
             if self._states:
-                print(f"  PriceMonitor restored {len(self._states)} entry price(s): {list(self._states.keys())}")
+                logger.info("PriceMonitor restored %d entry price(s): %s", len(self._states), list(self._states.keys()))
         except Exception:
             pass
         # Allow injecting known entry prices (for testing)
@@ -59,13 +62,13 @@ class PriceMonitor:
             self.logic.update_peak(state, price)
             sl = self.logic.check_stop_loss(state, price)
             if sl:
-                print(f"  🛑 SL triggered: SELL {symbol} {state.shares}sh @ ${sl:.2f}")
+                logger.info("🛑 SL triggered: SELL %s %dsh @ $%.2f", symbol, state.shares, sl)
                 self._states.pop(symbol)
                 sold.append((symbol, sl, state.shares))
                 continue
             tp = self.logic.check_take_profit(state, price)
             if tp:
-                print(f"  🎯 TP triggered: SELL {symbol} {state.shares}sh @ ${tp:.2f}")
+                logger.info("🎯 TP triggered: SELL %s %dsh @ $%.2f", symbol, state.shares, tp)
                 self._states.pop(symbol)
                 sold.append((symbol, tp, state.shares))
         return sold
@@ -108,7 +111,7 @@ class PriceMonitor:
                     timestamp=ts,
                     price=sl_price, size=float(shares),
                 )
-                print(f"  🛑 SL triggered: SELL {symbol} {shares}sh @ ${sl_price:.2f}")
+                logger.info("🛑 SL triggered: SELL %s %dsh @ $%.2f", symbol, shares, sl_price)
                 await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
                 self._states.pop(symbol, None)
                 sold.append(symbol)
@@ -122,7 +125,7 @@ class PriceMonitor:
                     timestamp=ts,
                     price=tp_price, size=float(shares),
                 )
-                print(f"  🎯 TP triggered: SELL {symbol} {shares}sh @ ${tp_price:.2f}")
+                logger.info("🎯 TP triggered: SELL %s %dsh @ $%.2f", symbol, shares, tp_price)
                 await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
                 self._states.pop(symbol, None)
                 sold.append(symbol)
@@ -137,12 +140,12 @@ class PriceMonitor:
 
     async def run(self, broker=None):
         """Continuous monitoring loop for live mode."""
-        print(f"  PriceMonitor started, checking every {self.interval}s")
+        logger.info("PriceMonitor started, checking every %ds", self.interval)
         while True:
             await self.check_once(broker)
             await asyncio.sleep(self.interval)
 
     def register_entry(self, symbol: str, price: float, shares: int):
         """Called when a new position is opened — sets the entry price for SL/TP."""
-        print(f"    📌 PriceMonitor: registered {symbol} entry @ ${price:.2f} ({shares}sh)")
+        logger.info("📌 PriceMonitor: registered %s entry @ $%.2f (%dsh)", symbol, price, shares)
         self._states[symbol] = PositionState(symbol=symbol, shares=shares, entry_price=price)

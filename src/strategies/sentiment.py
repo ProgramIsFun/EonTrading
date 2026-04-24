@@ -2,9 +2,12 @@
 import re
 import json
 import os
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from ..common.events import NewsEvent, SentimentEvent
+
+logger = logging.getLogger(__name__)
 
 
 class BaseSentimentAnalyzer(ABC):
@@ -184,7 +187,7 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
                 urgency=data.get("urgency", "normal"),
             )
         except Exception as e:
-            print(f"LLM analysis failed: {e}")
+            logger.error("LLM analysis failed: %s", e)
             return SentimentEvent(
                 source=event.source, headline=event.headline,
                 timestamp=event.timestamp,

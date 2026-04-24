@@ -1,7 +1,9 @@
 import os
+import logging
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
+logger = logging.getLogger(__name__)
 _client = None
 
 def get_mongo_client():
@@ -27,11 +29,11 @@ def get_mongo_client():
     # Send a ping to confirm a successful connection
     try:
         client.admin.command('ping')
-        print("Pinged your deployment. You successfully connected to MongoDB!")
+        logger.info("Successfully connected to MongoDB")
         _client = client
         return _client
     except Exception as e:
-        print(f"Failed to connect to MongoDB: {e}")
+        logger.error("Failed to connect to MongoDB: %s", e)
         return None
     
 

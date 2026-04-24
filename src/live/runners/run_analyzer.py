@@ -1,7 +1,14 @@
 """Run AnalyzerService as its own process. Subscribes to [news], publishes to [sentiment]."""
-import asyncio, os
+import asyncio, logging, os, signal
 from dotenv import load_dotenv
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisEventBus
 from src.common.startup import banner
@@ -28,20 +35,25 @@ async def main():
         "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
 
-    redis_host = os.getenv("REDIS_HOST", "192.168.0.38")
-    bus = RedisEventBus(host=redis_host)
+    bus = RedisEventBus()
     await bus.subscribe("news", lambda _: None)
     await bus.start()
 
     store = PositionStore()
     svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     await svc.start()
-    print(f"  🟢 Started. Waiting for [news] events.\n")
-    asyncio.ensure_future(Heartbeat("analyzer", metadata={"analyzer": analyzer_name, "mode": "distributed"}).run())
+    logger.info("🟢 Started. Waiting for [news] events.")
+    asyncio.create_task(Heartbeat("analyzer", metadata={"analyzer": analyzer_name, "mode": "distributed"}).run())
     ping = PingResponder(bus, ["analyzer"], metadata={"analyzer": {"analyzer": analyzer_name, "mode": "distributed"}})
     await ping.start()
-    while True:
-        await asyncio.sleep(3600)
+
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+    await stop_event.wait()
+    logger.info("Shutting down...")
+    await bus.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())
