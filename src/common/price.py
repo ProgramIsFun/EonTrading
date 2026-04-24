@@ -41,14 +41,19 @@ def _from_yfinance(symbol: str, as_of: str = None) -> float:
         if t:
             start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
             end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
+            print(f"    💲 Fetching {symbol} price @ {start}..{end}", end="", flush=True)
             data = yf.download(symbol, start=start, end=end, progress=False)
         else:
+            print(f"    💲 Fetching {symbol} latest price", end="", flush=True)
             data = yf.download(symbol, period="1d", interval="1m", progress=False)
         if not data.empty:
             val = data["Close"].iloc[-1]
-            return float(val.iloc[0]) if hasattr(val, "iloc") else float(val)
+            price = float(val.iloc[0]) if hasattr(val, "iloc") else float(val)
+            print(f" → ${price:.2f}")
+            return price
+        print(f" → no data")
     except Exception as e:
-        print(f"  ⚠️ yfinance price lookup failed for {symbol}: {e}")
+        print(f" → error: {e}")
     return 0.0
 
 
