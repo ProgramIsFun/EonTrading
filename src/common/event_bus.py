@@ -171,7 +171,3 @@ def _log_task_exception(task: asyncio.Task):
     """Callback to log exceptions from fire-and-forget tasks."""
     if not task.cancelled() and task.exception():
         logger.error("Unhandled exception in event handler: %s", task.exception(), exc_info=task.exception())
-
-
-# Backward-compatible alias
-RedisEventBus = RedisStreamBus
