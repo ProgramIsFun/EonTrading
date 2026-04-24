@@ -233,6 +233,32 @@ export default function ArchitectureDiagram() {
           Trader updates in-memory first, marks order as pending, then waits for <code style={{ color: "#818cf8" }}>[fill]</code> from broker.
           MongoDB is only written after broker confirms. If rejected, in-memory state rolls back.
         </div>
+
+        {/* PriceMonitor */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+          <div style={boxStyle(INTERNAL)}>
+            <div style={{ fontWeight: 600 }}>PriceMonitor</div>
+            <div style={{ fontSize: 10, color: "#888" }}>self-managed SL/TP</div>
+            <div style={{ fontSize: 9, color: "#666" }}>polls prices → publishes sell to [trade]</div>
+            {internalTag()}
+            {pathTag("src/live/price_monitor.py")}
+          </div>
+          <span style={arrow}>→</span>
+          {label("[trade]")}
+          <span style={{ fontSize: 10, color: "#666" }}>same flow as sentiment sells — you control risk, not the broker</span>
+        </div>
+
+        {/* Replay mode */}
+        <div style={{ background: "#1a2a2a", borderRadius: 6, padding: 10, marginTop: 12, border: "1px dashed #22c55e44" }}>
+          <div style={{ fontSize: 11, color: "#22c55e", fontWeight: 600, marginBottom: 4 }}>♻️ Replay Mode (backtest via live pipeline)</div>
+          <div style={{ fontSize: 10, color: "#888" }}>
+            Same pipeline, same code — but fed with historical news from MongoDB and a simulated clock.
+            Prices fetched at historical timestamps via yfinance. PriceMonitor checks SL/TP between events.
+          </div>
+          <code style={{ fontSize: 9, color: "#818cf8", display: "block", marginTop: 4 }}>
+            python -m src.live.replay --start 2025-01-01 --end 2025-06-01
+          </code>
+        </div>
       </div>
 
       {/* News Data Pipeline */}
@@ -279,9 +305,16 @@ export default function ArchitectureDiagram() {
         </div>
       </div>
 
-      {/* Backtest Pipeline */}
-      <div style={section}>
-        {sectionTitle("Backtest Pipeline", "#22c55e")}
+      {/* Backtest Pipeline (Legacy) */}
+      <div style={{ ...section, opacity: 0.6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          {sectionTitle("Backtest Pipeline", "#22c55e")}
+          <span style={{ fontSize: 9, background: "#55555522", color: "#888", padding: "1px 6px", borderRadius: 3 }}>legacy — use Replay Mode instead</span>
+        </div>
+        <div style={{ fontSize: 10, color: "#666", marginBottom: 8 }}>
+          Separate batch pipeline. Useful for quick parameter sweeps and equity curves, but uses different execution
+          mechanics than live (simulated hourly candles vs real event flow). For accurate results, use Replay Mode above.
+        </div>
         {processTag("runs inside FastAPI")}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
           {mongoBox("ohlcv", "price candles")}
@@ -302,9 +335,6 @@ export default function ArchitectureDiagram() {
             {pathTag("src/backtest/portfolio_backtest.py")}
             {pathTag("src/backtest/engine.py")}
           </div>
-        </div>
-        <div style={{ fontSize: 10, color: "#666", marginTop: 6 }}>
-          Reads price data from <code style={{ color: "#f59e0b" }}>ohlcv</code> and news from <code style={{ color: "#f59e0b" }}>news</code> collection (or generates synthetic events). Also fetches live prices via yfinance when needed.
         </div>
       </div>
 
@@ -387,6 +417,7 @@ export default function ArchitectureDiagram() {
             { name: "ohlcv", desc: "Price candles — written by ingest/migrations, read by backtest" },
             { name: "positions", desc: "Open trades — written on broker fill, read by Analyzer" },
             { name: "trades", desc: "Confirmed trade history — written on broker fill, read by API" },
+            { name: "replay_trades", desc: "Replay backtest trades — written by replay mode" },
             { name: "symbols", desc: "Stock list — written by update_sp500.py, read by API & scripts" },
             { name: "seen_urls", desc: "Dedup — written/read by NewsPoller, survives restarts" },
           ].map((c) => (
