@@ -13,15 +13,30 @@ class PositionStore:
         self._col = get_mongo_client()[DB][COLLECTION]
 
     def set_positions(self, holdings: dict[str, datetime]):
-        """Upsert current holdings, remove closed positions."""
+        """Sync holdings to MongoDB — upsert active, remove closed."""
         active = set(holdings.keys())
         for symbol, entry_time in holdings.items():
             self._col.update_one(
                 {"symbol": symbol},
-                {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(), "updatedAt": datetime.utcnow()}},
+                {"$set": {"entryTime": entry_time.isoformat(), "updatedAt": datetime.utcnow()}},
                 upsert=True,
             )
-        self._col.delete_many({"symbol": {"$nin": list(active)}})
+        if active:
+            self._col.delete_many({"symbol": {"$nin": list(active)}})
+        else:
+            self._col.delete_many({})
+
+    def open_position(self, symbol: str, entry_time: datetime):
+        """Atomically add a single position."""
+        self._col.update_one(
+            {"symbol": symbol},
+            {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(), "updatedAt": datetime.utcnow()}},
+            upsert=True,
+        )
+
+    def close_position(self, symbol: str):
+        """Atomically remove a single position."""
+        self._col.delete_one({"symbol": symbol})
 
     def get_positions(self) -> dict[str, datetime]:
         """Return {symbol: entry_time} for all open positions."""

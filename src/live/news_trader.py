@@ -23,7 +23,7 @@ async def main_single():
     from src.live.news_watcher import NewsWatcher
     from src.live.analyzer_service import AnalyzerService
     from src.live.sentiment_trader import SentimentTrader
-    from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker
+    from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
     from src.common.position_store import PositionStore
 
     bus = LocalEventBus()
@@ -36,7 +36,17 @@ async def main_single():
     sources.append(RedditSource())
 
     analyzer = LLMSentimentAnalyzer() if os.getenv("OPENAI_API_KEY") else KeywordSentimentAnalyzer()
-    broker = FutuBroker(simulate=not os.getenv("FUTU_REAL")) if os.getenv("FUTU_LIVE") else LogBroker()
+
+    # Broker selection via BROKER env var: futu, ibkr, alpaca, log (default)
+    broker_name = os.getenv("BROKER", "log").lower()
+    if broker_name == "futu":
+        broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
+    elif broker_name == "ibkr":
+        broker = IBKRBroker()
+    elif broker_name == "alpaca":
+        broker = AlpacaBroker()
+    else:
+        broker = LogBroker()
     store = PositionStore()
 
     trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store)

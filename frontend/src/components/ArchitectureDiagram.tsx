@@ -39,7 +39,17 @@ const pathTag = (p: string) => (
   <div style={{ fontSize: 9, color: "#555", fontFamily: "monospace", marginTop: 2 }}>{p}</div>
 );
 
+const mongoBox = (collection: string, detail: string) => (
+  <div style={boxStyle(SERVICE)}>
+    <div style={{ fontWeight: 600 }}>MongoDB</div>
+    <div style={{ fontSize: 10, color: "#f59e0b" }}>{collection}</div>
+    <div style={{ fontSize: 9, color: "#888" }}>{detail}</div>
+    {serviceTag()}
+  </div>
+);
+
 const arrow = { color: "#555", fontSize: 18 };
+const arrowDown = { color: "#555", fontSize: 14, textAlign: "center" as const, padding: "2px 0" };
 const label = (text: string) => <span style={{ fontSize: 10, color: "#666" }}>{text}</span>;
 
 const sectionTitle = (text: string, color: string) => (
@@ -55,7 +65,7 @@ export default function ArchitectureDiagram() {
 
       {/* Summary */}
       <div style={{ fontSize: 12, color: "#ccc", marginBottom: 16, lineHeight: 1.6 }}>
-        News comes in → gets scored for sentiment → triggers trades.
+        News comes in → gets scored for sentiment → triggers trades → broker confirms fill.
         <span style={{ color: "#888" }}> Everything flows through event channels, whether in one process or distributed across many.</span>
       </div>
 
@@ -67,6 +77,7 @@ export default function ArchitectureDiagram() {
             { ch: "news", desc: "raw headlines" },
             { ch: "sentiment", desc: "scored signals" },
             { ch: "trade", desc: "buy/sell orders" },
+            { ch: "fill", desc: "broker confirmation" },
           ].map((c, i) => (
             <div key={c.ch} style={{ display: "flex", alignItems: "center", gap: 12 }}>
               {i > 0 && <span style={{ color: "#818cf8", fontSize: 20 }}>→</span>}
@@ -85,6 +96,8 @@ export default function ArchitectureDiagram() {
       {/* Live Pipeline */}
       <div style={section}>
         {sectionTitle("Live Trading Pipeline", "#818cf8")}
+
+        {/* Row 1: Sources → Watcher → [news] → Analyzer → [sentiment] */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6 }}>
             {[
@@ -115,19 +128,28 @@ export default function ArchitectureDiagram() {
           <span style={arrow}>→</span>
           {label("[news]")}
           <span style={arrow}>→</span>
-          <div style={boxStyle(INTERNAL)}>
-            <div style={{ fontWeight: 600 }}>AnalyzerService</div>
-            <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM + positions</div>
-            {internalTag()}
-            {pathTag("src/live/analyzer_service.py")}
-            {pathTag("src/strategies/sentiment.py")}
+          <div>
+            <div style={boxStyle(INTERNAL)}>
+              <div style={{ fontWeight: 600 }}>AnalyzerService</div>
+              <div style={{ fontSize: 10, color: "#888" }}>Keyword / LLM + positions</div>
+              {internalTag()}
+              {pathTag("src/live/analyzer_service.py")}
+              {pathTag("src/strategies/sentiment.py")}
+            </div>
+            <div style={arrowDown}>↑ reads</div>
+            {mongoBox("positions", "get open positions")}
           </div>
           <span style={arrow}>→</span>
           {label("[sentiment]")}
+        </div>
+
+        {/* Row 2: → Trader → [trade] → Executor/Broker → [fill] → back to Trader */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
           <span style={arrow}>→</span>
           <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>SentimentTrader</div>
             <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
+            <div style={{ fontSize: 9, color: "#888" }}>tracks pending orders</div>
             {internalTag()}
             {pathTag("src/live/sentiment_trader.py")}
           </div>
@@ -136,25 +158,41 @@ export default function ArchitectureDiagram() {
           <span style={arrow}>→</span>
           <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Executor</div>
-            <div style={{ fontSize: 10, color: "#888" }}>Log / Futu</div>
             {internalTag()}
             {pathTag("src/live/brokers/broker.py")}
           </div>
+          <span style={arrow}>→</span>
+          <div style={boxStyle(PROCESS)}>
+            <div style={{ fontWeight: 600 }}>Broker</div>
+            <div style={{ fontSize: 10, color: "#888" }}>Log / Futu / IBKR / Alpaca</div>
+            <div style={{ fontSize: 9, color: "#666" }}>each confirms in its own way</div>
+            <div style={{ fontSize: 9, color: "#555", marginTop: 2 }}>polling · callback · instant</div>
+          </div>
+          <span style={arrow}>→</span>
+          {label("[fill]")}
+          <span style={arrow}>→</span>
+          <div>
+            <div style={{ ...boxStyle(INTERNAL), border: "1px solid #22c55e66" }}>
+              <div style={{ fontWeight: 600 }}>SentimentTrader</div>
+              <div style={{ fontSize: 10, color: "#22c55e" }}>✅ filled → persist</div>
+              <div style={{ fontSize: 10, color: "#ef4444" }}>❌ rejected → rollback</div>
+            </div>
+            <div style={arrowDown}>↓ on fill</div>
+            {mongoBox("positions", "open/close position")}
+          </div>
         </div>
-        <div style={{ fontSize: 10, color: "#888", marginTop: 8 }}>
-          AnalyzerService queries <code style={{ color: "#818cf8" }}>get_positions()</code> from Trader for portfolio-aware LLM scoring. Broker exposes <code style={{ color: "#818cf8" }}>execute(trade)</code> + <code style={{ color: "#818cf8" }}>get_positions()</code>.
-        </div>
-        <div style={{ fontSize: 10, color: "#666", marginTop: 4 }}>
-          Live pipeline is real-time via event bus — it does not read from MongoDB.
+
+        <div style={{ fontSize: 10, color: "#666", marginTop: 10 }}>
+          Trader updates in-memory first, marks order as pending, then waits for <code style={{ color: "#818cf8" }}>[fill]</code> from broker.
+          MongoDB is only written after broker confirms. If rejected, in-memory state rolls back.
         </div>
       </div>
 
       {/* News Data Pipeline */}
       <div style={section}>
-        {sectionTitle("News Data Pipeline → MongoDB (EonTradingDB.news)", "#f472b6")}
+        {sectionTitle("News Data Pipeline", "#f472b6")}
         <div style={{ fontSize: 10, color: "#888", marginBottom: 8 }}>
           Independent from the live pipeline. Uses the same RSS/Reddit sources but stores to MongoDB for backtesting and historical analysis.
-          The live pipeline streams through the event bus in real-time; this one builds a persistent dataset.
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
@@ -172,11 +210,7 @@ export default function ArchitectureDiagram() {
             {pathTag("scripts/collect_news.py")}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle(SERVICE)}>
-            <div style={{ fontWeight: 600 }}>MongoDB</div>
-            <div style={{ fontSize: 10, color: "#888" }}>dedup by URL</div>
-            {serviceTag()}
-          </div>
+          {mongoBox("news", "dedup by URL")}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -194,11 +228,7 @@ export default function ArchitectureDiagram() {
             {pathTag("scripts/backfill_news.py")}
           </div>
           <span style={arrow}>→</span>
-          <div style={boxStyle(SERVICE)}>
-            <div style={{ fontWeight: 600 }}>same collection</div>
-            <div style={{ fontSize: 10, color: "#888" }}>backfilled: true</div>
-            {serviceTag()}
-          </div>
+          {mongoBox("news", "backfilled: true")}
         </div>
       </div>
 
@@ -207,15 +237,10 @@ export default function ArchitectureDiagram() {
         {sectionTitle("Backtest Pipeline", "#22c55e")}
         {processTag("runs inside FastAPI")}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-          <div style={boxStyle(SOURCE)}>
-            <div style={{ fontWeight: 600 }}>yfinance</div>
-            <div style={{ fontSize: 10, color: "#888" }}>hourly / daily</div>
-          </div>
+          {mongoBox("ohlcv", "price candles")}
           <span style={arrow}>→</span>
-          <div style={boxStyle(SOURCE)}>
-            <div style={{ fontWeight: 600 }}>News Events</div>
-            <div style={{ fontSize: 10, color: "#888" }}>synthetic / real</div>
-          </div>
+          {mongoBox("news", "real articles")}
+          <span style={{ ...arrow, color: "#888", fontSize: 11 }}>or synthetic</span>
           <span style={arrow}>→</span>
           <div style={boxStyle(INTERNAL)}>
             <div style={{ fontWeight: 600 }}>Analyzer</div>
@@ -230,6 +255,9 @@ export default function ArchitectureDiagram() {
             {pathTag("src/backtest/portfolio_backtest.py")}
             {pathTag("src/backtest/engine.py")}
           </div>
+        </div>
+        <div style={{ fontSize: 10, color: "#666", marginTop: 6 }}>
+          Reads price data from <code style={{ color: "#f59e0b" }}>ohlcv</code> and news from <code style={{ color: "#f59e0b" }}>news</code> collection (or generates synthetic events). Also fetches live prices via yfinance when needed.
         </div>
       </div>
 
@@ -278,35 +306,46 @@ export default function ArchitectureDiagram() {
         </div>
       </div>
 
-      {/* State & Storage */}
+      {/* Ephemeral State */}
       <div style={section}>
-        {sectionTitle("State & Storage", "#c084fc")}
+        {sectionTitle("Ephemeral State (in-memory, resets on restart)", "#c084fc")}
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <div style={boxStyle(STATE)}>
             <div style={{ fontWeight: 600 }}>Trader holdings</div>
             <div style={{ fontSize: 10, color: "#888" }}>in-memory dict</div>
             {stateTag()}
-            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>ephemeral — lost on restart</div>
+            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>restored from MongoDB on startup</div>
           </div>
           <div style={boxStyle(STATE)}>
-            <div style={{ fontWeight: 600 }}>PositionStore</div>
-            <div style={{ fontSize: 10, color: "#888" }}>Redis key</div>
+            <div style={{ fontWeight: 600 }}>Pending orders</div>
+            <div style={{ fontSize: 10, color: "#888" }}>symbol → buy/sell</div>
             {stateTag()}
-            {pathTag("src/common/position_store.py")}
-            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>persistent — distributed mode</div>
+            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>awaiting [fill] from broker</div>
           </div>
           <div style={boxStyle(STATE)}>
             <div style={{ fontWeight: 600 }}>Source _seen sets</div>
             <div style={{ fontSize: 10, color: "#888" }}>in-memory per source</div>
             {stateTag()}
-            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>ephemeral — dedup resets on restart</div>
+            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>dedup resets on restart</div>
           </div>
-          <div style={boxStyle(SERVICE)}>
-            <div style={{ fontWeight: 600 }}>MongoDB</div>
-            <div style={{ fontSize: 10, color: "#888" }}>news + OHLCV</div>
-            {serviceTag()}
-            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>persistent — backtest data</div>
-          </div>
+        </div>
+      </div>
+
+      {/* MongoDB summary */}
+      <div style={{ background: "#1a1a2e", borderRadius: 8, padding: 12, marginBottom: 20, border: `1px solid ${borders[SERVICE]}` }}>
+        {sectionTitle("MongoDB Collections (EonTradingDB)", "#f59e0b")}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 10, color: "#888" }}>
+          {[
+            { name: "news", desc: "Articles — written by collect/backfill scripts, read by backtest" },
+            { name: "ohlcv", desc: "Price candles — written by ingest/migrations, read by backtest" },
+            { name: "positions", desc: "Open trades — written on broker fill, read by Analyzer" },
+            { name: "symbols", desc: "Stock list — written by update_sp500.py, read by API & scripts" },
+          ].map((c) => (
+            <div key={c.name} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
+              <code style={{ color: "#f59e0b", fontWeight: 600, minWidth: 65 }}>{c.name}</code>
+              <span>{c.desc}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -346,9 +385,9 @@ export default function ArchitectureDiagram() {
           </div>
           <div>
             <div style={{ color: "#ccc", fontWeight: 600, marginBottom: 4 }}>Services</div>
-            <div style={{ fontSize: 10 }}>MongoDB — news storage & backtest data</div>
-            <div style={{ fontSize: 10 }}>Redis — distributed mode + PositionStore</div>
-            <div style={{ fontSize: 10 }}>Futu OpenD — live trading (optional, defaults to LogBroker)</div>
+            <div style={{ fontSize: 10 }}>MongoDB — all persistent state (news, positions, OHLCV, symbols)</div>
+            <div style={{ fontSize: 10 }}>Redis — distributed mode only (event bus)</div>
+            <div style={{ fontSize: 10 }}>Futu OpenD / Interactive Brokers / Alpaca (optional, defaults to LogBroker)</div>
           </div>
         </div>
       </div>
@@ -357,8 +396,8 @@ export default function ArchitectureDiagram() {
       <div style={{ display: "flex", gap: 12, marginTop: 16, fontSize: 11, color: "#888", flexWrap: "wrap", alignItems: "center" }}>
         {processTag()} <span>standalone process</span>
         {internalTag()} <span>runs inside parent process</span>
-        {serviceTag()} <span>external service</span>
-        {stateTag()} <span>data / state</span>
+        {serviceTag()} <span>external service / MongoDB</span>
+        {stateTag()} <span>ephemeral state</span>
         {disabledTag()} <span>defined but not yet connected</span>
       </div>
     </div>

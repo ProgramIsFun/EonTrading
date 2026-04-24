@@ -59,7 +59,25 @@ class TradeEvent:
         return TradeEvent(**{k: v for k, v in d.items() if k in TradeEvent.__dataclass_fields__})
 
 
+@dataclass
+class FillEvent:
+    """Published by executor after broker responds, consumed by trader."""
+    symbol: str
+    action: str                    # "buy", "sell"
+    success: bool                  # did the broker fill the order?
+    reason: str                    # "filled" or error message
+    timestamp: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(d: dict) -> "FillEvent":
+        return FillEvent(**{k: v for k, v in d.items() if k in FillEvent.__dataclass_fields__})
+
+
 # Channel names
 CHANNEL_NEWS = "news"              # NewsEvent
 CHANNEL_SENTIMENT = "sentiment"    # SentimentEvent
 CHANNEL_TRADE = "trade"            # TradeEvent
+CHANNEL_FILL = "fill"              # FillEvent
