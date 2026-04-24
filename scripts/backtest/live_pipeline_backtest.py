@@ -54,7 +54,7 @@ async def main():
 
     analyzer = KeywordSentimentAnalyzer()
     broker = PaperBroker(initial_cash=70000, cost_model=US_STOCKS)
-    store = PositionStore()
+    store = PositionStore(collection="replay_positions")
 
     # Clean slate — clear positions from previous runs
     store.set_positions({})

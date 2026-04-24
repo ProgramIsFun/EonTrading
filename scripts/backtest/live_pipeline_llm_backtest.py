@@ -66,7 +66,7 @@ async def main():
     await bus.start()
 
     broker = PaperBroker(initial_cash=70000, cost_model=US_STOCKS)
-    store = PositionStore()
+    store = PositionStore(collection="replay_positions")
     store.set_positions({})  # clean slate
 
     monitor = PriceMonitor(bus, store, logic, interval_sec=0)

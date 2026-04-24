@@ -9,8 +9,8 @@ DB = "EonTradingDB"
 class PositionStore:
     """Read/write positions via MongoDB. One document per symbol."""
 
-    def __init__(self):
-        self._col = get_mongo_client()[DB][COLLECTION]
+    def __init__(self, collection: str = "positions"):
+        self._col = get_mongo_client()[DB][collection]
 
     def set_positions(self, holdings: dict[str, datetime]):
         """Sync holdings to MongoDB — upsert active, remove closed."""
