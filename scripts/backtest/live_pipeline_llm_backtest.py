@@ -81,6 +81,29 @@ async def main():
     import os as _os
     VERBOSE = _os.getenv("VERBOSE", "")
 
+    # Pre-load all prices into memory for fast SL/TP checks
+    if os.getenv("PRICE_SOURCE", "").lower() == "clickhouse":
+        from src.common.price import _price_cache
+        from src.data.storage.clickhouse_storage import ClickHouseStorage
+        storage = ClickHouseStorage()
+        symbols = list({s for doc in SCORED_NEWS for s in doc["symbols"]})
+        start_date = SCORED_NEWS[0]["date"][:10]
+        end_date = SCORED_NEWS[-1]["date"][:10]
+        print(f"  Pre-loading prices for {symbols} ({start_date} → {end_date})...")
+        for sym in symbols:
+            for interval in ["1h", "1d"]:
+                df = storage.query_ohlcv(sym, interval, start_date, end_date)
+                if df.empty:
+                    continue
+                for _, row in df.iterrows():
+                    ts = row["timestamp"]
+                    if hasattr(ts, "tz_convert") and ts.tzinfo:
+                        ts = ts.tz_convert(None)
+                    key = f"{sym}:{ts.strftime('%Y-%m-%d-%H')}"
+                    _price_cache[key] = float(row["close"])
+                print(f"    {sym} ({interval}): {len(df)} candles")
+        print(f"  Cache: {len(_price_cache)} entries in memory\n")
+
     print(f"\n{'═' * 60}")
     print(f"  Replay Backtest — Pre-scored LLM Sentiment")
     print(f"  Capital: $70,000 | Threshold: 0.4 | Max alloc: 20%")

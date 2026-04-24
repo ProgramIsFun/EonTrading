@@ -64,7 +64,6 @@ def get_price(symbol: str, as_of: str = None) -> float:
         cache_key = f"{symbol}:{t.strftime('%Y-%m-%d-%H')}"
         cached = _cache_get(cache_key)
         if cached:
-            print(f"    💲 [cache] {symbol} @ {t.strftime('%Y-%m-%d')} → ${cached:.2f}")
             return cached
 
     if PRICE_SOURCE == "clickhouse":
