@@ -51,11 +51,12 @@ class SentimentTrader:
                 })
             if self.position_store:
                 if pending_action == "buy":
-                    self.position_store.open_position(symbol, self.holdings[symbol])
-                    if self.price_monitor and self.broker:
-                        from src.common.price import get_price
-                        bp = await self.broker.get_positions()
-                        self.price_monitor.register_entry(symbol, get_price(symbol, event.timestamp), bp.get(symbol, 1))
+                    from src.common.price import get_price
+                    price = get_price(symbol, event.timestamp)
+                    self.position_store.open_position(symbol, self.holdings[symbol], entry_price=price)
+                    if self.price_monitor:
+                        bp = await self.broker.get_positions() if self.broker else {}
+                        self.price_monitor.register_entry(symbol, price, bp.get(symbol, 1))
                 elif pending_action == "sell":
                     self.position_store.close_position(symbol)
         else:

@@ -26,11 +26,12 @@ class PositionStore:
         else:
             self._col.delete_many({})
 
-    def open_position(self, symbol: str, entry_time: datetime):
+    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0):
         """Atomically add a single position."""
         self._col.update_one(
             {"symbol": symbol},
-            {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(), "updatedAt": datetime.utcnow()}},
+            {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(),
+                      "entryPrice": entry_price, "updatedAt": datetime.utcnow()}},
             upsert=True,
         )
 
@@ -42,6 +43,17 @@ class PositionStore:
         """Return {symbol: entry_time} for all open positions."""
         return {
             doc["symbol"]: datetime.fromisoformat(doc["entryTime"])
+            for doc in self._col.find()
+            if "entryTime" in doc
+        }
+
+    def get_positions_with_prices(self) -> dict[str, dict]:
+        """Return {symbol: {entryTime, entryPrice}} for all open positions."""
+        return {
+            doc["symbol"]: {
+                "entryTime": datetime.fromisoformat(doc["entryTime"]),
+                "entryPrice": doc.get("entryPrice", 0.0),
+            }
             for doc in self._col.find()
             if "entryTime" in doc
         }

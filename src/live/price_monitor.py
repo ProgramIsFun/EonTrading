@@ -21,9 +21,18 @@ class PriceMonitor:
         self.store = store
         self.logic = logic
         self.interval = interval_sec
-        # {symbol: PositionState} — tracks entry price and peak for trailing SL
         self._states: dict[str, PositionState] = {}
-        # Allow injecting known entry prices (for replay)
+        # Restore entry prices from store on startup
+        try:
+            for sym, info in store.get_positions_with_prices().items():
+                price = info.get("entryPrice", 0.0)
+                if price > 0:
+                    self._states[sym] = PositionState(symbol=sym, shares=0, entry_price=price)
+            if self._states:
+                print(f"  PriceMonitor restored {len(self._states)} entry price(s): {list(self._states.keys())}")
+        except Exception:
+            pass
+        # Allow injecting known entry prices (for testing)
         if entry_prices:
             for sym, price in entry_prices.items():
                 self._states[sym] = PositionState(symbol=sym, shares=0, entry_price=price)
