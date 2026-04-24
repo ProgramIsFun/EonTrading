@@ -154,15 +154,26 @@ export default function ArchitectureDiagram() {
             <div style={{
               ...boxStyle(SERVICE),
               border: `1px solid ${redisUp ? "#22c55e66" : redisUp === false ? "#ef444466" : "#33333366"}`,
+              position: "relative" as const,
+              overflow: "hidden" as const,
             }}>
+              {redisUp && (
+                <div style={{
+                  position: "absolute", top: 4, right: 8,
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: "#22c55e",
+                  animation: "pulse 2s ease-in-out infinite",
+                }} />
+              )}
+              <style>{`@keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 #22c55e88; } 50% { opacity: 0.6; box-shadow: 0 0 8px 4px #22c55e44; } }`}</style>
               <div style={{ fontWeight: 600 }}>
                 {redisUp === true ? "🟢" : redisUp === false ? "🔴" : "⚫"} Redis
               </div>
               <div style={{ fontSize: 10, color: "#888" }}>event bus + ping/pong + price cache</div>
               {serviceTag()}
               <div style={{ fontSize: 8, color: "#555", marginTop: 2 }}>port 6379 → host</div>
-              <div style={{ fontSize: 8, color: redisUp ? "#22c55e" : "#555", marginTop: 2 }}>
-                {redisUp === true ? "running" : redisUp === false ? "stopped" : "unknown"}
+              <div style={{ fontSize: 8, color: redisUp ? "#22c55e" : "#555", marginTop: 2, fontWeight: redisUp ? 600 : 400 }}>
+                {redisUp === true ? "● running" : redisUp === false ? "● stopped" : "● unknown"}
               </div>
             </div>
             <span style={{ fontSize: 9, color: "#555" }}>channels: [news] [sentiment] [trade] [fill] [ping] [pong]</span>
