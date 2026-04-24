@@ -48,6 +48,11 @@ SCORED_NEWS = [
 
 
 async def main():
+    import time
+    t0 = time.time()
+    def elapsed():
+        return f"[{time.time()-t0:.1f}s]"
+
     from src.common.event_bus import LocalEventBus
     from src.common.events import CHANNEL_SENTIMENT, SentimentEvent
     from src.live.sentiment_trader import SentimentTrader
@@ -57,6 +62,8 @@ async def main():
     from src.live.price_monitor import PriceMonitor
     from src.common.position_store import PositionStore
 
+    print(f"  {elapsed()} imports done")
+
     logic = TradingLogic(
         threshold=0.4, min_confidence=0.15,
         max_allocation=0.2, stop_loss_pct=0.05, take_profit_pct=0.10,
@@ -64,10 +71,12 @@ async def main():
 
     bus = LocalEventBus()
     await bus.start()
+    print(f"  {elapsed()} bus started")
 
     broker = PaperBroker(initial_cash=70000, cost_model=US_STOCKS)
     store = PositionStore(collection="replay_positions")
-    store.set_positions({})  # clean slate
+    store.set_positions({})
+    print(f"  {elapsed()} store cleared")
 
     monitor = PriceMonitor(bus, store, logic, interval_sec=0)
     trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor, position_store=store)
@@ -89,7 +98,7 @@ async def main():
         symbols = list({s for doc in SCORED_NEWS for s in doc["symbols"]})
         start_date = SCORED_NEWS[0]["date"][:10]
         end_date = SCORED_NEWS[-1]["date"][:10]
-        print(f"  Pre-loading prices for {symbols} ({start_date} → {end_date})...")
+        print(f"  {elapsed()} Pre-loading prices for {symbols} ({start_date} → {end_date})...")
         for sym in symbols:
             for interval in ["1h", "1d"]:
                 df = storage.query_ohlcv(sym, interval, start_date, end_date)
@@ -102,7 +111,7 @@ async def main():
                     key = f"{sym}:{ts.strftime('%Y-%m-%d-%H')}"
                     _price_cache[key] = float(row["close"])
                 print(f"    {sym} ({interval}): {len(df)} candles")
-        print(f"  Cache: {len(_price_cache)} entries in memory\n")
+        print(f"  {elapsed()} Cache: {len(_price_cache)} entries in memory\n")
 
     print(f"\n{'═' * 60}")
     print(f"  Replay Backtest — Pre-scored LLM Sentiment")
@@ -143,7 +152,7 @@ async def main():
                     print(f"    ⏰ SL/TP @ {check_time.strftime('%Y-%m-%d %H:%M')} — sold {', '.join(sold)}")
                     await asyncio.sleep(0.05)
                 elif checks_done % 50 == 0:
-                    print(f"    ... {checks_done} SL/TP checks done (@ {check_time.strftime('%Y-%m-%d %H:%M')})")
+                    print(f"    {elapsed()} ... {checks_done} SL/TP checks (@ {check_time.strftime('%Y-%m-%d %H:%M')})")
                 check_time += timedelta(hours=SL_CHECK_INTERVAL)
 
         prev_date = curr
@@ -153,7 +162,7 @@ async def main():
         if sold:
             await asyncio.sleep(0.05)
 
-        print(f"\n  📅 {doc['date']} — {doc['headline'][:65]}")
+        print(f"\n  {elapsed()} 📅 {doc['date']} — {doc['headline'][:65]}")
         print(f"     sentiment: {doc['sentiment']:+.1f}  confidence: {doc['confidence']}  symbols: {doc['symbols']}")
 
         # Publish pre-scored sentiment directly — skip analyzer
