@@ -4,16 +4,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.common.event_bus import RedisEventBus
-from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker
+from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
 
 
 async def main():
     bus = RedisEventBus(host=os.getenv("REDIS_HOST", "192.168.0.38"))
-    await bus.subscribe("trade", lambda _: None)  # register before start
+    await bus.subscribe("trade", lambda _: None)
     await bus.start()
 
-    if os.getenv("FUTU_LIVE"):
+    broker_name = os.getenv("BROKER", "log").lower()
+    if broker_name == "futu":
         broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
+    elif broker_name == "ibkr":
+        broker = IBKRBroker()
+    elif broker_name == "alpaca":
+        broker = AlpacaBroker()
     else:
         broker = LogBroker()
 

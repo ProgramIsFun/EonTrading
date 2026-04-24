@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 from datetime import datetime
 from src.common.event_bus import LocalEventBus
 from src.common.events import (
-    NewsEvent, SentimentEvent, TradeEvent,
-    CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE,
+    NewsEvent, SentimentEvent, TradeEvent, FillEvent,
+    CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL,
 )
 from src.strategies.sentiment import KeywordSentimentAnalyzer
 from src.live.news_watcher import NewsWatcher
@@ -38,21 +38,12 @@ class MockBroker(Broker):
     def __init__(self):
         self.trades: list[TradeEvent] = []
 
-    async def execute(self, trade: TradeEvent) -> bool:
+    async def execute(self, trade: TradeEvent):
         self.trades.append(trade)
-        return True
+        await self._publish_fill(trade.symbol, trade.action, True, "filled (mock)")
 
     async def get_positions(self) -> dict[str, int]:
         return {}
-
-    async def place_stop_loss(self, symbol: str, shares: int, stop_price: float) -> bool:
-        return True
-
-    async def place_take_profit(self, symbol: str, shares: int, target_price: float) -> bool:
-        return True
-
-    async def cancel_orders(self, symbol: str) -> bool:
-        return True
 
 
 # --- Keyword sentiment tests ---
@@ -112,7 +103,7 @@ class TestSentimentTrader:
             sentiment=0.8, confidence=0.9, urgency="high",
         )
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
 
         assert len(broker.trades) == 1
         assert broker.trades[0].symbol == "AAPL"
@@ -134,7 +125,7 @@ class TestSentimentTrader:
             sentiment=-0.8, confidence=0.9, urgency="high",
         )
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
 
         assert len(broker.trades) == 1
         assert broker.trades[0].symbol == "TSLA"
@@ -153,7 +144,7 @@ class TestSentimentTrader:
             sentiment=0.9, confidence=0.05,  # below min_confidence
         )
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
 
         assert len(broker.trades) == 0
 
@@ -169,13 +160,13 @@ class TestSentimentTrader:
             analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
             sentiment=0.8, confidence=0.9,
         )
-        # Publish twice
+        # Publish twice — second should be skipped (pending then held)
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
 
-        assert len(broker.trades) == 1  # only one buy, already holding
+        assert len(broker.trades) == 1  # only one buy
 
 
 # --- Full pipeline test ---
@@ -197,9 +188,238 @@ class TestFullPipeline:
         # Simulate what NewsWatcher does
         sentiment = analyzer.analyze(BULLISH_NEWS)
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
 
         assert len(broker.trades) == 1
         assert broker.trades[0].symbol == "AAPL"
         assert broker.trades[0].action == "buy"
         assert "sentiment" in broker.trades[0].reason
+
+
+# --- Rejecting broker for rollback tests ---
+
+class RejectingBroker(Broker):
+    """Broker that always rejects orders."""
+    def __init__(self):
+        self.trades: list[TradeEvent] = []
+
+    async def execute(self, trade: TradeEvent):
+        self.trades.append(trade)
+        await self._publish_fill(trade.symbol, trade.action, False, "rejected by broker")
+
+    async def get_positions(self) -> dict[str, int]:
+        return {}
+
+
+# --- FillEvent tests ---
+
+class TestFillEvent:
+    def test_fill_event_roundtrip(self):
+        fill = FillEvent(symbol="AAPL", action="buy", success=True, reason="filled", timestamp="2026-04-22T10:00:00Z")
+        d = fill.to_dict()
+        restored = FillEvent.from_dict(d)
+        assert restored.symbol == "AAPL"
+        assert restored.success is True
+        assert restored.reason == "filled"
+
+    def test_fill_event_failure(self):
+        fill = FillEvent(symbol="TSLA", action="sell", success=False, reason="timeout", timestamp="2026-04-22T10:00:00Z")
+        assert fill.success is False
+        assert fill.reason == "timeout"
+
+
+# --- Fill confirmation & rollback tests ---
+
+class TestFillConfirmation:
+    @pytest.fixture
+    def setup_with_mock(self):
+        bus = LocalEventBus()
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2)
+        broker = MockBroker()
+        executor = TradeExecutor(bus, broker)
+        return bus, trader, executor, broker
+
+    @pytest.fixture
+    def setup_with_rejecting(self):
+        bus = LocalEventBus()
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2)
+        broker = RejectingBroker()
+        executor = TradeExecutor(bus, broker)
+        return bus, trader, executor, broker
+
+    @pytest.mark.asyncio
+    async def test_buy_confirmed_adds_to_holdings(self, setup_with_mock):
+        bus, trader, executor, broker = setup_with_mock
+        await bus.start()
+        await trader.start()
+        await executor.start()
+
+        sentiment = SentimentEvent(
+            source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
+            analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
+            sentiment=0.8, confidence=0.9,
+        )
+        await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+        await asyncio.sleep(0.2)
+
+        assert "AAPL" in trader.holdings
+        assert "AAPL" not in trader.pending
+
+    @pytest.mark.asyncio
+    async def test_buy_rejected_rolls_back(self, setup_with_rejecting):
+        bus, trader, executor, broker = setup_with_rejecting
+        await bus.start()
+        await trader.start()
+        await executor.start()
+
+        sentiment = SentimentEvent(
+            source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
+            analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
+            sentiment=0.8, confidence=0.9,
+        )
+        await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+        await asyncio.sleep(0.2)
+
+        # Broker rejected → should not be in holdings
+        assert "AAPL" not in trader.holdings
+        assert "AAPL" not in trader.pending
+
+    @pytest.mark.asyncio
+    async def test_sell_rejected_restores_holding(self, setup_with_rejecting):
+        bus, trader, executor, broker = setup_with_rejecting
+        await bus.start()
+        await trader.start()
+        await executor.start()
+
+        # Pre-load a holding
+        trader.holdings["TSLA"] = datetime.utcnow()
+
+        sentiment = SentimentEvent(
+            source="test", headline="Tesla crashes", timestamp="2026-04-22T10:00:00Z",
+            analyzed_at="2026-04-22T10:00:01Z", symbols=["TSLA"],
+            sentiment=-0.8, confidence=0.9,
+        )
+        await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+        await asyncio.sleep(0.2)
+
+        # Broker rejected sell → should still be in holdings
+        assert "TSLA" in trader.holdings
+        assert "TSLA" not in trader.pending
+
+    @pytest.mark.asyncio
+    async def test_pending_blocks_duplicate_orders(self, setup_with_mock):
+        bus, trader, executor, broker = setup_with_mock
+        await bus.start()
+        await trader.start()
+        # Don't start executor — orders stay pending forever
+
+        sentiment = SentimentEvent(
+            source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
+            analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
+            sentiment=0.8, confidence=0.9,
+        )
+        await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+        await asyncio.sleep(0.1)
+
+        assert "AAPL" in trader.pending
+
+        # Second event for same symbol — should be skipped
+        await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+        await asyncio.sleep(0.1)
+
+        # Still only one trade published
+        trades = []
+        await bus.subscribe(CHANNEL_TRADE, lambda msg: trades.append(msg))
+        # The trade was already published before we subscribed, check pending
+        assert trader.pending.get("AAPL") == "buy"
+
+    @pytest.mark.asyncio
+    async def test_sell_confirmed_removes_from_holdings(self, setup_with_mock):
+        bus, trader, executor, broker = setup_with_mock
+        await bus.start()
+        await trader.start()
+        await executor.start()
+
+        trader.holdings["TSLA"] = datetime.utcnow()
+
+        sentiment = SentimentEvent(
+            source="test", headline="Tesla crashes", timestamp="2026-04-22T10:00:00Z",
+            analyzed_at="2026-04-22T10:00:01Z", symbols=["TSLA"],
+            sentiment=-0.8, confidence=0.9,
+        )
+        await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+        await asyncio.sleep(0.2)
+
+        assert "TSLA" not in trader.holdings
+        assert "TSLA" not in trader.pending
+
+
+# --- Position store integration with trader ---
+
+class TestTraderWithPositionStore:
+    @pytest.mark.asyncio
+    async def test_restore_positions_on_init(self):
+        """Trader should restore holdings from position store on startup."""
+        from unittest.mock import MagicMock
+        mock_store = MagicMock()
+        now = datetime.utcnow()
+        mock_store.get_positions.return_value = {"AAPL": now, "NVDA": now}
+
+        bus = LocalEventBus()
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, position_store=mock_store)
+
+        assert "AAPL" in trader.holdings
+        assert "NVDA" in trader.holdings
+        mock_store.get_positions.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_fill_persists_to_store(self):
+        """On confirmed fill, trader should write to position store."""
+        from unittest.mock import MagicMock
+        mock_store = MagicMock()
+        mock_store.get_positions.return_value = {}
+
+        bus = LocalEventBus()
+        await bus.start()
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, position_store=mock_store)
+        broker = MockBroker()
+        executor = TradeExecutor(bus, broker)
+        await trader.start()
+        await executor.start()
+
+        sentiment = SentimentEvent(
+            source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
+            analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
+            sentiment=0.8, confidence=0.9,
+        )
+        await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+        await asyncio.sleep(0.2)
+
+        mock_store.open_position.assert_called_once()
+        assert mock_store.open_position.call_args[0][0] == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_rejected_fill_does_not_persist(self):
+        """On rejected fill, trader should NOT write to position store."""
+        from unittest.mock import MagicMock
+        mock_store = MagicMock()
+        mock_store.get_positions.return_value = {}
+
+        bus = LocalEventBus()
+        await bus.start()
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, position_store=mock_store)
+        broker = RejectingBroker()
+        executor = TradeExecutor(bus, broker)
+        await trader.start()
+        await executor.start()
+
+        sentiment = SentimentEvent(
+            source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
+            analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
+            sentiment=0.8, confidence=0.9,
+        )
+        await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+        await asyncio.sleep(0.2)
+
+        mock_store.open_position.assert_not_called()
+        mock_store.close_position.assert_not_called()

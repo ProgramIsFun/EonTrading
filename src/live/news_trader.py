@@ -50,7 +50,7 @@ async def main_single():
     store = PositionStore()
 
     trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store)
-    analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=lambda: trader.holdings)
+    analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
     executor = TradeExecutor(bus, broker)
 

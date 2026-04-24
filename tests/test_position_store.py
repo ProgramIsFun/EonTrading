@@ -1,66 +1,64 @@
-"""Tests for PositionStore — mocked Redis, no real connection needed."""
+"""Tests for PositionStore — mocked MongoDB, no real connection needed."""
 from unittest.mock import MagicMock, patch
+from datetime import datetime
 from src.common.position_store import PositionStore
 
 
-class TestPositionStore:
-    def _make_store(self):
-        with patch("src.common.position_store.redis.Redis") as mock_cls:
-            mock_redis = MagicMock()
-            mock_cls.return_value = mock_redis
-            store = PositionStore()
-            return store, mock_redis
+def _make_store():
+    """Create a PositionStore with mocked MongoDB collection."""
+    mock_col = MagicMock()
+    with patch("src.common.position_store.get_mongo_client") as mock_client:
+        mock_db = MagicMock()
+        mock_db.__getitem__ = MagicMock(return_value=mock_col)
+        mock_client.return_value.__getitem__ = MagicMock(return_value=mock_db)
+        store = PositionStore()
+        store._col = mock_col
+    return store, mock_col
 
-    def test_set_positions(self):
-        store, mock_redis = self._make_store()
-        store.set_positions({"AAPL": 50, "NVDA": 30})
-        mock_redis.set.assert_called_once()
-        key, value = mock_redis.set.call_args[0]
-        assert key == "eontrading:positions"
-        assert "AAPL" in value
-        assert "NVDA" in value
+
+class TestPositionStore:
+    def test_open_position(self):
+        store, mock_col = _make_store()
+        now = datetime.utcnow()
+        store.open_position("AAPL", now)
+        mock_col.update_one.assert_called_once()
+        args = mock_col.update_one.call_args
+        assert args[0][0] == {"symbol": "AAPL"}
+        assert now.isoformat() in str(args[0][1])
+
+    def test_close_position(self):
+        store, mock_col = _make_store()
+        store.close_position("AAPL")
+        mock_col.delete_one.assert_called_once_with({"symbol": "AAPL"})
 
     def test_get_positions_with_data(self):
-        store, mock_redis = self._make_store()
-        mock_redis.get.return_value = '{"AAPL": 50, "TSLA": 20}'
+        store, mock_col = _make_store()
+        now = datetime.utcnow()
+        mock_col.find.return_value = [
+            {"symbol": "AAPL", "entryTime": now.isoformat()},
+            {"symbol": "TSLA", "entryTime": now.isoformat()},
+        ]
         positions = store.get_positions()
-        assert positions == {"AAPL": 50, "TSLA": 20}
+        assert "AAPL" in positions
+        assert "TSLA" in positions
+        assert isinstance(positions["AAPL"], datetime)
 
     def test_get_positions_empty(self):
-        store, mock_redis = self._make_store()
-        mock_redis.get.return_value = None
+        store, mock_col = _make_store()
+        mock_col.find.return_value = []
         positions = store.get_positions()
         assert positions == {}
 
-    def test_set_then_get_roundtrip(self):
-        store, mock_redis = self._make_store()
-        # Simulate Redis storing the value
-        stored = {}
-        mock_redis.set.side_effect = lambda k, v: stored.update({k: v})
-        mock_redis.get.side_effect = lambda k: stored.get(k)
+    def test_set_positions_upserts_and_deletes(self):
+        store, mock_col = _make_store()
+        now = datetime.utcnow()
+        store.set_positions({"AAPL": now, "NVDA": now})
+        assert mock_col.update_one.call_count == 2
+        mock_col.delete_many.assert_called_once()
+        delete_filter = mock_col.delete_many.call_args[0][0]
+        assert set(delete_filter["symbol"]["$nin"]) == {"AAPL", "NVDA"}
 
-        store.set_positions({"META": 10})
-        result = store.get_positions()
-        assert result == {"META": 10}
-
-    def test_overwrite_positions(self):
-        store, mock_redis = self._make_store()
-        stored = {}
-        mock_redis.set.side_effect = lambda k, v: stored.update({k: v})
-        mock_redis.get.side_effect = lambda k: stored.get(k)
-
-        store.set_positions({"AAPL": 50})
-        store.set_positions({"AAPL": 50, "TSLA": 20})
-        result = store.get_positions()
-        assert result == {"AAPL": 50, "TSLA": 20}
-
-    def test_clear_positions(self):
-        store, mock_redis = self._make_store()
-        stored = {}
-        mock_redis.set.side_effect = lambda k, v: stored.update({k: v})
-        mock_redis.get.side_effect = lambda k: stored.get(k)
-
-        store.set_positions({"AAPL": 50})
+    def test_set_positions_empty_clears_all(self):
+        store, mock_col = _make_store()
         store.set_positions({})
-        result = store.get_positions()
-        assert result == {}
+        mock_col.delete_many.assert_called_once_with({})

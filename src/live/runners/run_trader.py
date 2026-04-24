@@ -12,6 +12,7 @@ async def main():
     redis_host = os.getenv("REDIS_HOST", "192.168.0.38")
     bus = RedisEventBus(host=redis_host)
     await bus.subscribe("sentiment", lambda _: None)
+    await bus.subscribe("fill", lambda _: None)
     await bus.start()
 
     store = PositionStore()
