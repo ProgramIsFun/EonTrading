@@ -75,11 +75,32 @@ async def main():
     print(f"  News events: {len(SAMPLE_NEWS)}")
     print(f"{'═' * 60}\n")
 
+    from datetime import timedelta
+
+    # SL/TP check interval between news events (hours)
+    # 1 = hourly (matches original backtest, slow), 24 = daily (faster)
+    SL_CHECK_INTERVAL = int(os.getenv("SL_CHECK_HOURS", "24"))
+
+    prev_date = None
     for doc in SAMPLE_NEWS:
+        curr = datetime.fromisoformat(doc["date"])
+
+        # Simulate periodic SL/TP checks between news events
+        if prev_date and monitor._states:
+            check_time = prev_date + timedelta(hours=SL_CHECK_INTERVAL)
+            while check_time < curr:
+                sold = await monitor.check_once(broker, as_of=check_time.isoformat())
+                if sold:
+                    print(f"    ⏰ SL/TP check @ {check_time.strftime('%Y-%m-%d %H:%M')}")
+                    await asyncio.sleep(0.3)
+                check_time += timedelta(hours=SL_CHECK_INTERVAL)
+
+        prev_date = curr
+
         # Check SL/TP at this timestamp before processing news
         sold = await monitor.check_once(broker, as_of=doc["date"])
         if sold:
-            await asyncio.sleep(0.3)  # let SL/TP sells flow through pipeline
+            await asyncio.sleep(0.3)
 
         print(f"\n  📅 {doc['date']} — {doc['headline'][:70]}")
 
