@@ -156,6 +156,8 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.api_version = os.getenv("OPENAI_API_VERSION", "")
+        self._is_azure = "azure" in self.base_url
 
     def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         import requests
@@ -166,9 +168,11 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         else:
             prompt = LLM_PROMPT.format(headline=event.headline)
         try:
+            url = f"{self.base_url}/chat/completions"
+            headers = {"api-key": self.api_key} if self._is_azure else {"Authorization": f"Bearer {self.api_key}"}
+            params = {"api-version": self.api_version} if self._is_azure and self.api_version else {}
             resp = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
+                url, headers=headers, params=params,
                 json={"model": self.model, "messages": [{"role": "user", "content": prompt}], "temperature": 0},
                 timeout=15,
             )
