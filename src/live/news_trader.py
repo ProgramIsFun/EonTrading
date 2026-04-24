@@ -54,7 +54,8 @@ async def main_single():
     # --- Broker ---
     broker_name = os.getenv("BROKER", "log").lower()
     if broker_name == "futu":
-        broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
+        confirm = os.getenv("FUTU_CONFIRM", "poll")  # poll or callback
+        broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"), confirm_mode=confirm)
     elif broker_name == "ibkr":
         broker = IBKRBroker()
     elif broker_name == "alpaca":

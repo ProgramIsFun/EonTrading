@@ -13,7 +13,8 @@ from src.live.brokers.broker import TradeExecutor, LogBroker, FutuBroker, IBKRBr
 async def main():
     broker_name = os.getenv("BROKER", "log").lower()
     if broker_name == "futu":
-        broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
+        confirm = os.getenv("FUTU_CONFIRM", "poll")
+        broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"), confirm_mode=confirm)
     elif broker_name == "ibkr":
         broker = IBKRBroker()
     elif broker_name == "alpaca":

@@ -85,32 +85,52 @@ class LogBroker(Broker):
 
 
 # ---------------------------------------------------------------------------
-# FutuBroker — HK/US market via Futu OpenD, confirms by polling order status
+# FutuBroker — HK/US market via Futu OpenD
+#   confirm_mode="poll" (default): polls order status every N seconds
+#   confirm_mode="callback": uses TradeOrderHandlerBase for real-time updates
 # ---------------------------------------------------------------------------
 class FutuBroker(Broker):
-    """pip install futu-api"""
+    """pip install futu-api
+
+    confirm_mode:
+      "poll" (default) — simple, reliable, works in simulate mode
+      "callback" — real-time order status via Futu push, lower latency
+    """
 
     def __init__(self, host: str = "127.0.0.1", port: int = 11111, simulate: bool = True,
-                 poll_interval: float = 2.0, poll_timeout: float = 60.0):
+                 confirm_mode: str = "poll", poll_interval: float = 2.0, poll_timeout: float = 60.0):
         self.host = host
         self.port = port
         self.simulate = simulate
+        self.confirm_mode = confirm_mode
         self.poll_interval = poll_interval
         self.poll_timeout = poll_timeout
+        self._ctx = None
+
+    def _get_ctx(self):
+        from futu import OpenSecTradeContext
+        if not self._ctx:
+            self._ctx = OpenSecTradeContext(host=self.host, port=self.port)
+        return self._ctx
 
     async def execute(self, trade: TradeEvent):
+        if self.confirm_mode == "callback":
+            await self._execute_callback(trade)
+        else:
+            await self._execute_poll(trade)
+
+    async def _execute_poll(self, trade: TradeEvent):
         import asyncio
-        from futu import OpenSecTradeContext, TrdSide, TrdEnv, OrderStatus
+        from futu import TrdSide, TrdEnv, OrderStatus
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         trd_side = TrdSide.BUY if trade.action == "buy" else TrdSide.SELL
         try:
-            ctx = OpenSecTradeContext(host=self.host, port=self.port)
+            ctx = self._get_ctx()
             ret, data = ctx.place_order(
-                price=trade.price, qty=int(trade.size * 100),
+                price=trade.price, qty=int(trade.size),
                 code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
             )
             if ret != 0:
-                ctx.close()
                 await self._publish_fill(trade.symbol, trade.action, False, "order rejected")
                 return
 
@@ -126,26 +146,72 @@ class FutuBroker(Broker):
                     continue
                 status = orders["order_status"].iloc[0]
                 if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
-                    ctx.close()
                     await self._publish_fill(trade.symbol, trade.action, True)
                     return
                 if status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
-                    ctx.close()
                     await self._publish_fill(trade.symbol, trade.action, False, f"status: {status}")
                     return
 
-            ctx.close()
             await self._publish_fill(trade.symbol, trade.action, False, "timeout")
         except Exception as e:
             await self._publish_fill(trade.symbol, trade.action, False, str(e))
 
+    async def _execute_callback(self, trade: TradeEvent):
+        """Place order and wait for Futu's push notification on status change."""
+        import asyncio
+        from futu import TrdSide, TrdEnv, TradeOrderHandlerBase
+
+        trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
+        trd_side = TrdSide.BUY if trade.action == "buy" else TrdSide.SELL
+        result_future = asyncio.get_event_loop().create_future()
+
+        class Handler(TradeOrderHandlerBase):
+            def on_recv_rsp(self, rsp_pb):
+                ret, data = super().on_recv_rsp(rsp_pb)
+                if ret != 0 or data.empty:
+                    return
+                for _, row in data.iterrows():
+                    status = row.get("order_status", "")
+                    code = row.get("code", "")
+                    if code != trade.symbol:
+                        continue
+                    from futu import OrderStatus
+                    if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
+                        if not result_future.done():
+                            result_future.set_result(("filled", True))
+                    elif status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
+                        if not result_future.done():
+                            result_future.set_result((f"status: {status}", False))
+
+        try:
+            ctx = self._get_ctx()
+            handler = Handler()
+            ctx.set_handler(handler)
+
+            ret, data = ctx.place_order(
+                price=trade.price, qty=int(trade.size),
+                code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
+            )
+            if ret != 0:
+                await self._publish_fill(trade.symbol, trade.action, False, "order rejected")
+                return
+
+            print(f"  📤 Futu order placed: {trade.action.upper()} {trade.symbol} (waiting for callback...)")
+
+            try:
+                reason, success = await asyncio.wait_for(result_future, timeout=self.poll_timeout)
+                await self._publish_fill(trade.symbol, trade.action, success, reason)
+            except asyncio.TimeoutError:
+                await self._publish_fill(trade.symbol, trade.action, False, "callback timeout")
+        except Exception as e:
+            await self._publish_fill(trade.symbol, trade.action, False, str(e))
+
     async def get_positions(self) -> dict[str, int]:
-        from futu import OpenSecTradeContext, TrdEnv
+        from futu import TrdEnv
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
-            ctx = OpenSecTradeContext(host=self.host, port=self.port)
+            ctx = self._get_ctx()
             ret, data = ctx.position_list_query(trd_env=trd_env)
-            ctx.close()
             if ret != 0:
                 return {}
             return {row["code"]: int(row["qty"]) for _, row in data.iterrows() if int(row["qty"]) > 0}
@@ -154,12 +220,11 @@ class FutuBroker(Broker):
             return {}
 
     async def get_cash(self) -> float:
-        from futu import OpenSecTradeContext, TrdEnv
+        from futu import TrdEnv
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
-            ctx = OpenSecTradeContext(host=self.host, port=self.port)
+            ctx = self._get_ctx()
             ret, data = ctx.accinfo_query(trd_env=trd_env)
-            ctx.close()
             if ret == 0:
                 return float(data["cash"].iloc[0])
         except Exception as e:
