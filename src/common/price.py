@@ -64,6 +64,7 @@ def get_price(symbol: str, as_of: str = None) -> float:
         cache_key = f"{symbol}:{t.strftime('%Y-%m-%d-%H')}"
         cached = _cache_get(cache_key)
         if cached:
+            print(f"    💲 [cache] {symbol} @ {t.strftime('%Y-%m-%d')} → ${cached:.2f}")
             return cached
 
     if PRICE_SOURCE == "clickhouse":
@@ -122,9 +123,13 @@ def _from_clickhouse(symbol: str, as_of: str = None) -> float:
         storage = ClickHouseStorage()
         start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
         end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
+        print(f"    💲 [ClickHouse] {symbol} @ {t.strftime('%Y-%m-%d')}", end="", flush=True)
         df = storage.query_ohlcv(symbol, "1d", start, end)
         if not df.empty:
-            return float(df["close"].iloc[-1])
+            price = float(df["close"].iloc[-1])
+            print(f" → ${price:.2f}")
+            return price
+        print(f" → no data")
     except Exception as e:
-        print(f"  ⚠️ ClickHouse price lookup failed for {symbol}: {e}")
+        print(f" → error: {e}")
     return 0.0

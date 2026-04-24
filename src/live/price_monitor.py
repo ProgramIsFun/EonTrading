@@ -114,4 +114,5 @@ class PriceMonitor:
 
     def register_entry(self, symbol: str, price: float, shares: int):
         """Called when a new position is opened — sets the entry price for SL/TP."""
+        print(f"    📌 PriceMonitor: registered {symbol} entry @ ${price:.2f} ({shares}sh)")
         self._states[symbol] = PositionState(symbol=symbol, shares=shares, entry_price=price)
