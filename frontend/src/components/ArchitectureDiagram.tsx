@@ -227,26 +227,26 @@ export default function ArchitectureDiagram() {
               {mongoBox("positions", "open/close position")}
             </div>
           </div>
+
+          {/* PriceMonitor */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+            <div style={boxStyle(INTERNAL)}>
+              <div style={{ fontWeight: 600 }}>PriceMonitor</div>
+              <div style={{ fontSize: 10, color: "#888" }}>self-managed SL/TP</div>
+              <div style={{ fontSize: 9, color: "#666" }}>polls prices → publishes sell to [trade]</div>
+              {internalTag()}
+              {pathTag("src/live/price_monitor.py")}
+              <div style={{ fontSize: 8, color: "#555" }}>live: yfinance (latest prices)</div>
+            </div>
+            <span style={arrow}>→</span>
+            {label("[trade]")}
+            <span style={{ fontSize: 10, color: "#666" }}>same flow as sentiment sells — you control risk, not the broker</span>
+          </div>
         </div>
 
         <div style={{ fontSize: 10, color: "#666", marginTop: 10 }}>
           Trader updates in-memory first, marks order as pending, then waits for <code style={{ color: "#818cf8" }}>[fill]</code> from broker.
           MongoDB is only written after broker confirms. If rejected, in-memory state rolls back.
-        </div>
-
-        {/* PriceMonitor */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
-          <div style={boxStyle(INTERNAL)}>
-            <div style={{ fontWeight: 600 }}>PriceMonitor</div>
-            <div style={{ fontSize: 10, color: "#888" }}>self-managed SL/TP</div>
-            <div style={{ fontSize: 9, color: "#666" }}>polls prices → publishes sell to [trade]</div>
-            {internalTag()}
-            {pathTag("src/live/price_monitor.py")}
-            <div style={{ fontSize: 8, color: "#555" }}>live: yfinance (latest prices)</div>
-          </div>
-          <span style={arrow}>→</span>
-          {label("[trade]")}
-          <span style={{ fontSize: 10, color: "#666" }}>same flow as sentiment sells — you control risk, not the broker</span>
         </div>
 
         {/* Replay mode */}
