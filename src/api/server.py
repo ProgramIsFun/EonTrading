@@ -135,6 +135,27 @@ async def ping_components():
         return {"components": [], "count": 0, "error": str(e)}
 
 
+@app.get("/api/reconcile")
+async def reconcile_positions():
+    """Compare system positions vs broker. Requires BROKER env var."""
+    import os
+    try:
+        from src.common.reconcile import reconcile
+        from src.live.brokers.broker import LogBroker, FutuBroker, IBKRBroker, AlpacaBroker
+        broker_name = os.getenv("BROKER", "log").lower()
+        if broker_name == "futu":
+            broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
+        elif broker_name == "ibkr":
+            broker = IBKRBroker()
+        elif broker_name == "alpaca":
+            broker = AlpacaBroker()
+        else:
+            broker = LogBroker()
+        return await reconcile(broker)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/api/docker/status")
 def docker_status():
     """Get status of all Docker Compose services."""

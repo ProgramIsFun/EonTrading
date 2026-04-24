@@ -105,7 +105,13 @@ async def main_single():
     })
     await ping.start()
 
-    print(f"\n  🟢 All components started. Polling every 120s.\n")
+    print(f"\n  🟢 All components started. Polling every 120s.")
+
+    # Reconcile on startup
+    from src.common.reconcile import reconcile
+    await reconcile(broker, store)
+    print()
+
     await watcher.run()
 
 
