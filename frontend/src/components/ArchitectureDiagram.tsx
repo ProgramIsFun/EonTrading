@@ -33,8 +33,13 @@ const tag = (text: string, bg: string, fg: string) => (
 const processTag = (t?: string) => tag(t || "process", "#818cf822", "#818cf8");
 const internalTag = () => tag("internal", "#22c55e22", "#22c55e");
 const serviceTag = () => tag("service", "#f59e0b22", "#f59e0b");
-const disabledTag = () => tag("not wired", "#55555522", "#555");
 const stateTag = () => tag("state", "#c084fc22", "#c084fc");
+const envReq = (v: string) => (
+  <div style={{ fontSize: 8, fontFamily: "monospace", color: "#ef4444", marginTop: 1 }}>● {v}</div>
+);
+const envOpt = (v: string) => (
+  <div style={{ fontSize: 8, fontFamily: "monospace", color: "#22c55e", marginTop: 1 }}>○ {v}</div>
+);
 const pathTag = (p: string) => (
   <div style={{ fontSize: 9, color: "#555", fontFamily: "monospace", marginTop: 2 }}>{p}</div>
 );
@@ -101,19 +106,21 @@ export default function ArchitectureDiagram() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6 }}>
             {[
-              { name: "NewsAPI", path: "src/data/news/newsapi_source.py" },
-              { name: "Finnhub", path: "src/data/news/finnhub_source.py" },
-              { name: "RSS", path: "src/data/news/rss_source.py" },
-              { name: "Reddit", path: "src/data/news/reddit_source.py" },
+              { name: "NewsAPI", path: "src/data/news/newsapi_source.py", env: "NEWSAPI_KEY" },
+              { name: "Finnhub", path: "src/data/news/finnhub_source.py", env: "FINNHUB_KEY" },
+              { name: "RSS", path: "src/data/news/rss_source.py", env: null },
+              { name: "Reddit", path: "src/data/news/reddit_source.py", env: null },
             ].map((s) => (
               <div key={s.name} style={boxStyle(SOURCE)}>
                 {s.name}
                 {pathTag(s.path)}
+                {s.env ? envOpt(s.env) : <div style={{ fontSize: 8, color: "#555", marginTop: 1 }}>always on</div>}
               </div>
             ))}
             <div style={boxStyle(SOURCE)}>
               Twitter/X
               {pathTag("src/data/news/twitter_source.py")}
+              {envOpt("TWITTER_BEARER_TOKEN")}
             </div>
           </div>
           <span style={arrow}>→</span>
@@ -134,6 +141,8 @@ export default function ArchitectureDiagram() {
               {internalTag()}
               {pathTag("src/live/analyzer_service.py")}
               {pathTag("src/strategies/sentiment.py")}
+              {envOpt("OPENAI_API_KEY")}
+              <div style={{ fontSize: 8, color: "#555" }}>default: keyword (free)</div>
             </div>
             <div style={arrowDown}>↑ reads</div>
             {mongoBox("positions", "get open positions")}
@@ -166,6 +175,11 @@ export default function ArchitectureDiagram() {
             <div style={{ fontSize: 10, color: "#888" }}>Log / Futu / IBKR / Alpaca</div>
             <div style={{ fontSize: 9, color: "#666" }}>each confirms in its own way</div>
             <div style={{ fontSize: 9, color: "#555", marginTop: 2 }}>polling · callback · instant</div>
+            {envOpt("BROKER")}
+            {envOpt("ALPACA_API_KEY")}
+            {envOpt("ALPACA_SECRET_KEY")}
+            {envOpt("FUTU_LIVE / FUTU_REAL")}
+            <div style={{ fontSize: 8, color: "#555" }}>default: LogBroker (dry run)</div>
           </div>
           <span style={arrow}>→</span>
           {label("[fill]")}
@@ -364,6 +378,7 @@ export default function ArchitectureDiagram() {
             <div style={{ fontWeight: 600, marginBottom: 4 }}>🔵 Distributed (separate processes)</div>
             <div style={{ color: "#888" }}>Each component runs independently.</div>
             <div style={{ color: "#888" }}>Uses RedisEventBus (cross-process).</div>
+            {envReq("REDIS_HOST")}
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_watcher</code>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_analyzer</code>
@@ -374,52 +389,26 @@ export default function ArchitectureDiagram() {
         </div>
       </div>
 
-      {/* Requirements — per component */}
+      {/* Env var legend */}
       <div style={{ background: "#1a1a2e", borderRadius: 8, padding: 12, border: "1px solid #333" }}>
-        {sectionTitle("Environment Variables — by Component", "#f59e0b")}
-        <div style={{ fontSize: 9, color: "#666", marginBottom: 10 }}>
-          <span style={{ color: "#ef4444" }}>● required</span>
-          <span style={{ marginLeft: 10, color: "#22c55e" }}>● optional (enables feature)</span>
+        {sectionTitle("Environment Variables", "#f59e0b")}
+        <div style={{ fontSize: 10, color: "#888", marginBottom: 6 }}>
+          Env vars are shown on each component above. All components require MongoDB:
         </div>
-        <table style={{ fontSize: 10, color: "#888", borderCollapse: "collapse", width: "100%" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #333", color: "#ccc" }}>
-              <th style={{ textAlign: "left", padding: "4px 8px" }}>Env var</th>
-              <th style={{ textAlign: "left", padding: "4px 8px" }}>Component</th>
-              <th style={{ textAlign: "center", padding: "4px 8px" }}>Required?</th>
-              <th style={{ textAlign: "left", padding: "4px 8px" }}>Purpose</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              { var: "MONGODB_URI", comp: "All", req: true, desc: "MongoDB Atlas connection" },
-              { var: "MONGODB_USER", comp: "All", req: true, desc: "MongoDB username" },
-              { var: "MONGODB_PASS", comp: "All", req: true, desc: "MongoDB password" },
-              { var: "MONGODB_CLUSTERNAME", comp: "All", req: true, desc: "MongoDB cluster name" },
-              { var: "REDIS_HOST", comp: "All (distributed)", req: true, desc: "Redis host for RedisEventBus" },
-              { var: "NEWSAPI_KEY", comp: "Watcher", req: false, desc: "Enables NewsAPI source" },
-              { var: "FINNHUB_KEY", comp: "Watcher", req: false, desc: "Enables Finnhub source" },
-              { var: "TWITTER_BEARER_TOKEN", comp: "Watcher", req: false, desc: "Enables Twitter/X source" },
-              { var: "OPENAI_API_KEY", comp: "Analyzer", req: false, desc: "LLM analyzer (default: keyword)" },
-              { var: "BROKER", comp: "Executor", req: false, desc: "log (default), futu, ibkr, alpaca" },
-              { var: "ALPACA_API_KEY", comp: "Executor", req: false, desc: "Required if BROKER=alpaca" },
-              { var: "ALPACA_SECRET_KEY", comp: "Executor", req: false, desc: "Required if BROKER=alpaca" },
-              { var: "FUTU_LIVE", comp: "Executor", req: false, desc: "Enable Futu broker" },
-              { var: "FUTU_REAL", comp: "Executor", req: false, desc: "Futu real trading (default: simulate)" },
-            ].map((row) => (
-              <tr key={row.var} style={{ borderBottom: "1px solid #222" }}>
-                <td style={{ padding: "3px 8px", fontFamily: "monospace", color: "#ccc" }}>{row.var}</td>
-                <td style={{ padding: "3px 8px" }}>{row.comp}</td>
-                <td style={{ padding: "3px 8px", textAlign: "center", color: row.req ? "#ef4444" : "#22c55e" }}>
-                  {row.req ? "● required" : "● optional"}
-                </td>
-                <td style={{ padding: "3px 8px" }}>{row.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ fontSize: 9, color: "#555", marginTop: 8 }}>
-          RSS and Reddit sources are always on — no API key needed. LogBroker (dry run) is the default broker.
+        <div style={{ display: "flex", gap: 16, fontSize: 10, flexWrap: "wrap" }}>
+          <div>
+            {envReq("MONGODB_URI")}
+            {envReq("MONGODB_USER")}
+            {envReq("MONGODB_PASS")}
+            {envReq("MONGODB_CLUSTERNAME")}
+          </div>
+          <div style={{ color: "#666", fontSize: 9, alignSelf: "center" }}>
+            <div><span style={{ color: "#ef4444" }}>●</span> = required</div>
+            <div><span style={{ color: "#22c55e" }}>○</span> = optional (enables feature)</div>
+            <div style={{ marginTop: 4 }}>RSS + Reddit are always on, no key needed.</div>
+            <div>Default broker: LogBroker (dry run).</div>
+            <div>Default analyzer: Keyword (free).</div>
+          </div>
         </div>
       </div>
 
