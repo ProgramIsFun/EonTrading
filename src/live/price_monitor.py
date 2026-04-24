@@ -51,9 +51,16 @@ class PriceMonitor:
         if broker:
             broker_positions = await broker.get_positions()
 
+        if not positions and not self._states:
+            return []
+
         ts = as_of or (datetime.utcnow().isoformat() + "Z")
         sold = []
-        for symbol in list(positions.keys()):
+        # Check all symbols that have entry prices registered
+        check_symbols = set(positions.keys()) | set(self._states.keys())
+        for symbol in list(check_symbols):
+            if symbol not in self._states:
+                continue  # no entry price — can't check SL/TP
             price = get_price(symbol, as_of=as_of)
             if price <= 0:
                 continue
@@ -91,8 +98,9 @@ class PriceMonitor:
                 sold.append(symbol)
 
         # Clean up states for positions that no longer exist
+        active = set(positions.keys()) | set(broker_positions.keys())
         for sym in list(self._states.keys()):
-            if sym not in positions:
+            if sym not in active:
                 del self._states[sym]
 
         return sold

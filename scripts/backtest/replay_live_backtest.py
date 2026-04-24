@@ -59,7 +59,7 @@ async def main():
 
     monitor = PriceMonitor(bus, store, logic, interval_sec=0)
 
-    trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor)
+    trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor, position_store=store)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=lambda: trader.holdings)
     executor = TradeExecutor(bus, broker)
 
@@ -77,8 +77,9 @@ async def main():
 
     for doc in SAMPLE_NEWS:
         # Check SL/TP at this timestamp before processing news
-        await monitor.check_once(broker, as_of=doc["date"])
-        await asyncio.sleep(0.1)
+        sold = await monitor.check_once(broker, as_of=doc["date"])
+        if sold:
+            await asyncio.sleep(0.3)  # let SL/TP sells flow through pipeline
 
         print(f"\n  📅 {doc['date']} — {doc['headline'][:70]}")
 
