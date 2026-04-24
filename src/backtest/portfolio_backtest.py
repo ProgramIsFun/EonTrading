@@ -55,13 +55,22 @@ class PortfolioResult:
 
 
 def _fetch_hourly(symbol, start, end):
+    cache_key = f"{symbol}:{start}:{end}"
+    if cache_key in _price_data_cache:
+        return _price_data_cache[cache_key]
     try:
-        df = yf.download(symbol, start=start, end=end, interval="1h", auto_adjust=True, progress=False)
+        df = yf.download(symbol, start=start, end=end, interval="1h", auto_adjust=True, progress=False, timeout=15)
         if not df.empty:
+            _price_data_cache[cache_key] = df
             return df
     except Exception:
         pass
-    return yf.download(symbol, start=start, end=end, interval="1d", auto_adjust=True, progress=False)
+    df = yf.download(symbol, start=start, end=end, interval="1d", auto_adjust=True, progress=False, timeout=15)
+    _price_data_cache[cache_key] = df
+    return df
+
+
+_price_data_cache: dict[str, pd.DataFrame] = {}
 
 
 def run_portfolio_backtest(

@@ -21,6 +21,10 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     profiles: ["single"]
 
   # --- Distributed mode (one container per runner) ---
@@ -29,6 +33,10 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   watcher:
     build: .
@@ -39,6 +47,10 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     profiles: ["distributed"]
 
   analyzer:
@@ -50,6 +62,10 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     profiles: ["distributed"]
 
   trader:
@@ -61,6 +77,10 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     profiles: ["distributed"]
 
   executor:
@@ -73,6 +93,10 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     profiles: ["distributed"]
 
   monitor:
@@ -84,6 +108,10 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     profiles: ["distributed"]
 
   # --- Dashboard (both modes) ---
@@ -94,3 +122,7 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M

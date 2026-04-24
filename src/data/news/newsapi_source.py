@@ -9,14 +9,21 @@ class NewsSource:
     """Base class for news sources."""
     MAX_SEEN = 5000  # cap in-memory dedup set to prevent unbounded growth
 
+    def __init__(self):
+        self._seen: dict[str, int] = {}  # key → insertion order
+        self._seen_counter = 0
+
     def _check_seen(self, key: str) -> bool:
-        if not hasattr(self, "_seen"):
-            self._seen = set()
+        if not key:
+            return False
         if key in self._seen:
             return True
-        if len(self._seen) > self.MAX_SEEN:
-            self._seen.clear()
-        self._seen.add(key)
+        if len(self._seen) >= self.MAX_SEEN:
+            # Evict oldest 20%
+            cutoff = sorted(self._seen.values())[self.MAX_SEEN // 5]
+            self._seen = {k: v for k, v in self._seen.items() if v > cutoff}
+        self._seen_counter += 1
+        self._seen[key] = self._seen_counter
         return False
 
     def fetch_latest(self) -> list[NewsEvent]:
@@ -27,6 +34,7 @@ class NewsAPISource(NewsSource):
     """Fetch headlines from NewsAPI.org."""
 
     def __init__(self, api_key: str = None, categories: list[str] = None):
+        super().__init__()
         self.api_key = api_key or os.getenv("NEWSAPI_KEY")
         self.base_url = "https://newsapi.org/v2"
         self.categories = categories or ["business"]

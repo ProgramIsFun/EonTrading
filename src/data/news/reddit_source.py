@@ -12,6 +12,7 @@ class RedditSource(NewsSource):
     """Fetch posts from finance subreddits. No API key required."""
 
     def __init__(self, subreddits: list[str] = None, limit: int = 20):
+        super().__init__()
         self.subreddits = subreddits or ["wallstreetbets", "stocks", "investing"]
         self.limit = limit
 

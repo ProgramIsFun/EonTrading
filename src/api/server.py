@@ -17,6 +17,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 # --- News collector state ---
 _collector_task = None
 _collector_running = False
+_collector_stop = threading.Event()
 
 
 def _run_collector():
@@ -28,7 +29,6 @@ def _run_collector():
     client = get_mongo_client()
     col = client["EonTradingDB"]["news"]
     col.create_index("url", unique=True, sparse=True)
-    import time
     while _collector_running:
         for ev in poller.poll_once():
             if ev.url and col.find_one({"url": ev.url}):
@@ -38,7 +38,8 @@ def _run_collector():
                 "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
                 "collected_at": datetime.utcnow().isoformat() + "Z",
             })
-        time.sleep(300)
+        if _collector_stop.wait(timeout=300):
+            break
 
 
 @app.get("/api/collector/status")
@@ -52,6 +53,7 @@ def collector_start():
     if _collector_running:
         return {"status": "already running"}
     _collector_running = True
+    _collector_stop.clear()
     _collector_task = threading.Thread(target=_run_collector, daemon=True)
     _collector_task.start()
     return {"status": "started"}
@@ -61,6 +63,7 @@ def collector_start():
 def collector_stop():
     global _collector_running
     _collector_running = False
+    _collector_stop.set()
     return {"status": "stopped"}
 
 # Sample news for demo — replace with DB later
@@ -309,8 +312,8 @@ def news(limit: int = 100):
         col = client["EonTradingDB"]["news"]
         docs = list(col.find({}, {"_id": 0}).sort("collected_at", -1).limit(limit))
         return docs
-    except Exception:
-        return SAMPLE_NEWS
+    except Exception as e:
+        return {"error": f"MongoDB unavailable: {e}", "fallback": True, "articles": SAMPLE_NEWS}
 
 
 @app.get("/api/news/count")

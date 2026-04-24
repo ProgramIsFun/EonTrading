@@ -6,10 +6,13 @@ Sources:
 
 Set via: PRICE_SOURCE=clickhouse or PRICE_SOURCE=yfinance (default)
 """
+import logging
 import os
 from datetime import datetime, timedelta
 
+logger = logging.getLogger(__name__)
 PRICE_SOURCE = os.getenv("PRICE_SOURCE", "yfinance").lower()
+_YFINANCE_TIMEOUT = int(os.getenv("PRICE_TIMEOUT", "15"))
 
 
 _price_cache: dict[str, float] = {}
@@ -93,8 +96,8 @@ def _from_yfinance(symbol: str, as_of: str = None) -> float:
         if t:
             start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
             end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
-            print(f"    💲 Fetching {symbol} price @ {t.strftime('%Y-%m-%d %H:%M')}", end="", flush=True)
-            data = yf.download(symbol, start=start, end=end, interval="1h", progress=False)
+            logger.info("Fetching %s price @ %s", symbol, t.strftime('%Y-%m-%d %H:%M'))
+            data = yf.download(symbol, start=start, end=end, interval="1h", progress=False, timeout=_YFINANCE_TIMEOUT)
             if not data.empty:
                 # Find the closest candle at or before the target time
                 data.index = data.index.tz_localize(None) if data.index.tz is None else data.index.tz_convert(None)
@@ -102,16 +105,16 @@ def _from_yfinance(symbol: str, as_of: str = None) -> float:
                 if mask.any():
                     data = data[mask]
         else:
-            print(f"    💲 Fetching {symbol} latest price", end="", flush=True)
-            data = yf.download(symbol, period="1d", interval="1m", progress=False)
+            logger.info("Fetching %s latest price", symbol)
+            data = yf.download(symbol, period="1d", interval="1m", progress=False, timeout=_YFINANCE_TIMEOUT)
         if not data.empty:
             val = data["Close"].iloc[-1]
             price = float(val.iloc[0]) if hasattr(val, "iloc") else float(val)
-            print(f" → ${price:.2f}")
+            logger.info("%s → $%.2f", symbol, price)
             return price
-        print(f" → no data")
+        logger.warning("%s → no data", symbol)
     except Exception as e:
-        print(f" → error: {e}")
+        logger.error("%s → error: %s", symbol, e)
     return 0.0
 
 
@@ -124,7 +127,7 @@ def _from_clickhouse(symbol: str, as_of: str = None) -> float:
         end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
         # Try hourly first, fall back to daily
         for interval in ["1h", "1d"]:
-            print(f"    💲 [ClickHouse] {symbol} @ {t.strftime('%Y-%m-%d %H:%M')} ({interval})", end="", flush=True)
+            logger.info("[ClickHouse] %s @ %s (%s)", symbol, t.strftime('%Y-%m-%d %H:%M'), interval)
             df = storage.query_ohlcv(symbol, interval, start, end)
             if not df.empty:
                 # For hourly, find closest candle at or before target time
@@ -134,9 +137,9 @@ def _from_clickhouse(symbol: str, as_of: str = None) -> float:
                     if mask.any():
                         df = df[mask]
                 price = float(df["close"].iloc[-1])
-                print(f" → ${price:.2f}")
+                logger.info("%s → $%.2f", symbol, price)
                 return price
-            print(f" → no data")
+            logger.warning("%s (%s) → no data", symbol, interval)
     except Exception as e:
-        print(f" → error: {e}")
+        logger.error("%s → error: %s", symbol, e)
     return 0.0

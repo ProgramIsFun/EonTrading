@@ -17,6 +17,7 @@ class RSSSource(NewsSource):
     """Fetch news from RSS/Atom feeds. No API key required."""
 
     def __init__(self, feeds: list[str] = None):
+        super().__init__()
         self.feeds = feeds or [
             "https://feeds.finance.yahoo.com/rss/2.0/headline?region=US&lang=en-US",
             "https://www.cnbc.com/id/100003114/device/rss/rss.html",
