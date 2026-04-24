@@ -112,6 +112,7 @@ export default function ArchitectureDiagram() {
               {processTag("uvicorn")}
               {pathTag("src/api/server.py")}
               {envReq("REDIS_HOST=localhost")}
+              <div style={{ fontSize: 8, color: "#555" }}>ping/pong + price cache via Redis</div>
             </div>
             <div style={boxStyle(INTERNAL)}>
               <div style={{ fontWeight: 600 }}>Reconciliation</div>
