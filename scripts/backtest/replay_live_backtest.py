@@ -4,6 +4,7 @@ Usage: PYTHONPATH=. python scripts/backtest/replay_live_backtest.py
 """
 import asyncio
 import os
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -74,8 +75,6 @@ async def main():
     print(f"  Analyzer: Keyword | Broker: LogBroker (dry run)")
     print(f"  News events: {len(SAMPLE_NEWS)}")
     print(f"{'═' * 60}\n")
-
-    from datetime import timedelta
 
     # SL/TP check interval between news events (hours)
     # 1 = hourly (matches original backtest, slow), 24 = daily (faster)
