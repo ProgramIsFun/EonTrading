@@ -304,12 +304,34 @@ async def _run_live_backtest(job_id: str, params: dict):
     from src.common.trading_logic import TradingLogic
     from src.live.price_monitor import PriceMonitor
     from src.common.price import get_price
+    from src.common.costs import US_STOCKS, HK_STOCKS, CRYPTO, ZERO
     from datetime import timedelta
     import os
 
     job = _backtest_jobs[job_id]
     try:
         capital = params["capital"]
+        cost_models = {"us_stocks": US_STOCKS, "hk_stocks": HK_STOCKS, "crypto": CRYPTO, "zero": ZERO}
+        costs = cost_models.get(params.get("cost_model", "us_stocks"), US_STOCKS)
+
+        # Load news
+        news_src = params.get("news_source", "sample")
+        if news_src == "mongodb":
+            try:
+                client = get_mongo_client()
+                docs = list(client["EonTradingDB"]["news"].find({}, {"_id": 0}).sort("timestamp", 1).limit(200))
+                news_list = [{"date": d.get("timestamp", ""), "headline": d.get("headline", "")} for d in docs if d.get("headline")]
+                if not news_list:
+                    job["status"] = "error"
+                    job["error"] = "No news found in MongoDB"
+                    return
+            except Exception as e:
+                job["status"] = "error"
+                job["error"] = f"MongoDB error: {e}"
+                return
+        else:
+            news_list = SAMPLE_NEWS
+
         logic = TradingLogic(
             threshold=params["threshold"], min_confidence=0.15,
             max_allocation=params["max_allocation"],
@@ -324,7 +346,7 @@ async def _run_live_backtest(job_id: str, params: dict):
         else:
             anlzr = KeywordSentimentAnalyzer()
 
-        broker = PaperBroker(initial_cash=capital, cost_model=US_STOCKS)
+        broker = PaperBroker(initial_cash=capital, cost_model=costs)
         monitor = PriceMonitor(bus, None, logic, interval_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor)
         analyzer_svc = AnalyzerService(bus, analyzer=anlzr, get_positions=lambda: trader.holdings)
@@ -348,7 +370,9 @@ async def _run_live_backtest(job_id: str, params: dict):
         prev_date = None
         sl_check_hours = params["sl_check_hours"]
 
-        for i, doc in enumerate(SAMPLE_NEWS):
+        job["log"].append(f"📊 {len(news_list)} news events, cost model: {params.get('cost_model', 'us_stocks')}")
+
+        for i, doc in enumerate(news_list):
             curr = datetime.fromisoformat(doc["date"])
 
             if prev_date and monitor._states:
@@ -379,7 +403,7 @@ async def _run_live_backtest(job_id: str, params: dict):
                     port_value += p * qty
             equity.append(round(port_value, 2))
 
-            job["progress"] = round((i + 1) / len(SAMPLE_NEWS) * 100)
+            job["progress"] = round((i + 1) / len(news_list) * 100)
 
         await asyncio.sleep(0.3)
         await bus.stop()
@@ -397,7 +421,7 @@ async def _run_live_backtest(job_id: str, params: dict):
         final_cash = await broker.get_cash()
         final_positions = await broker.get_positions()
         final_value = final_cash
-        last_date = SAMPLE_NEWS[-1]["date"]
+        last_date = news_list[-1]["date"]
         open_positions = []
         for sym, qty in final_positions.items():
             p = get_price(sym, as_of=last_date)
@@ -445,6 +469,8 @@ async def start_live_backtest(
     max_hold_days: int = 30,
     sl_check_hours: int = 24,
     analyzer: str = "keyword",
+    cost_model: str = "us_stocks",
+    news_source: str = "sample",
 ):
     """Start a live pipeline backtest as a background task."""
     import uuid
@@ -452,7 +478,8 @@ async def start_live_backtest(
     _backtest_jobs[job_id] = {"status": "running", "progress": 0, "log": []}
     params = dict(capital=capital, threshold=threshold, max_allocation=max_allocation,
                   stop_loss=stop_loss, take_profit=take_profit, max_hold_days=max_hold_days,
-                  sl_check_hours=sl_check_hours, analyzer=analyzer)
+                  sl_check_hours=sl_check_hours, analyzer=analyzer,
+                  cost_model=cost_model, news_source=news_source)
     asyncio.create_task(_run_live_backtest(job_id, params))
     return {"job_id": job_id, "status": "running"}
 

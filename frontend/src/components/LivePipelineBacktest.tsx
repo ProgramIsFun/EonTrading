@@ -14,6 +14,8 @@ const defaults = {
   max_hold_days: 30,
   sl_check_hours: 24,
   analyzer: "keyword",
+  cost_model: "us_stocks",
+  news_source: "sample",
 };
 
 const sliders = [
@@ -91,6 +93,26 @@ export default function LivePipelineBacktest() {
           >
             <option value="keyword">Keyword Analyzer (free)</option>
             <option value="llm">LLM Analyzer (needs API key)</option>
+          </select>
+
+          <select
+            value={params.cost_model}
+            onChange={(e) => setParams({ ...params, cost_model: e.target.value })}
+            style={{ background: "#2a2a3e", color: "#ccc", border: "1px solid #333", borderRadius: 4, padding: "6px 10px", fontSize: 13 }}
+          >
+            <option value="us_stocks">US Stocks ($0.99 + 0.05% slippage)</option>
+            <option value="hk_stocks">HK Stocks (0.1% stamp duty)</option>
+            <option value="crypto">Crypto (0.1% commission)</option>
+            <option value="zero">Zero costs (testing)</option>
+          </select>
+
+          <select
+            value={params.news_source}
+            onChange={(e) => setParams({ ...params, news_source: e.target.value })}
+            style={{ background: "#2a2a3e", color: "#ccc", border: "1px solid #333", borderRadius: 4, padding: "6px 10px", fontSize: 13 }}
+          >
+            <option value="sample">Sample News (15 events)</option>
+            <option value="mongodb">MongoDB (collected articles)</option>
           </select>
 
           <button onClick={run} disabled={loading} style={{
