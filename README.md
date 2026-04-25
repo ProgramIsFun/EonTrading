@@ -125,7 +125,7 @@ Same pipeline code, but fed with historical news and prices:
 
 ```bash
 # Keyword analyzer, daily SL/TP checks
-PRICE_SOURCE=clickhouse PYTHONPATH=. python3 scripts/backtest/live_pipeline_backtest.py
+PRICE_SOURCE=clickhouse PYTHONPATH=. python3 scripts/backtest/live_pipeline_keyword_backtest.py
 
 # Pre-scored LLM sentiment, hourly SL/TP checks
 PRICE_SOURCE=clickhouse SL_CHECK_HOURS=1 PYTHONPATH=. python3 scripts/backtest/live_pipeline_llm_backtest.py
