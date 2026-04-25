@@ -217,6 +217,8 @@ OPENAI_API_KEY=ollama
 | `GET /api/news/count` | Total articles in DB |
 | `GET /api/backtest` | Run sentiment backtest (legacy) |
 | `GET /api/price-backtest` | Run price-based backtest (SMA/RSI) |
+| `POST /api/live-backtest` | Start live pipeline backtest (background job) |
+| `GET /api/live-backtest/{id}` | Poll backtest progress/result |
 | `POST /api/collector/start` | Start news collector |
 | `POST /api/collector/stop` | Stop news collector |
 | `GET /api/docker/status` | Docker container states |
@@ -228,8 +230,8 @@ OPENAI_API_KEY=ollama
 ## Testing
 
 ```bash
-PYTHONPATH=. python -m pytest tests/ -v          # 96 tests (needs Redis for 5)
-PYTHONPATH=. python -m pytest tests/ -m "not redis"  # 91 tests, no Redis needed
+PYTHONPATH=. python -m pytest tests/ -v          # 101 tests (needs Redis for 5)
+PYTHONPATH=. python -m pytest tests/ -m "not redis"  # 96 tests, no Redis needed
 ```
 
 | Test file | Tests | Covers |
@@ -239,6 +241,7 @@ PYTHONPATH=. python -m pytest tests/ -m "not redis"  # 91 tests, no Redis needed
 | `test_redis_event_bus.py` | 12 | RedisStreamBus routing, serialization, consumer groups (mocked) |
 | `test_redis_live.py` | 5 | Real Redis Streams: persistence, ack, consumer groups |
 | `test_backtest.py` | 12 | Engine: PnL, drawdown, SL/TP, shorting |
+| `test_api.py` | 5 | API endpoints: health, live backtest job lifecycle, progress |
 | `test_position_aware_analyzer.py` | 5 | LLM prompt selection with/without holdings |
 | `test_position_store.py` | 6 | MongoDB position store (mocked) |
 | `test_twitter_source.py` | 9 | Twitter source (mocked API) |
@@ -284,7 +287,7 @@ src/
 └── strategies/                      # SMA, RSI, sentiment analyzers
 frontend/                            # React + Vite dashboard
 scripts/                             # Data collection, backfill, backtest scripts
-tests/                               # 96 tests (unit + integration + Redis)
+tests/                               # 101 tests (unit + integration + Redis)
 env.sh                               # Environment profile switcher
 ```
 
@@ -325,7 +328,7 @@ env.sh                               # Environment profile switcher
 - [x] Graceful shutdown (SIGINT/SIGTERM) in all runners
 - [x] Structured logging across all pipeline components
 - [x] Environment profiles (./env.sh dev/llm/live)
-- [x] 96 tests passing (unit + integration + Redis)
+- [x] 101 tests passing (unit + integration + Redis)
 
 ### To Do
 - [ ] LLM analyzer improvements (context-aware, inverse ETFs)
