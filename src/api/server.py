@@ -331,7 +331,6 @@ async def _run_live_backtest(job_id: str, params: dict):
         executor = TradeExecutor(bus, broker)
 
         fills = []
-        await bus.subscribe(CHANNEL_FILL, lambda msg: fills.append(msg) or asyncio.sleep(0))
 
         async def on_fill(msg):
             fills.append(msg)
@@ -425,7 +424,7 @@ async def _run_live_backtest(job_id: str, params: dict):
         }
     except Exception as e:
         job["status"] = "error"
-        job["error"] = str(e)
+        job["error"] = f"{type(e).__name__}: {e}"
 
 
 @app.post("/api/live-backtest")

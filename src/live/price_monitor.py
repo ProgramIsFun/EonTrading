@@ -79,9 +79,11 @@ class PriceMonitor:
         # Use _states directly if available (avoids MongoDB call in replay)
         if self._states:
             check_symbols = set(self._states.keys())
-        else:
+        elif self.store:
             positions = self.store.get_positions()
             check_symbols = set(positions.keys())
+        else:
+            check_symbols = set()
 
         broker_positions = {}
         if broker:
