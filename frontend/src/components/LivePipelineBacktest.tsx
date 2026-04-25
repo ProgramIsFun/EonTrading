@@ -67,6 +67,9 @@ export default function LivePipelineBacktest() {
           <span style={{ fontSize: 9, background: "#22c55e22", color: "#22c55e", padding: "2px 6px", borderRadius: 3 }}>
             same code as production
           </span>
+          <span style={{ fontSize: 9, background: "#818cf822", color: "#818cf8", padding: "2px 6px", borderRadius: 3 }}>
+            single-process only — backtesting needs controlled clock &amp; sequential execution
+          </span>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
