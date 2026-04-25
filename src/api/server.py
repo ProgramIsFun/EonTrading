@@ -289,20 +289,14 @@ def backtest(
     }
 
 
-@app.get("/api/live-backtest")
-async def live_backtest(
-    capital: float = 70000,
-    threshold: float = 0.4,
-    max_allocation: float = 0.2,
-    stop_loss: float = 0.05,
-    take_profit: float = 0.10,
-    max_hold_days: int = 30,
-    sl_check_hours: int = 24,
-    analyzer: str = "keyword",
-):
-    """Run backtest through the actual live pipeline (event bus, trader, executor)."""
+# --- Live pipeline backtest (background task) ---
+_backtest_jobs: dict[str, dict] = {}
+
+
+async def _run_live_backtest(job_id: str, params: dict):
+    """Background task: runs the live pipeline backtest."""
     from src.common.event_bus import LocalEventBus
-    from src.common.events import CHANNEL_NEWS, CHANNEL_FILL, NewsEvent, FillEvent
+    from src.common.events import CHANNEL_NEWS, CHANNEL_FILL, NewsEvent
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
     from src.live.analyzer_service import AnalyzerService
     from src.live.sentiment_trader import SentimentTrader
@@ -313,122 +307,160 @@ async def live_backtest(
     from datetime import timedelta
     import os
 
-    logic = TradingLogic(
-        threshold=threshold, min_confidence=0.15, max_allocation=max_allocation,
-        stop_loss_pct=stop_loss, take_profit_pct=take_profit,
-    )
+    job = _backtest_jobs[job_id]
+    try:
+        capital = params["capital"]
+        logic = TradingLogic(
+            threshold=params["threshold"], min_confidence=0.15,
+            max_allocation=params["max_allocation"],
+            stop_loss_pct=params["stop_loss"], take_profit_pct=params["take_profit"],
+        )
 
-    bus = LocalEventBus()
-    await bus.start()
+        bus = LocalEventBus()
+        await bus.start()
 
-    if analyzer == "llm" and os.getenv("OPENAI_API_KEY"):
-        anlzr = LLMSentimentAnalyzer()
-    else:
-        anlzr = KeywordSentimentAnalyzer()
+        if params["analyzer"] == "llm" and os.getenv("OPENAI_API_KEY"):
+            anlzr = LLMSentimentAnalyzer()
+        else:
+            anlzr = KeywordSentimentAnalyzer()
 
-    broker = PaperBroker(initial_cash=capital, cost_model=US_STOCKS)
-    monitor = PriceMonitor(bus, None, logic, interval_sec=0)
-    trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor)
-    analyzer_svc = AnalyzerService(bus, analyzer=anlzr, get_positions=lambda: trader.holdings)
-    executor = TradeExecutor(bus, broker)
+        broker = PaperBroker(initial_cash=capital, cost_model=US_STOCKS)
+        monitor = PriceMonitor(bus, None, logic, interval_sec=0)
+        trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor)
+        analyzer_svc = AnalyzerService(bus, analyzer=anlzr, get_positions=lambda: trader.holdings)
+        executor = TradeExecutor(bus, broker)
 
-    # Collect fills for trade log
-    fills = []
+        fills = []
+        await bus.subscribe(CHANNEL_FILL, lambda msg: fills.append(msg) or asyncio.sleep(0))
 
-    async def on_fill(msg):
-        fills.append(msg)
+        async def on_fill(msg):
+            fills.append(msg)
 
-    await bus.subscribe(CHANNEL_FILL, on_fill)
-    await analyzer_svc.start()
-    await trader.start()
-    await executor.start()
+        await bus.subscribe(CHANNEL_FILL, on_fill)
+        await analyzer_svc.start()
+        await trader.start()
+        await executor.start()
 
-    # Run news through pipeline with SL/TP checks between events
-    equity = []
-    trades = []
-    prev_date = None
+        equity = []
+        prev_date = None
+        sl_check_hours = params["sl_check_hours"]
 
-    for doc in SAMPLE_NEWS:
-        curr = datetime.fromisoformat(doc["date"])
+        for i, doc in enumerate(SAMPLE_NEWS):
+            curr = datetime.fromisoformat(doc["date"])
 
-        if prev_date and monitor._states:
-            check_time = prev_date + timedelta(hours=sl_check_hours)
-            while check_time < curr:
-                await monitor.check_once(broker, as_of=check_time.isoformat())
-                await asyncio.sleep(0.05)
-                check_time += timedelta(hours=sl_check_hours)
+            if prev_date and monitor._states:
+                check_time = prev_date + timedelta(hours=sl_check_hours)
+                while check_time < curr:
+                    await monitor.check_once(broker, as_of=check_time.isoformat())
+                    await asyncio.sleep(0.05)
+                    check_time += timedelta(hours=sl_check_hours)
 
-        prev_date = curr
-        await monitor.check_once(broker, as_of=doc["date"])
-        await asyncio.sleep(0.05)
+            prev_date = curr
+            await monitor.check_once(broker, as_of=doc["date"])
+            await asyncio.sleep(0.05)
 
-        event = NewsEvent(source="replay", headline=doc["headline"], timestamp=doc["date"], url="", body=doc["headline"])
-        await bus.publish(CHANNEL_NEWS, event.to_dict())
-        await asyncio.sleep(0.15)
+            event = NewsEvent(source="replay", headline=doc["headline"], timestamp=doc["date"], url="", body=doc["headline"])
+            await bus.publish(CHANNEL_NEWS, event.to_dict())
+            await asyncio.sleep(0.15)
 
-        # Record equity after each event
-        cash = await broker.get_cash()
-        positions = await broker.get_positions()
-        port_value = cash
-        for sym, qty in positions.items():
-            p = get_price(sym, as_of=doc["date"])
-            if p > 0:
-                port_value += p * qty
-        equity.append(round(port_value, 2))
+            cash = await broker.get_cash()
+            positions = await broker.get_positions()
+            port_value = cash
+            for sym, qty in positions.items():
+                p = get_price(sym, as_of=doc["date"])
+                if p > 0:
+                    port_value += p * qty
+            equity.append(round(port_value, 2))
 
-    await asyncio.sleep(0.3)
-    await bus.stop()
+            job["progress"] = round((i + 1) / len(SAMPLE_NEWS) * 100)
 
-    # Build trade log from fills
-    for f in fills:
-        trades.append({
-            "symbol": f.get("symbol", ""),
-            "action": f.get("action", ""),
-            "date": f.get("timestamp", ""),
-            "price": 0,
-            "shares": 0,
-            "sentiment": 0,
-            "pnl": 0,
-            "headline": f.get("reason", ""),
-        })
+        await asyncio.sleep(0.3)
+        await bus.stop()
 
-    final_cash = await broker.get_cash()
-    final_positions = await broker.get_positions()
-    final_value = final_cash
-    last_date = SAMPLE_NEWS[-1]["date"]
-    open_positions = []
-    for sym, qty in final_positions.items():
-        p = get_price(sym, as_of=last_date)
-        val = p * qty
-        final_value += val
-        open_positions.append({"symbol": sym, "qty": qty, "price": round(p, 2), "value": round(val, 2)})
+        trades = []
+        for f in fills:
+            trades.append({
+                "symbol": f.get("symbol", ""),
+                "action": f.get("action", ""),
+                "date": f.get("timestamp", ""),
+                "price": 0, "shares": 0, "sentiment": 0, "pnl": 0,
+                "headline": f.get("reason", ""),
+            })
 
-    total_return = (final_value - capital) / capital * 100
-    peak = capital
-    max_dd = 0
-    for v in equity:
-        if v > peak:
-            peak = v
-        dd = (peak - v) / peak * 100
-        if dd > max_dd:
-            max_dd = dd
+        final_cash = await broker.get_cash()
+        final_positions = await broker.get_positions()
+        final_value = final_cash
+        last_date = SAMPLE_NEWS[-1]["date"]
+        open_positions = []
+        for sym, qty in final_positions.items():
+            p = get_price(sym, as_of=last_date)
+            val = p * qty
+            final_value += val
+            open_positions.append({"symbol": sym, "qty": qty, "price": round(p, 2), "value": round(val, 2)})
 
-    sell_fills = [f for f in fills if f.get("action") == "sell" and f.get("success")]
+        total_return = (final_value - capital) / capital * 100
+        peak = capital
+        max_dd = 0
+        for v in equity:
+            if v > peak:
+                peak = v
+            dd = (peak - v) / peak * 100
+            if dd > max_dd:
+                max_dd = dd
 
-    return {
-        "mode": "live_pipeline",
-        "analyzer": "llm" if isinstance(anlzr, LLMSentimentAnalyzer) else "keyword",
-        "initial_capital": capital,
-        "final_value": round(final_value, 2),
-        "total_return_pct": round(total_return, 2),
-        "max_drawdown_pct": round(max_dd, 2),
-        "total_trades": len(fills),
-        "win_rate": 0,
-        "equity_curve": equity,
-        "trades": trades,
-        "open_positions": open_positions,
-        "cash": round(final_cash, 2),
-    }
+        job["status"] = "done"
+        job["result"] = {
+            "mode": "live_pipeline",
+            "analyzer": "llm" if isinstance(anlzr, LLMSentimentAnalyzer) else "keyword",
+            "initial_capital": capital,
+            "final_value": round(final_value, 2),
+            "total_return_pct": round(total_return, 2),
+            "max_drawdown_pct": round(max_dd, 2),
+            "total_trades": len(fills),
+            "win_rate": 0,
+            "equity_curve": equity,
+            "trades": trades,
+            "open_positions": open_positions,
+            "cash": round(final_cash, 2),
+        }
+    except Exception as e:
+        job["status"] = "error"
+        job["error"] = str(e)
+
+
+@app.post("/api/live-backtest")
+async def start_live_backtest(
+    capital: float = 70000,
+    threshold: float = 0.4,
+    max_allocation: float = 0.2,
+    stop_loss: float = 0.05,
+    take_profit: float = 0.10,
+    max_hold_days: int = 30,
+    sl_check_hours: int = 24,
+    analyzer: str = "keyword",
+):
+    """Start a live pipeline backtest as a background task."""
+    import uuid
+    job_id = str(uuid.uuid4())[:8]
+    _backtest_jobs[job_id] = {"status": "running", "progress": 0}
+    params = dict(capital=capital, threshold=threshold, max_allocation=max_allocation,
+                  stop_loss=stop_loss, take_profit=take_profit, max_hold_days=max_hold_days,
+                  sl_check_hours=sl_check_hours, analyzer=analyzer)
+    asyncio.create_task(_run_live_backtest(job_id, params))
+    return {"job_id": job_id, "status": "running"}
+
+
+@app.get("/api/live-backtest/{job_id}")
+def get_live_backtest(job_id: str):
+    """Poll backtest status/result."""
+    job = _backtest_jobs.get(job_id)
+    if not job:
+        return {"status": "not_found"}
+    if job["status"] == "done":
+        result = job["result"]
+        del _backtest_jobs[job_id]  # cleanup
+        return {"status": "done", **result}
+    return {"status": job["status"], "progress": job.get("progress", 0)}
 
 
 @app.get("/api/news")

@@ -30,18 +30,21 @@ export default function LivePipelineBacktest() {
   const [params, setParams] = useState(defaults);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
 
   const run = async () => {
     setLoading(true);
+    setProgress(0);
     setError("");
     try {
-      const data = await fetchLiveBacktest(params);
+      const data = await fetchLiveBacktest(params, setProgress);
       setResult(data);
     } catch (e: any) {
       setError(e.message || "Failed");
     } finally {
       setLoading(false);
+      setProgress(0);
     }
   };
 
@@ -91,7 +94,7 @@ export default function LivePipelineBacktest() {
             color: "#fff", border: "none", borderRadius: 6,
             cursor: loading ? "wait" : "pointer", fontSize: 14, fontWeight: 600,
           }}>
-            {loading ? "Running pipeline..." : "Run Live Backtest"}
+            {loading ? `Running pipeline... ${progress}%` : "Run Live Backtest"}
           </button>
         </div>
       </div>
