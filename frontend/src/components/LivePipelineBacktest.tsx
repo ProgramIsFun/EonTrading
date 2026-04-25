@@ -68,9 +68,21 @@ export default function LivePipelineBacktest() {
             same code as production
           </span>
           <span style={{ fontSize: 9, background: "#818cf822", color: "#818cf8", padding: "2px 6px", borderRadius: 3 }}>
-            single-process only — backtesting needs controlled clock &amp; sequential execution
+            single-process only
           </span>
         </div>
+        <details style={{ fontSize: 11, color: "#666", marginBottom: 12 }}>
+          <summary style={{ cursor: "pointer", color: "#888" }}>Why single-process only?</summary>
+          <div style={{ marginTop: 6, lineHeight: 1.6, color: "#777" }}>
+            <p style={{ margin: "4px 0" }}>The live pipeline backtest uses the same components as production but runs in single-process mode (LocalEventBus) because backtesting is inherently a simulation — it needs a controlled clock and sequential execution.</p>
+            <ol style={{ margin: "6px 0", paddingLeft: 20 }}>
+              <li><strong style={{ color: "#ccc" }}>Historical timestamps</strong> — PriceMonitor needs to step through past timestamps. In distributed mode it polls live prices on a 60s timer.</li>
+              <li><strong style={{ color: "#ccc" }}>Sequential execution</strong> — The backtest must process events in order: publish news → wait for fill → check SL/TP → next news. Distributed components run independently with no synchronization.</li>
+              <li><strong style={{ color: "#ccc" }}>Price lookups</strong> — Each SL/TP check calls yfinance. Hourly checks across months = thousands of API calls. Single-process can use ClickHouse cache; distributed containers would each hit yfinance independently.</li>
+            </ol>
+            <p style={{ margin: "4px 0" }}>Distributed mode is for live trading where events arrive naturally. Backtesting = single process, live trading = distributed. Same component code, different wiring.</p>
+          </div>
+        </details>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
           {sliders.map((f) => (
