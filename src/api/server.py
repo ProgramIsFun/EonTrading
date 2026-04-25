@@ -289,6 +289,148 @@ def backtest(
     }
 
 
+@app.get("/api/live-backtest")
+async def live_backtest(
+    capital: float = 70000,
+    threshold: float = 0.4,
+    max_allocation: float = 0.2,
+    stop_loss: float = 0.05,
+    take_profit: float = 0.10,
+    max_hold_days: int = 30,
+    sl_check_hours: int = 24,
+    analyzer: str = "keyword",
+):
+    """Run backtest through the actual live pipeline (event bus, trader, executor)."""
+    from src.common.event_bus import LocalEventBus
+    from src.common.events import CHANNEL_NEWS, CHANNEL_FILL, NewsEvent, FillEvent
+    from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
+    from src.live.analyzer_service import AnalyzerService
+    from src.live.sentiment_trader import SentimentTrader
+    from src.live.brokers.broker import TradeExecutor, PaperBroker
+    from src.common.trading_logic import TradingLogic
+    from src.live.price_monitor import PriceMonitor
+    from src.common.price import get_price
+    from datetime import timedelta
+    import os
+
+    logic = TradingLogic(
+        threshold=threshold, min_confidence=0.15, max_allocation=max_allocation,
+        stop_loss_pct=stop_loss, take_profit_pct=take_profit,
+    )
+
+    bus = LocalEventBus()
+    await bus.start()
+
+    if analyzer == "llm" and os.getenv("OPENAI_API_KEY"):
+        anlzr = LLMSentimentAnalyzer()
+    else:
+        anlzr = KeywordSentimentAnalyzer()
+
+    broker = PaperBroker(initial_cash=capital, cost_model=US_STOCKS)
+    monitor = PriceMonitor(bus, None, logic, interval_sec=0)
+    trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor)
+    analyzer_svc = AnalyzerService(bus, analyzer=anlzr, get_positions=lambda: trader.holdings)
+    executor = TradeExecutor(bus, broker)
+
+    # Collect fills for trade log
+    fills = []
+
+    async def on_fill(msg):
+        fills.append(msg)
+
+    await bus.subscribe(CHANNEL_FILL, on_fill)
+    await analyzer_svc.start()
+    await trader.start()
+    await executor.start()
+
+    # Run news through pipeline with SL/TP checks between events
+    equity = []
+    trades = []
+    prev_date = None
+
+    for doc in SAMPLE_NEWS:
+        curr = datetime.fromisoformat(doc["date"])
+
+        if prev_date and monitor._states:
+            check_time = prev_date + timedelta(hours=sl_check_hours)
+            while check_time < curr:
+                await monitor.check_once(broker, as_of=check_time.isoformat())
+                await asyncio.sleep(0.05)
+                check_time += timedelta(hours=sl_check_hours)
+
+        prev_date = curr
+        await monitor.check_once(broker, as_of=doc["date"])
+        await asyncio.sleep(0.05)
+
+        event = NewsEvent(source="replay", headline=doc["headline"], timestamp=doc["date"], url="", body=doc["headline"])
+        await bus.publish(CHANNEL_NEWS, event.to_dict())
+        await asyncio.sleep(0.15)
+
+        # Record equity after each event
+        cash = await broker.get_cash()
+        positions = await broker.get_positions()
+        port_value = cash
+        for sym, qty in positions.items():
+            p = get_price(sym, as_of=doc["date"])
+            if p > 0:
+                port_value += p * qty
+        equity.append(round(port_value, 2))
+
+    await asyncio.sleep(0.3)
+    await bus.stop()
+
+    # Build trade log from fills
+    for f in fills:
+        trades.append({
+            "symbol": f.get("symbol", ""),
+            "action": f.get("action", ""),
+            "date": f.get("timestamp", ""),
+            "price": 0,
+            "shares": 0,
+            "sentiment": 0,
+            "pnl": 0,
+            "headline": f.get("reason", ""),
+        })
+
+    final_cash = await broker.get_cash()
+    final_positions = await broker.get_positions()
+    final_value = final_cash
+    last_date = SAMPLE_NEWS[-1]["date"]
+    open_positions = []
+    for sym, qty in final_positions.items():
+        p = get_price(sym, as_of=last_date)
+        val = p * qty
+        final_value += val
+        open_positions.append({"symbol": sym, "qty": qty, "price": round(p, 2), "value": round(val, 2)})
+
+    total_return = (final_value - capital) / capital * 100
+    peak = capital
+    max_dd = 0
+    for v in equity:
+        if v > peak:
+            peak = v
+        dd = (peak - v) / peak * 100
+        if dd > max_dd:
+            max_dd = dd
+
+    sell_fills = [f for f in fills if f.get("action") == "sell" and f.get("success")]
+
+    return {
+        "mode": "live_pipeline",
+        "analyzer": "llm" if isinstance(anlzr, LLMSentimentAnalyzer) else "keyword",
+        "initial_capital": capital,
+        "final_value": round(final_value, 2),
+        "total_return_pct": round(total_return, 2),
+        "max_drawdown_pct": round(max_dd, 2),
+        "total_trades": len(fills),
+        "win_rate": 0,
+        "equity_curve": equity,
+        "trades": trades,
+        "open_positions": open_positions,
+        "cash": round(final_cash, 2),
+    }
+
+
 @app.get("/api/news")
 def news(limit: int = 100):
     try:

@@ -9,6 +9,7 @@ import PnlBySymbol from "./components/PnlBySymbol";
 import ArchitectureDiagram from "./components/ArchitectureDiagram";
 import SystemStatus from "./components/SystemStatus";
 import NewsFeed from "./components/NewsFeed";
+import LivePipelineBacktest from "./components/LivePipelineBacktest";
 import PriceBacktest from "./components/PriceBacktest";
 
 const DEFAULT_PARAMS: BacktestParams = {
@@ -21,7 +22,7 @@ const DEFAULT_PARAMS: BacktestParams = {
   trailing_sl: false,
 };
 
-type Tab = "backtest" | "price" | "news" | "about";
+type Tab = "backtest" | "live" | "price" | "news" | "about";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("backtest");
@@ -78,6 +79,7 @@ export default function App() {
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>EonTrading</h1>
         <div style={{ display: "flex", gap: 4, background: "#1e1e2e", borderRadius: 8, padding: 4 }}>
           <button style={tabStyle("backtest")} onClick={() => setTab("backtest")}>Sentiment</button>
+          <button style={tabStyle("live")} onClick={() => setTab("live")}>Live Pipeline</button>
           <button style={tabStyle("price")} onClick={() => setTab("price")}>Price</button>
           <button style={tabStyle("news")} onClick={() => { setTab("news"); setNewsBadge(0); }}>
             News
@@ -93,6 +95,8 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 1100 }}>
+        {tab === "live" && <LivePipelineBacktest />}
+
         {tab === "price" && <PriceBacktest />}
 
         {tab === "news" && <NewsFeed />}
