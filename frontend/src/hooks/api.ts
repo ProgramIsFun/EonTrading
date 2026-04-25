@@ -11,7 +11,7 @@ export async function fetchBacktest(params: Record<string, number>): Promise<any
 
 export async function fetchLiveBacktest(
   params: Record<string, number | string>,
-  onProgress?: (pct: number) => void,
+  onProgress?: (pct: number, log: string[]) => void,
 ): Promise<any> {
   const query = new URLSearchParams(
     Object.entries(params).map(([k, v]) => [k, String(v)])
@@ -29,7 +29,7 @@ export async function fetchLiveBacktest(
     if (data.status === "done") return data;
     if (data.status === "error") throw new Error(data.error || "Backtest failed");
     if (data.status === "not_found") throw new Error("Job not found");
-    if (onProgress) onProgress(data.progress || 0);
+    if (onProgress) onProgress(data.progress || 0, data.log || []);
   }
 }
 

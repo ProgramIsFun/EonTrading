@@ -31,20 +31,24 @@ export default function LivePipelineBacktest() {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState("");
 
   const run = async () => {
     setLoading(true);
     setProgress(0);
+    setLog([]);
     setError("");
     try {
-      const data = await fetchLiveBacktest(params, setProgress);
+      const data = await fetchLiveBacktest(params, (pct, lines) => {
+        setProgress(pct);
+        setLog(lines);
+      });
       setResult(data);
     } catch (e: any) {
       setError(e.message || "Failed");
     } finally {
       setLoading(false);
-      setProgress(0);
     }
   };
 
@@ -100,6 +104,17 @@ export default function LivePipelineBacktest() {
       </div>
 
       {error && <div style={{ color: "#ef4444", background: "#2a1515", padding: 12, borderRadius: 8 }}>{error}</div>}
+
+      {loading && log.length > 0 && (
+        <div style={{ background: "#1e1e2e", borderRadius: 8, padding: 16, fontFamily: "monospace", fontSize: 12, maxHeight: 300, overflowY: "auto" }}>
+          <div style={{ fontSize: 13, color: "#888", marginBottom: 8 }}>Pipeline Output ({progress}%)</div>
+          {log.map((line, i) => (
+            <div key={i} style={{ color: line.startsWith("✅") ? "#22c55e" : line.startsWith("❌") ? "#ef4444" : line.startsWith("⏰") ? "#f59e0b" : "#ccc", padding: "1px 0" }}>
+              {line}
+            </div>
+          ))}
+        </div>
+      )}
 
       {result && (
         <>

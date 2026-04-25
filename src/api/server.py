@@ -334,6 +334,10 @@ async def _run_live_backtest(job_id: str, params: dict):
 
         async def on_fill(msg):
             fills.append(msg)
+            action = msg.get("action", "")
+            symbol = msg.get("symbol", "")
+            status = "✅" if msg.get("success") else "❌"
+            job["log"].append(f"{status} {action.upper()} {symbol} — {msg.get('reason', '')}")
 
         await bus.subscribe(CHANNEL_FILL, on_fill)
         await analyzer_svc.start()
@@ -350,13 +354,17 @@ async def _run_live_backtest(job_id: str, params: dict):
             if prev_date and monitor._states:
                 check_time = prev_date + timedelta(hours=sl_check_hours)
                 while check_time < curr:
-                    await monitor.check_once(broker, as_of=check_time.isoformat())
+                    sold = await monitor.check_once(broker, as_of=check_time.isoformat())
                     await asyncio.sleep(0.05)
+                    if sold:
+                        job["log"].append(f"⏰ SL/TP check @ {check_time.strftime('%Y-%m-%d %H:%M')} — sold {', '.join(sold)}")
                     check_time += timedelta(hours=sl_check_hours)
 
             prev_date = curr
             await monitor.check_once(broker, as_of=doc["date"])
             await asyncio.sleep(0.05)
+
+            job["log"].append(f"📅 {doc['date'][:16]} — {doc['headline'][:70]}")
 
             event = NewsEvent(source="replay", headline=doc["headline"], timestamp=doc["date"], url="", body=doc["headline"])
             await bus.publish(CHANNEL_NEWS, event.to_dict())
@@ -441,7 +449,7 @@ async def start_live_backtest(
     """Start a live pipeline backtest as a background task."""
     import uuid
     job_id = str(uuid.uuid4())[:8]
-    _backtest_jobs[job_id] = {"status": "running", "progress": 0}
+    _backtest_jobs[job_id] = {"status": "running", "progress": 0, "log": []}
     params = dict(capital=capital, threshold=threshold, max_allocation=max_allocation,
                   stop_loss=stop_loss, take_profit=take_profit, max_hold_days=max_hold_days,
                   sl_check_hours=sl_check_hours, analyzer=analyzer)
@@ -459,7 +467,7 @@ def get_live_backtest(job_id: str):
         result = job["result"]
         del _backtest_jobs[job_id]  # cleanup
         return {"status": "done", **result}
-    return {"status": job["status"], "progress": job.get("progress", 0)}
+    return {"status": job["status"], "progress": job.get("progress", 0), "log": job.get("log", [])}
 
 
 @app.get("/api/news")
