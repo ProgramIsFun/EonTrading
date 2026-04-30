@@ -81,6 +81,11 @@ class RedisStreamBus(EventBus):
         import redis.asyncio as aioredis
         self._redis = aioredis.Redis(host=self._host, port=self._port, decode_responses=True)
 
+        try:
+            await self._redis.ping()
+        except Exception as e:
+            raise ConnectionError(f"Redis not reachable at {self._host}:{self._port} — {e}") from e
+
         # Create consumer groups for any pre-registered stream channels
         for channel in self._subscribers:
             if channel not in _PUBSUB_CHANNELS:
