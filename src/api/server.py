@@ -48,26 +48,10 @@ def health():
         client = get_mongo_client()
         db = client["EonTradingDB"]
         positions = list(db["positions"].find({}, {"_id": 0}))
-        heartbeats = list(db["heartbeats"].find({}, {"_id": 0}))
-        now = utcnow()
-        components = []
-        for hb in heartbeats:
-            last = hb.get("lastBeat")
-            age = (now - last).total_seconds() if last else 999
-            components.append({
-                "component": hb.get("component"),
-                "status": "🟢 running" if age < 60 else "🔴 stale" if age < 300 else "⚫ dead",
-                "lastBeat": last.isoformat() + "Z" if last else None,
-                "ageSec": round(age),
-                "host": hb.get("host"),
-                "pid": hb.get("pid"),
-                **{k: v for k, v in hb.items() if k not in ("component", "lastBeat", "host", "pid")},
-            })
         return {
             "status": "ok",
             "open_positions": len(positions),
             "positions": [{"symbol": p.get("symbol"), "entryTime": p.get("entryTime")} for p in positions],
-            "components": components,
         }
     except Exception as e:
         logger.warning("Health check DB error: %s", e)

@@ -8,7 +8,6 @@ interface Component {
 }
 
 interface HealthData {
-  components: { component: string; status: string; ageSec: number; host?: string; pid?: number; mode?: string; [key: string]: unknown }[];
   open_positions: number;
 }
 
@@ -91,13 +90,19 @@ export default function SystemStatus() {
   const getStatus = (name: string) => {
     const dc = getDocker(name);
     if (dc && dc.state === "exited") return "⚫ stopped";
+    if (dc && dc.state === "running") {
+      if (ping) {
+        const found = ping.components.find((c) => c.component === name);
+        return found ? "🟢 alive" : "🟡 running (no ping response)";
+      }
+      return "🟢 running";
+    }
+    if (dc && dc.state === "restarting") return "🔄 restarting";
     if (ping) {
       const found = ping.components.find((c) => c.component === name);
       return found ? "🟢 alive" : "⚫ no response";
     }
-    const hb = health?.components.find((c) => c.component === name);
-    if (!hb) return "⚫ not started";
-    return hb.status;
+    return "⚫ not started";
   };
 
   const getMode = (name: string): string | null => {
@@ -105,8 +110,7 @@ export default function SystemStatus() {
       const found = ping.components.find((c) => c.component === name);
       return found?.mode as string || null;
     }
-    const hb = health?.components.find((c) => c.component === name);
-    return hb?.mode as string || null;
+    return null;
   };
 
   const getMeta = (name: string) => {
@@ -114,8 +118,6 @@ export default function SystemStatus() {
       const found = ping.components.find((c) => c.component === name);
       if (found) return Object.entries(found).filter(([k]) => !["component", "timestamp", "mode"].includes(k));
     }
-    const hb = health?.components.find((c) => c.component === name);
-    if (hb) return Object.entries(hb).filter(([k]) => !["component", "status", "lastBeat", "ageSec", "host", "pid", "mode"].includes(k));
     return [];
   };
 
