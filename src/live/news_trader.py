@@ -99,8 +99,8 @@ async def main_single():
                              broker=broker, price_monitor=monitor)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
-                          persist_news=bool(os.getenv("PERSIST_NEWS")),
-                          publish=bool(os.getenv("PUBLISH_PIPELINE", "1")))
+                          persist_news=os.getenv("PERSIST_NEWS") == "1",
+                          publish=os.getenv("PUBLISH_PIPELINE", "1") == "1")
     executor = TradeExecutor(bus, broker)
 
     await analyzer_svc.start()

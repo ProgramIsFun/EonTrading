@@ -40,8 +40,8 @@ async def main():
     await bus.start()
 
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
-                          persist_news=bool(os.getenv("PERSIST_NEWS")),
-                          publish=bool(os.getenv("PUBLISH_PIPELINE", "1")))
+                          persist_news=os.getenv("PERSIST_NEWS") == "1",
+                          publish=os.getenv("PUBLISH_PIPELINE", "1") == "1")
     logger.info("🟢 Started. Polling every 120s.")
     asyncio.create_task(Heartbeat("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"}).run())
     ping = PingResponder(bus, ["watcher"], metadata={"watcher": {"sources": ", ".join(source_names), "mode": "distributed"}})

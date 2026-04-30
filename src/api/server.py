@@ -132,8 +132,8 @@ def docker_status():
         if c["name"] == "watcher" and c["state"] == "running":
             env = container_env("watcher")
             c["options"] = {
-                "persist_news": env.get("PERSIST_NEWS", "") == "1",
-                "publish_pipeline": env.get("PUBLISH_PIPELINE", "1") != "",
+                "persist_news": env.get("PERSIST_NEWS") == "1",
+                "publish_pipeline": env.get("PUBLISH_PIPELINE") == "1",
             }
     return {"containers": containers}
 
@@ -145,8 +145,8 @@ def docker_start(name: str, persist_news: bool = False, publish_pipeline: bool =
     from src.common.docker_ctl import start_component
     env = {}
     if name == "watcher":
-        env["PERSIST_NEWS"] = "1" if persist_news else ""
-        env["PUBLISH_PIPELINE"] = "1" if publish_pipeline else ""
+        env["PERSIST_NEWS"] = "1" if persist_news else "0"
+        env["PUBLISH_PIPELINE"] = "1" if publish_pipeline else "0"
     result = start_component(name, env=env if env else None)
     return {"component": name, **result}
 
