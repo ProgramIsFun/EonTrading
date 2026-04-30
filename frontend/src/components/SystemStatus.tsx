@@ -10,7 +10,6 @@ interface Component {
 interface HealthData {
   components: { component: string; status: string; ageSec: number; host?: string; pid?: number; mode?: string; [key: string]: unknown }[];
   open_positions: number;
-  collector_running: boolean;
 }
 
 interface PingData {
@@ -160,7 +159,7 @@ export default function SystemStatus() {
           </div>
           {health && (
             <div style={{ fontSize: 10, color: "#666", marginTop: 8 }}>
-              Open positions: {health.open_positions} · Collector: {health.collector_running ? "🟢" : "⚫"}
+              Open positions: {health.open_positions}
             </div>
           )}
         </>

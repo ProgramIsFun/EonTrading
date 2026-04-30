@@ -10,7 +10,6 @@ from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.costs import US_STOCKS
 from src.data.utils.db_helper import get_mongo_client
 import asyncio
-import threading
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -40,58 +39,6 @@ def _validate_docker_name(name: str) -> str:
         raise HTTPException(status_code=400, detail=f"Unknown component: {name}")
     return name
 
-# --- News collector state ---
-_collector_task = None
-_collector_running = False
-_collector_stop = threading.Event()
-
-
-def _run_collector():
-    global _collector_running
-    from src.common.news_poller import NewsPoller
-    from src.data.news import RSSSource, RedditSource
-    from datetime import datetime
-    poller = NewsPoller(sources=[RSSSource(), RedditSource()])
-    client = get_mongo_client()
-    col = client["EonTradingDB"]["news"]
-    col.create_index("url", unique=True, sparse=True)
-    while _collector_running:
-        for ev in poller.poll_once():
-            if ev.url and col.find_one({"url": ev.url}):
-                continue
-            col.insert_one({
-                "source": ev.source, "headline": ev.headline,
-                "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
-                "collected_at": utcnow().isoformat() + "Z",
-            })
-        if _collector_stop.wait(timeout=300):
-            break
-
-
-@app.get("/api/collector/status")
-def collector_status():
-    return {"running": _collector_running}
-
-
-@app.post("/api/collector/start", dependencies=[Depends(_check_api_key)])
-def collector_start():
-    global _collector_task, _collector_running
-    if _collector_running:
-        return {"status": "already running"}
-    _collector_running = True
-    _collector_stop.clear()
-    _collector_task = threading.Thread(target=_run_collector, daemon=True)
-    _collector_task.start()
-    return {"status": "started"}
-
-
-@app.post("/api/collector/stop", dependencies=[Depends(_check_api_key)])
-def collector_stop():
-    global _collector_running
-    _collector_running = False
-    _collector_stop.set()
-    return {"status": "stopped"}
-
 from src.common.sample_news import SAMPLE_NEWS
 
 
@@ -118,14 +65,13 @@ def health():
             })
         return {
             "status": "ok",
-            "collector_running": _collector_running,
             "open_positions": len(positions),
             "positions": [{"symbol": p.get("symbol"), "entryTime": p.get("entryTime")} for p in positions],
             "components": components,
         }
     except Exception as e:
         logger.warning("Health check DB error: %s", e)
-        return {"status": "ok", "collector_running": _collector_running, "db_error": str(e)}
+        return {"status": "ok", "db_error": str(e)}
 
 
 @app.get("/api/ping")
