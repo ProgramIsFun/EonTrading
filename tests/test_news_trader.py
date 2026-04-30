@@ -1,7 +1,7 @@
 """Tests for news sentiment trading pipeline."""
 import asyncio
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from datetime import datetime
 from src.common.clock import utcnow
 from src.common.event_bus import LocalEventBus
@@ -14,6 +14,12 @@ from src.live.news_watcher import NewsWatcher
 from src.live.sentiment_trader import SentimentTrader
 from src.live.brokers.broker import Broker, TradeExecutor
 from conftest import MockBroker
+
+
+@pytest.fixture(autouse=True)
+def mock_get_price():
+    with patch("src.live.sentiment_trader.get_price", return_value=150.0):
+        yield
 
 
 # --- Fake news fixtures ---

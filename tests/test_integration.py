@@ -22,6 +22,12 @@ from src.common.trading_logic import TradingLogic, PositionState
 from src.common.costs import US_STOCKS
 
 
+@pytest.fixture(autouse=True)
+def mock_get_price():
+    with patch("src.live.sentiment_trader.get_price", return_value=150.0):
+        yield
+
+
 # --- Helpers ---
 
 def make_news(headline, ts="2026-04-22T10:00:00Z"):
@@ -81,7 +87,7 @@ class TestFullPipelineIntegration:
         broker = PaperBroker(initial_cash=100000)
         logic = TradingLogic(threshold=0.3, min_confidence=0.2, max_allocation=0.2)
 
-        analyzer_svc = AnalyzerService(bus, analyzer=analyzer)
+        analyzer_svc = AnalyzerService(bus, analyzer=analyzer, max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
         executor = TradeExecutor(bus, broker)
 
@@ -112,7 +118,7 @@ class TestFullPipelineIntegration:
         broker = PaperBroker(initial_cash=100000)
         logic = TradingLogic(threshold=0.3, min_confidence=0.2, max_allocation=0.2)
 
-        analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer())
+        analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer(), max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
         executor = TradeExecutor(bus, broker)
 
@@ -148,7 +154,7 @@ class TestFullPipelineIntegration:
         broker = PaperBroker(initial_cash=100000)
         logic = TradingLogic(threshold=0.3, min_confidence=0.2, max_allocation=0.2)
 
-        analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer())
+        analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer(), max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
         executor = TradeExecutor(bus, broker)
 
@@ -362,7 +368,8 @@ class TestSLTPFullCycle:
         await executor.start()
 
         # Simulate: trader bought AAPL at $150
-        with patch("src.common.price.get_price", return_value=150.0):
+        with patch("src.common.price.get_price", return_value=150.0), \
+             patch("src.live.price_monitor.get_price", return_value=150.0):
             await bus.publish(CHANNEL_SENTIMENT, SentimentEvent(
                 source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
                 analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
@@ -375,7 +382,8 @@ class TestSLTPFullCycle:
         assert "AAPL" in broker_pos
 
         # Now SL triggers at $140 (>5% drop from $150)
-        with patch("src.common.price.get_price", return_value=140.0):
+        with patch("src.common.price.get_price", return_value=140.0), \
+             patch("src.live.price_monitor.get_price", return_value=140.0):
             sold = await monitor.check_once(broker, as_of="2026-04-22T14:00:00Z")
             await asyncio.sleep(0.3)
 
@@ -401,7 +409,7 @@ class TestAnalyzerPositionAware:
 
         positions = {"AAPL": 100}
         analyzer = KeywordSentimentAnalyzer()
-        svc = AnalyzerService(bus, analyzer=analyzer, get_positions=lambda: positions)
+        svc = AnalyzerService(bus, analyzer=analyzer, get_positions=lambda: positions, max_age_sec=0)
         await svc.start()
 
         await bus.publish(CHANNEL_NEWS, BULLISH_APPLE.to_dict())
@@ -429,7 +437,7 @@ class TestNeutralNewsNoTrades:
         broker = PaperBroker(initial_cash=100000)
         logic = TradingLogic(threshold=0.3, min_confidence=0.2)
 
-        analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer())
+        analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer(), max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
         executor = TradeExecutor(bus, broker)
 

@@ -80,7 +80,7 @@ async def test_publishes_to_bus():
     bus = LocalEventBus()
     await bus.start()
     received = []
-    await bus.subscribe(CHANNEL_NEWS, lambda msg: received.append(msg))
+    await bus.subscribe(CHANNEL_NEWS, lambda msg: received.append(msg) or asyncio.sleep(0))
 
     sources = [FastSource()]
     watcher = NewsWatcher(bus, sources=sources, persist_seen=False)
