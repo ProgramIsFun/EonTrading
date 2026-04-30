@@ -31,6 +31,8 @@ export default function SystemStatus() {
   const [pinging, setPinging] = useState(false);
   const [docker, setDocker] = useState<DockerContainer[]>([]);
   const [actionMsg, setActionMsg] = useState("");
+  const [watcherPersist, setWatcherPersist] = useState(false);
+  const [watcherCollectOnly, setWatcherCollectOnly] = useState(false);
 
   useEffect(() => {
     const poll = () => {
@@ -49,14 +51,21 @@ export default function SystemStatus() {
 
   const doAction = useCallback((action: string, name: string) => {
     setActionMsg(`${action}ing ${name}...`);
-    fetch(`/api/docker/${action}/${name}`, { method: "POST" })
+    let url = `/api/docker/${action}/${name}`;
+    if (action === "start" && name === "watcher") {
+      const params = new URLSearchParams();
+      if (watcherPersist) params.set("persist_news", "true");
+      if (watcherCollectOnly) params.set("collect_only", "true");
+      if (params.toString()) url += `?${params}`;
+    }
+    fetch(url, { method: "POST" })
       .then((r) => r.json())
       .then((d) => {
         setActionMsg(d.ok ? `${name} ${action}ed ✅` : `${name} failed: ${d.stderr}`);
         setTimeout(() => setActionMsg(""), 3000);
       })
       .catch(() => setActionMsg("API error"));
-  }, []);
+  }, [watcherPersist, watcherCollectOnly]);
 
   const getStatus = (name: string) => {
     if (ping) {
@@ -153,6 +162,18 @@ export default function SystemStatus() {
                     <button onClick={() => doAction("stop", name)} style={{ ...btnStyle, color: "#ef4444" }}>⏹</button>
                     <button onClick={() => doAction("restart", name)} style={{ ...btnStyle, color: "#f59e0b" }}>↻</button>
                   </div>
+                  {name === "watcher" && (
+                    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+                      <label style={{ fontSize: 9, color: "#888", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                        <input type="checkbox" checked={watcherPersist} onChange={(e) => setWatcherPersist(e.target.checked)} />
+                        Save to DB
+                      </label>
+                      <label style={{ fontSize: 9, color: "#888", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                        <input type="checkbox" checked={watcherCollectOnly} onChange={(e) => setWatcherCollectOnly(e.target.checked)} />
+                        Collect only (no trading)
+                      </label>
+                    </div>
+                  )}
                 </div>
               );
             })}

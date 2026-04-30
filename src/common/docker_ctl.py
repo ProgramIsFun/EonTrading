@@ -8,10 +8,10 @@ COMPOSE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__
 COMPONENTS = ["watcher", "analyzer", "trader", "executor", "redis"]
 
 
-def _run(cmd: list[str], timeout: int = 30) -> dict:
+def _run(cmd: list[str], timeout: int = 30, env: dict = None) -> dict:
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, cwd=COMPOSE_DIR,
+            cmd, capture_output=True, text=True, timeout=timeout, cwd=COMPOSE_DIR, env=env,
         )
         return {"ok": result.returncode == 0, "stdout": result.stdout.strip(), "stderr": result.stderr.strip()}
     except subprocess.TimeoutExpired:
@@ -40,13 +40,14 @@ def container_status() -> list[dict]:
     return containers
 
 
-def start_component(name: str, profile: str = "distributed") -> dict:
+def start_component(name: str, profile: str = "distributed", env: dict = None) -> dict:
     """Start a single service (or 'all' for the full profile)."""
+    extra_env = {**os.environ, **(env or {})}
     if name == "all":
-        return _run(["docker", "compose", "--profile", profile, "up", "-d"])
+        return _run(["docker", "compose", "--profile", profile, "up", "-d"], env=extra_env)
     if name == "redis":
-        return _run(["docker", "compose", "up", "-d", "redis"])
-    return _run(["docker", "compose", "--profile", profile, "up", "-d", name])
+        return _run(["docker", "compose", "up", "-d", "redis"], env=extra_env)
+    return _run(["docker", "compose", "--profile", profile, "up", "-d", name], env=extra_env)
 
 
 def stop_component(name: str) -> dict:
