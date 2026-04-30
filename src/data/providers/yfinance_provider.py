@@ -1,7 +1,7 @@
 # src\eontrading_datagrabber\providers\yfinance_provider.py
 from eontrading_datagrabber.providers.base_provider import MarketDataProvider,MarketDataProviderError
 import yfinance as yf
-from typing import List, Optional, Any, Dict, Union
+from typing import List, Optional, Any, Union
 import pandas as pd
 class YFinanceProvider(MarketDataProvider):
     def fetchMarketDataFromSymbol(self, symbol: str) -> dict:

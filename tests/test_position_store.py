@@ -1,6 +1,7 @@
 """Tests for PositionStore — mocked MongoDB, no real connection needed."""
 from unittest.mock import MagicMock, patch
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.position_store import PositionStore
 
 
@@ -19,7 +20,7 @@ def _make_store():
 class TestPositionStore:
     def test_open_position(self):
         store, mock_col = _make_store()
-        now = datetime.utcnow()
+        now = utcnow()
         store.open_position("AAPL", now)
         mock_col.update_one.assert_called_once()
         args = mock_col.update_one.call_args
@@ -33,7 +34,7 @@ class TestPositionStore:
 
     def test_get_positions_with_data(self):
         store, mock_col = _make_store()
-        now = datetime.utcnow()
+        now = utcnow()
         mock_col.find.return_value = [
             {"symbol": "AAPL", "entryTime": now.isoformat()},
             {"symbol": "TSLA", "entryTime": now.isoformat()},
@@ -51,7 +52,7 @@ class TestPositionStore:
 
     def test_set_positions_upserts_and_deletes(self):
         store, mock_col = _make_store()
-        now = datetime.utcnow()
+        now = utcnow()
         store.set_positions({"AAPL": now, "NVDA": now})
         assert mock_col.update_one.call_count == 2
         mock_col.delete_many.assert_called_once()

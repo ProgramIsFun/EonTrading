@@ -11,6 +11,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from src.common.clock import utcnow
+
+load_dotenv()
+
 from src.data.utils.db_helper import get_mongo_client
 
 DB_NAME = "EonTradingDB"
@@ -34,7 +38,7 @@ def backfill_finnhub(symbol: str, days: int, col):
         print("Set FINNHUB_KEY env var. Get free key at https://finnhub.io/")
         return 0
 
-    end = datetime.utcnow()
+    end = utcnow()
     start = end - timedelta(days=days)
     total = 0
 
@@ -58,7 +62,7 @@ def backfill_finnhub(symbol: str, days: int, col):
                 "url": url,
                 "body": a.get("summary", ""),
                 "symbol": symbol,
-                "collected_at": datetime.utcnow().isoformat() + "Z",
+                "collected_at": utcnow().isoformat() + "Z",
                 "backfilled": True,
             })
             total += 1
@@ -78,7 +82,7 @@ def backfill_newsapi(query: str, days: int, col):
         print("Set NEWSAPI_KEY env var. Get free key at https://newsapi.org/")
         return 0
 
-    end = datetime.utcnow()
+    end = utcnow()
     start = end - timedelta(days=min(days, 30))  # free tier max 30 days
     total = 0
 
@@ -103,7 +107,7 @@ def backfill_newsapi(query: str, days: int, col):
                 "timestamp": a.get("publishedAt", ""),
                 "url": url,
                 "body": a.get("description", ""),
-                "collected_at": datetime.utcnow().isoformat() + "Z",
+                "collected_at": utcnow().isoformat() + "Z",
                 "backfilled": True,
             })
             total += 1

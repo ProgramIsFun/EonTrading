@@ -11,7 +11,8 @@ ingest_yfinance(symbols, storage, exchange="TEST", interval="1d", period="5d")
 
 # Query it back
 from datetime import datetime, timedelta
-end = datetime.utcnow()
+from src.common.clock import utcnow
+end = utcnow()
 start = end - timedelta(days=10)
 
 for sym in symbols:

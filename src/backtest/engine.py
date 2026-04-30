@@ -1,6 +1,5 @@
 """Backtesting engine with realistic execution model."""
 import pandas as pd
-import numpy as np
 from dataclasses import dataclass, field
 from ..strategies.base_strategy import Strategy, Signal
 from ..common.costs import CostModel, ZERO

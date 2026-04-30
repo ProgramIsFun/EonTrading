@@ -5,7 +5,6 @@ Uses the same TradingLogic as backtest — identical SL/TP behavior.
 """
 import asyncio
 import logging
-from datetime import datetime
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent

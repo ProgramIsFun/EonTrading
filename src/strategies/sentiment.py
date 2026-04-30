@@ -4,7 +4,6 @@ import json
 import os
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
 from ..common.clock import utcnow
 from ..common.events import NewsEvent, SentimentEvent
 

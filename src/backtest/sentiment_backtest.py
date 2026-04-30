@@ -2,7 +2,6 @@
 import pandas as pd
 import yfinance as yf
 from dataclasses import dataclass, field
-from datetime import datetime
 from ..common.events import NewsEvent
 from ..strategies.sentiment import KeywordSentimentAnalyzer, BaseSentimentAnalyzer
 from ..common.costs import CostModel, ZERO

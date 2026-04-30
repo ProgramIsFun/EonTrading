@@ -1,6 +1,5 @@
 """Event message schemas for the EventBus."""
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
 
 
 @dataclass

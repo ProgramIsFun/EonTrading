@@ -5,9 +5,13 @@ Run continuously or via cron:
   python3 -m scripts.collect_news          # run once
   python3 -m scripts.collect_news --loop   # poll every 5 min
 """
-import os, sys, time, argparse
+import time, argparse
 from datetime import datetime
 from dotenv import load_dotenv
+
+load_dotenv()
+
+from src.common.clock import utcnow
 
 load_dotenv()
 
@@ -34,7 +38,7 @@ def collect_once(poller, col):
             col.insert_one({
                 "source": ev.source, "headline": ev.headline,
                 "timestamp": ev.timestamp, "url": ev.url, "body": ev.body,
-                "collected_at": datetime.utcnow().isoformat() + "Z",
+                "collected_at": utcnow().isoformat() + "Z",
             })
             total += 1
             print(f"  + [{ev.source}] {ev.headline[:70]}")
@@ -60,7 +64,7 @@ def main():
 
     if args.loop:
         while True:
-            print(f"\n[{datetime.utcnow().strftime('%H:%M:%S')}] Polling...")
+            print(f"\n[{utcnow().strftime('%H:%M:%S')}] Polling...")
             n = collect_once(poller, col)
             print(f"  Collected {n} new articles (total in DB: {col.count_documents({})})")
             time.sleep(poller.interval)

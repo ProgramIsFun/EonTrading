@@ -1,6 +1,5 @@
 """Ping/pong health check via event bus — real-time component status."""
 import asyncio
-from datetime import datetime
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 

@@ -9,7 +9,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Callable, Any
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 

@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock
 from datetime import datetime
+from src.common.clock import utcnow
 from src.common.event_bus import LocalEventBus
 from src.common.events import (
     NewsEvent, SentimentEvent, TradeEvent, FillEvent,
@@ -117,7 +118,7 @@ class TestSentimentTrader:
         await executor.start()
 
         # First buy
-        trader.holdings["TSLA"] = datetime.utcnow()
+        trader.holdings["TSLA"] = utcnow()
 
         sentiment = SentimentEvent(
             source="test", headline="Tesla crashes", timestamp="2026-04-22T10:00:00Z",
@@ -292,7 +293,7 @@ class TestFillConfirmation:
         await executor.start()
 
         # Pre-load a holding
-        trader.holdings["TSLA"] = datetime.utcnow()
+        trader.holdings["TSLA"] = utcnow()
 
         sentiment = SentimentEvent(
             source="test", headline="Tesla crashes", timestamp="2026-04-22T10:00:00Z",
@@ -340,7 +341,7 @@ class TestFillConfirmation:
         await trader.start()
         await executor.start()
 
-        trader.holdings["TSLA"] = datetime.utcnow()
+        trader.holdings["TSLA"] = utcnow()
 
         sentiment = SentimentEvent(
             source="test", headline="Tesla crashes", timestamp="2026-04-22T10:00:00Z",
@@ -362,7 +363,7 @@ class TestTraderWithPositionStore:
         """Trader should restore holdings from position store on startup."""
         from unittest.mock import MagicMock
         mock_store = MagicMock()
-        now = datetime.utcnow()
+        now = utcnow()
         mock_store.get_positions.return_value = {"AAPL": now, "NVDA": now}
 
         bus = LocalEventBus()

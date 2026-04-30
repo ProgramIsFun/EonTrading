@@ -1,5 +1,5 @@
 """Shared trading logic used by both backtest and live trader."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

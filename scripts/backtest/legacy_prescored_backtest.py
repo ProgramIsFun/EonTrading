@@ -4,7 +4,7 @@ from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.costs import US_STOCKS
 from src.strategies.sentiment import BaseSentimentAnalyzer
 from src.common.events import NewsEvent, SentimentEvent
-from datetime import datetime
+from src.common.clock import utcnow
 
 
 class PreScoredAnalyzer(BaseSentimentAnalyzer):
@@ -19,7 +19,7 @@ class PreScoredAnalyzer(BaseSentimentAnalyzer):
         return SentimentEvent(
             source=event.source, headline=event.headline,
             timestamp=event.timestamp,
-            analyzed_at=datetime.utcnow().isoformat() + "Z",
+            analyzed_at=utcnow().isoformat() + "Z",
             symbols=score.get("symbols", []),
             sentiment=score.get("sentiment", 0),
             confidence=score.get("confidence", 0),

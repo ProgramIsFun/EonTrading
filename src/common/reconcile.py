@@ -3,7 +3,6 @@
 Run daily or on startup to catch discrepancies.
 """
 import logging
-from datetime import datetime
 from src.common.clock import utcnow
 from src.common.position_store import PositionStore
 
