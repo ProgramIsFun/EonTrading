@@ -33,8 +33,7 @@ def get_mongo_client():
         _client = client
         return _client
     except Exception as e:
-        logger.error("Failed to connect to MongoDB: %s", e)
-        return None
+        raise ConnectionError(f"Failed to connect to MongoDB: {e}") from e
     
 
 def getSymbolsList():

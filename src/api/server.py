@@ -1,7 +1,9 @@
 """REST API for EonTrading dashboard."""
+import os
 from datetime import datetime
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 from src.common.clock import utcnow
 from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.costs import US_STOCKS
@@ -13,7 +15,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI(title="EonTrading API")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:8000").split(",")
+app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_methods=["*"], allow_headers=["*"])
+
+# --- API key auth (optional — set API_KEY env var to enable) ---
+_api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
+_API_KEY = os.getenv("API_KEY")
+
+
+async def _check_api_key(key: str = Depends(_api_key_header)):
+    if _API_KEY and key != _API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+# --- Docker component allowlist ---
+_ALLOWED_DOCKER_NAMES = {"watcher", "analyzer", "trader", "executor", "redis", "all"}
+
+
+def _validate_docker_name(name: str) -> str:
+    if name not in _ALLOWED_DOCKER_NAMES:
+        raise HTTPException(status_code=400, detail=f"Unknown component: {name}")
+    return name
 
 # --- News collector state ---
 _collector_task = None
@@ -48,7 +71,7 @@ def collector_status():
     return {"running": _collector_running}
 
 
-@app.post("/api/collector/start")
+@app.post("/api/collector/start", dependencies=[Depends(_check_api_key)])
 def collector_start():
     global _collector_task, _collector_running
     if _collector_running:
@@ -60,7 +83,7 @@ def collector_start():
     return {"status": "started"}
 
 
-@app.post("/api/collector/stop")
+@app.post("/api/collector/stop", dependencies=[Depends(_check_api_key)])
 def collector_stop():
     global _collector_running
     _collector_running = False
@@ -150,33 +173,37 @@ def docker_status():
     return {"containers": container_status()}
 
 
-@app.post("/api/docker/start/{name}")
+@app.post("/api/docker/start/{name}", dependencies=[Depends(_check_api_key)])
 def docker_start(name: str):
     """Start a component container. Use 'all' for full distributed pipeline."""
+    _validate_docker_name(name)
     from src.common.docker_ctl import start_component
     result = start_component(name)
     return {"component": name, **result}
 
 
-@app.post("/api/docker/stop/{name}")
+@app.post("/api/docker/stop/{name}", dependencies=[Depends(_check_api_key)])
 def docker_stop(name: str):
     """Stop a component container. Use 'all' to stop everything."""
+    _validate_docker_name(name)
     from src.common.docker_ctl import stop_component
     result = stop_component(name)
     return {"component": name, **result}
 
 
-@app.post("/api/docker/restart/{name}")
+@app.post("/api/docker/restart/{name}", dependencies=[Depends(_check_api_key)])
 def docker_restart(name: str):
     """Restart a component container."""
+    _validate_docker_name(name)
     from src.common.docker_ctl import restart_component
     result = restart_component(name)
     return {"component": name, **result}
 
 
 @app.get("/api/docker/logs/{name}")
-def docker_logs(name: str, lines: int = 50):
+def docker_logs(name: str, lines: int = Query(default=50, ge=1, le=1000)):
     """Get recent logs for a component."""
+    _validate_docker_name(name)
     from src.common.docker_ctl import view_logs
     result = view_logs(name, lines)
     return {"component": name, **result}
@@ -200,14 +227,14 @@ def price_backtest(
     strategy: str = "sma",
     start: str = "2025-01-01",
     end: str = "2025-12-31",
-    capital: float = 10000,
+    capital: float = Query(default=10000, ge=100, le=100_000_000),
     # SMA params
-    fast: int = 20,
-    slow: int = 50,
+    fast: int = Query(default=20, ge=2, le=500),
+    slow: int = Query(default=50, ge=2, le=500),
     # RSI params
-    period: int = 14,
-    oversold: float = 30,
-    overbought: float = 70,
+    period: int = Query(default=14, ge=2, le=200),
+    oversold: float = Query(default=30, ge=0, le=100),
+    overbought: float = Query(default=70, ge=0, le=100),
 ):
     import yfinance as yf
     from src.backtest import run_backtest
@@ -250,12 +277,12 @@ def price_backtest(
 
 @app.get("/api/backtest")
 def backtest(
-    capital: float = 70000,
-    threshold: float = 0.4,
-    max_allocation: float = 0.2,
-    stop_loss: float = 0.05,
-    take_profit: float = 0.10,
-    max_hold_days: int = 30,
+    capital: float = Query(default=70000, ge=100, le=100_000_000),
+    threshold: float = Query(default=0.4, ge=0, le=1),
+    max_allocation: float = Query(default=0.2, ge=0.01, le=1),
+    stop_loss: float = Query(default=0.05, ge=0.001, le=0.5),
+    take_profit: float = Query(default=0.10, ge=0.001, le=5.0),
+    max_hold_days: int = Query(default=30, ge=1, le=365),
     trailing_sl: bool = False,
 ):
     result = run_portfolio_backtest(
@@ -459,15 +486,15 @@ async def _run_live_backtest(job_id: str, params: dict):
         job["error"] = f"{type(e).__name__}: {e}"
 
 
-@app.post("/api/live-backtest")
+@app.post("/api/live-backtest", dependencies=[Depends(_check_api_key)])
 async def start_live_backtest(
-    capital: float = 70000,
-    threshold: float = 0.4,
-    max_allocation: float = 0.2,
-    stop_loss: float = 0.05,
-    take_profit: float = 0.10,
-    max_hold_days: int = 30,
-    sl_check_hours: int = 24,
+    capital: float = Query(default=70000, ge=100, le=100_000_000),
+    threshold: float = Query(default=0.4, ge=0, le=1),
+    max_allocation: float = Query(default=0.2, ge=0.01, le=1),
+    stop_loss: float = Query(default=0.05, ge=0.001, le=0.5),
+    take_profit: float = Query(default=0.10, ge=0.001, le=5.0),
+    max_hold_days: int = Query(default=30, ge=1, le=365),
+    sl_check_hours: int = Query(default=24, ge=1, le=720),
     analyzer: str = "keyword",
     cost_model: str = "us_stocks",
     news_source: str = "sample",
