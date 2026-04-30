@@ -29,6 +29,7 @@ export default function SystemStatus() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [ping, setPing] = useState<PingData | null>(null);
   const [pinging, setPinging] = useState(false);
+  const [lastPing, setLastPing] = useState<Date | null>(null);
   const [docker, setDocker] = useState<DockerContainer[]>([]);
   const [actionMsg, setActionMsg] = useState("");
   const [watcherPersist, setWatcherPersist] = useState(false);
@@ -59,7 +60,7 @@ export default function SystemStatus() {
 
   const doPing = useCallback(() => {
     setPinging(true);
-    fetch("/api/ping").then((r) => r.json()).then((d) => { setPing(d); setPinging(false); }).catch(() => setPinging(false));
+    fetch("/api/ping").then((r) => r.json()).then((d) => { setPing(d); setPinging(false); setLastPing(new Date()); }).catch(() => setPinging(false));
   }, []);
 
   const fetchLogs = useCallback((name: string) => {
@@ -174,7 +175,10 @@ export default function SystemStatus() {
                       }}>{getMode(name)}</span>
                     )}
                   </div>
-                  <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{getStatus(name)}</div>
+                  <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
+                    {getStatus(name)}
+                    {lastPing && <span style={{ fontSize: 8, color: "#555", marginLeft: 6 }}>pinged {lastPing.toLocaleTimeString()}</span>}
+                  </div>
                   {dc && (
                     <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>
                       container: {dc.state} {dc.status && `(${dc.status})`}
