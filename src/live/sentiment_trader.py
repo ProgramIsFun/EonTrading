@@ -113,11 +113,13 @@ class SentimentTrader:
                     shares = broker_positions.get(symbol, 1)
                 else:
                     shares = 1
+                # to_thread: get_price uses synchronous requests (yfinance), would block the event loop
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
                 self.holdings.pop(symbol, None)
             elif symbol not in self.holdings:
                 if event.confidence < self.logic.min_confidence or event.sentiment < self.logic.threshold:
                     continue
+                # to_thread: get_price uses synchronous requests (yfinance), would block the event loop
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
                 if price <= 0:
                     continue

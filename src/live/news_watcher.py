@@ -54,7 +54,11 @@ class NewsWatcher:
             await asyncio.sleep(self.poller.interval)
 
     async def _poll_concurrent(self):
-        """Poll all sources concurrently, then dedup."""
+        """Poll all sources concurrently, then dedup.
+
+        Uses to_thread because news sources use synchronous requests.get() —
+        calling them directly would block the async event loop.
+        """
         try:
             results = await asyncio.wait_for(asyncio.gather(*[
                 asyncio.to_thread(source.fetch_latest) for source in self.poller.sources
