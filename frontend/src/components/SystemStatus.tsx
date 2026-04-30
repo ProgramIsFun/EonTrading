@@ -89,6 +89,8 @@ export default function SystemStatus() {
   }, [watcherPersist, watcherPublish, refreshStatus]);
 
   const getStatus = (name: string) => {
+    const dc = getDocker(name);
+    if (dc && dc.state === "exited") return "⚫ stopped";
     if (ping) {
       const found = ping.components.find((c) => c.component === name);
       return found ? "🟢 alive" : "⚫ no response";
