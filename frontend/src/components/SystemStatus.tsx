@@ -32,7 +32,7 @@ export default function SystemStatus() {
   const [docker, setDocker] = useState<DockerContainer[]>([]);
   const [actionMsg, setActionMsg] = useState("");
   const [watcherPersist, setWatcherPersist] = useState(false);
-  const [watcherCollectOnly, setWatcherCollectOnly] = useState(false);
+  const [watcherPublish, setWatcherPublish] = useState(true);
   const [logs, setLogs] = useState<{ name: string; text: string } | null>(null);
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function SystemStatus() {
     if (action === "start" && name === "watcher") {
       const params = new URLSearchParams();
       if (watcherPersist) params.set("persist_news", "true");
-      if (watcherCollectOnly) params.set("collect_only", "true");
+      if (!watcherPublish) params.set("publish_pipeline", "false");
       if (params.toString()) url += `?${params}`;
     }
     fetch(url, { method: "POST" })
@@ -73,7 +73,7 @@ export default function SystemStatus() {
         setTimeout(() => setActionMsg(""), 3000);
       })
       .catch(() => setActionMsg("API error"));
-  }, [watcherPersist, watcherCollectOnly]);
+  }, [watcherPersist, watcherPublish]);
 
   const getStatus = (name: string) => {
     if (ping) {
@@ -179,8 +179,8 @@ export default function SystemStatus() {
                         Save to DB
                       </label>
                       <label style={{ fontSize: 9, color: "#888", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                        <input type="checkbox" checked={watcherCollectOnly} onChange={(e) => setWatcherCollectOnly(e.target.checked)} />
-                        Collect only (no trading)
+                        <input type="checkbox" checked={watcherPublish} onChange={(e) => setWatcherPublish(e.target.checked)} />
+                        Publish to pipeline
                       </label>
                     </div>
                   )}

@@ -125,14 +125,14 @@ def docker_status():
 
 
 @app.post("/api/docker/start/{name}", dependencies=[Depends(_check_api_key)])
-def docker_start(name: str, persist_news: bool = False, collect_only: bool = False):
+def docker_start(name: str, persist_news: bool = False, publish_pipeline: bool = True):
     """Start a component container. Use 'all' for full distributed pipeline."""
     _validate_docker_name(name)
     from src.common.docker_ctl import start_component
     env = {}
     if name == "watcher":
         env["PERSIST_NEWS"] = "1" if persist_news else ""
-        env["COLLECT_ONLY"] = "1" if collect_only else ""
+        env["PUBLISH_PIPELINE"] = "1" if publish_pipeline else ""
     result = start_component(name, env=env if env else None)
     return {"component": name, **result}
 

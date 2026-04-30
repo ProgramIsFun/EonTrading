@@ -54,7 +54,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - PERSIST_NEWS=${PERSIST_NEWS:-}
-      - COLLECT_ONLY=${COLLECT_ONLY:-}
+      - PUBLISH_PIPELINE=${PUBLISH_PIPELINE:-1}
     depends_on:
       redis:
         condition: service_healthy
