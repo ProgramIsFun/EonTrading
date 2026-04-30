@@ -18,11 +18,12 @@ class NewsWatcher:
     """
 
     def __init__(self, bus: EventBus, sources: list = None, interval_sec: int = 120,
-                 persist_seen: bool = True, persist_news: bool = False):
+                 persist_seen: bool = True, persist_news: bool = False, publish: bool = True):
         self.bus = bus
         self.poller = NewsPoller(sources=sources or [], interval_sec=interval_sec, persist_seen=persist_seen)
         self.last_poll: datetime | None = None
         self.last_poll_count: int = 0
+        self._publish = publish
         self._news_col = None
         if persist_news:
             try:
@@ -40,7 +41,8 @@ class NewsWatcher:
             self.last_poll = utcnow()
             self.last_poll_count = len(events)
             for news in events:
-                await self.bus.publish(CHANNEL_NEWS, news.to_dict())
+                if self._publish:
+                    await self.bus.publish(CHANNEL_NEWS, news.to_dict())
                 if self._news_col:
                     try:
                         self._news_col.insert_one({
