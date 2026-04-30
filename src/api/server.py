@@ -74,6 +74,27 @@ def health():
         return {"status": "ok", "db_error": str(e)}
 
 
+@app.get("/api/queues")
+def queue_status():
+    """Show message counts in all Redis Streams."""
+    try:
+        import redis
+        r = redis.Redis(host=os.getenv("REDIS_HOST", "localhost"), port=6379, decode_responses=True)
+        r.ping()
+        streams = ["news", "sentiment", "trade", "fill"]
+        result = {}
+        for name in streams:
+            key = f"stream:{name}"
+            try:
+                result[name] = r.xlen(key)
+            except Exception:
+                result[name] = 0
+        return {"queues": result}
+    except Exception as e:
+        logger.warning("Queue status error: %s", e)
+        return {"queues": {}, "error": str(e)}
+
+
 @app.get("/api/ping")
 async def ping_components():
     """Real-time ping — asks all components to respond via event bus."""

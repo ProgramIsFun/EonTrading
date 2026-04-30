@@ -35,9 +35,12 @@ export default function SystemStatus() {
   const [watcherPublish, setWatcherPublish] = useState(true);
   const [logs, setLogs] = useState<{ name: string; text: string } | null>(null);
 
+  const [queues, setQueues] = useState<Record<string, number>>({});
+
   const refreshStatus = useCallback(() => {
     fetch("/api/health").then((r) => r.json()).then(setHealth).catch(() => setHealth(null));
     fetch("/api/docker/status").then((r) => r.json()).then((d) => setDocker(d.containers || [])).catch(() => {});
+    fetch("/api/queues").then((r) => r.json()).then((d) => setQueues(d.queues || {})).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -193,6 +196,15 @@ export default function SystemStatus() {
           {health && (
             <div style={{ fontSize: 10, color: "#666", marginTop: 8 }}>
               Open positions: {health.open_positions}
+              {Object.keys(queues).length > 0 && (
+                <span style={{ marginLeft: 12 }}>
+                  Queues: {Object.entries(queues).map(([k, v]) => (
+                    <span key={k} style={{ marginLeft: 6, color: v > 0 ? "#f59e0b" : "#444" }}>
+                      {k}:{v}
+                    </span>
+                  ))}
+                </span>
+              )}
             </div>
           )}
           {logs && (
