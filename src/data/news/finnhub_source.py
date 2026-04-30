@@ -21,6 +21,10 @@ class FinnhubSource(NewsSource):
         self.category = category  # general, forex, crypto, merger
 
     def fetch_latest(self) -> list[NewsEvent]:
+        """Fetch from Finnhub /api/v1/news.
+
+        Response: [{ "id", "headline", "url", "summary", "datetime" (epoch), "source", "category" }]
+        """
         if not self.api_key:
             return []
         events = []

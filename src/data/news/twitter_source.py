@@ -34,7 +34,10 @@ class TwitterSource(NewsSource):
             return self._fetch_alternative()
 
     def _fetch_official(self) -> list[NewsEvent]:
-        """Fetch via official X API using tweepy."""
+        """Fetch via official X API using tweepy.
+
+        Tweepy response: tweet.id, tweet.text, tweet.created_at (via get_users_tweets with tweet_fields=["created_at", "text"])
+        """
         if not self.bearer_token:
             return []
         try:

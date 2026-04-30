@@ -26,6 +26,11 @@ class RSSSource(NewsSource):
         ]
 
     def fetch_latest(self) -> list[NewsEvent]:
+        """Fetch from RSS/Atom feeds.
+
+        RSS: <item><title/><link/><pubDate/><description/></item>
+        Atom: <entry><title/><link href="..."/><published/><summary/></entry>
+        """
         events = []
         for feed_url in self.feeds:
             try:

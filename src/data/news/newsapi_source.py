@@ -44,6 +44,10 @@ class NewsAPISource(NewsSource):
         self.categories = categories or ["business"]
 
     def fetch_latest(self, query: str = "stock market OR trading OR tariff OR earnings") -> list[NewsEvent]:
+        """Fetch from NewsAPI /v2/everything.
+
+        Response: { "articles": [{ "title", "url", "publishedAt", "description", "source": {"name"} }] }
+        """
         events = []
         try:
             resp = requests.get(f"{self.base_url}/everything", params={

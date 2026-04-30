@@ -20,6 +20,10 @@ class RedditSource(NewsSource):
         self.limit = limit
 
     def fetch_latest(self) -> list[NewsEvent]:
+        """Fetch from Reddit /r/{sub}/new.json.
+
+        Response: { "data": { "children": [{ "data": { "id", "title", "selftext", "created_utc", "permalink" } }] } }
+        """
         events = []
         for sub in self.subreddits:
             try:
