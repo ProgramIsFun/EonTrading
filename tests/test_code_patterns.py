@@ -1,4 +1,4 @@
-"""Smoke tests to catch issues that mocks hide.
+"""Code pattern checks to catch issues that mocks hide.
 
 Verifies code doesn't use patterns that break with real library objects
 (e.g., pymongo Collection raising on bool()).
