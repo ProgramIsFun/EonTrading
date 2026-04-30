@@ -54,7 +54,7 @@ class SentimentTrader:
 
         if event.success:
             logger.info("✅ %s %s confirmed by broker", action.upper(), symbol)
-            if self._trades_col:
+            if self._trades_col is not None:
                 self._trades_col.insert_one(trade_to_doc(
                     symbol, action, entry_price, shares, event.reason, event.timestamp))
             if self.position_store:

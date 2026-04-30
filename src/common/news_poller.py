@@ -22,12 +22,12 @@ class NewsPoller:
                 logger.warning("Failed to init persistent dedup — falling back to in-memory only", exc_info=True)
 
     def _is_seen(self, url: str) -> bool:
-        if not self._seen_col or not url:
+        if self._seen_col is None or not url:
             return False
         return self._seen_col.find_one({"url": url}) is not None
 
     def _mark_seen(self, url: str):
-        if self._seen_col and url:
+        if self._seen_col is not None and url:
             try:
                 self._seen_col.insert_one({"url": url})
             except Exception:
@@ -38,7 +38,7 @@ class NewsPoller:
         events = []
         for source in self.sources:
             for event in source.fetch_latest():
-                if self._seen_col:
+                if self._seen_col is not None:
                     if self._is_seen(event.url):
                         continue
                     self._mark_seen(event.url)

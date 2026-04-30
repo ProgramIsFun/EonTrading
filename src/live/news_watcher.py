@@ -48,7 +48,7 @@ class NewsWatcher:
             for news in events:
                 if self._publish:
                     await self.bus.publish(CHANNEL_NEWS, news.to_dict())
-                if self._news_col:
+                if self._news_col is not None:
                     try:
                         self._news_col.insert_one(news_to_doc(news, origin="live"))
                     except Exception:
@@ -78,7 +78,7 @@ class NewsWatcher:
                 logger.error("Source %s failed: %s", self.poller.sources[i].__class__.__name__, result)
                 continue
             for event in result:
-                if self.poller._seen_col:
+                if self.poller._seen_col is not None:
                     if self.poller._is_seen(event.url):
                         continue
                     self.poller._mark_seen(event.url)
