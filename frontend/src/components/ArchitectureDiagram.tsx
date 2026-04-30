@@ -530,12 +530,14 @@ export default function ArchitectureDiagram() {
             <div style={{ fontWeight: 600, marginBottom: 4 }}>🟢 Single Process (default)</div>
             <div style={{ color: "#888" }}>All components in one Python process.</div>
             <div style={{ color: "#888" }}>Uses LocalEventBus (in-memory).</div>
+            <div style={{ color: "#6ee7b7", fontSize: 10, marginTop: 2 }}>Best for: dev, replay/backtest, debugging</div>
             <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.news_trader</code>
           </div>
           <div>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>🔵 Distributed (separate processes)</div>
             <div style={{ color: "#888" }}>Each component runs independently.</div>
             <div style={{ color: "#888" }}>Uses RedisStreamBus (persistent message queue).</div>
+            <div style={{ color: "#93c5fd", fontSize: 10, marginTop: 2 }}>Best for: production, scaling, per-component restarts</div>
             {envReq("REDIS_HOST")}
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_watcher</code>

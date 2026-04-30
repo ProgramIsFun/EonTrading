@@ -72,6 +72,12 @@ Docker containers get `REDIS_HOST=redis` automatically from `docker-compose.yml`
 | Single process (default) | `python -m src.live.news_trader` | LocalEventBus (in-memory) |
 | Distributed | Run each runner separately | RedisStreamBus (Redis Streams, persistent) |
 
+**When to use which:**
+- **Single process** — local dev, replay/backtest (deterministic ordering, simulated clock), debugging (one log stream, breakpoints work)
+- **Distributed** — production (isolate failures), scaling (LLM analyzer is CPU-heavy, watcher is I/O-heavy), per-component restarts and memory limits
+
+Same component code, both modes. Components don't know which transport they're on.
+
 Distributed runners:
 ```bash
 python -m src.live.runners.run_watcher
@@ -79,8 +85,6 @@ python -m src.live.runners.run_analyzer
 python -m src.live.runners.run_trader
 python -m src.live.runners.run_executor
 ```
-
-Same component code, both modes. Components don't know which transport they're on.
 
 **Distributed mode uses Redis Streams** (message queue) — messages persist and survive container restarts. Each component has its own consumer group. Ping/pong uses Redis Pub/Sub (broadcast).
 
