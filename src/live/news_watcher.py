@@ -38,7 +38,11 @@ class NewsWatcher:
     async def run(self):
         logger.info("NewsWatcher started, polling every %ds", self.poller.interval)
         while True:
-            events = await self._poll_concurrent()
+            try:
+                events = await self._poll_concurrent()
+            except Exception:
+                logger.error("Poll failed", exc_info=True)
+                events = []
             self.last_poll = utcnow()
             self.last_poll_count = len(events)
             for news in events:
@@ -51,6 +55,8 @@ class NewsWatcher:
                         pass  # duplicate URL
             if not events:
                 logger.info("No new articles at %s", self.last_poll.strftime('%H:%M:%S'))
+            else:
+                logger.info("Fetched %d articles at %s", len(events), self.last_poll.strftime('%H:%M:%S'))
             await asyncio.sleep(self.poller.interval)
 
     async def _poll_concurrent(self):
