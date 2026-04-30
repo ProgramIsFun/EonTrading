@@ -144,6 +144,7 @@ class TestSentimentTrader:
 
     @pytest.mark.asyncio
     async def test_no_trade_when_price_unavailable(self, setup):
+        """If yfinance returns no data (price=0), skip the trade. Better to miss than buy at wrong price."""
         bus, trader, executor, broker = setup
         await bus.start()
         await trader.start()
