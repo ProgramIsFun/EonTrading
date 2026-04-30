@@ -63,6 +63,7 @@ def backfill_finnhub(symbol: str, days: int, col):
                 "body": a.get("summary", ""),
                 "symbol": symbol,
                 "collected_at": utcnow().isoformat() + "Z",
+                "origin": "backfill",
                 "backfilled": True,
             })
             total += 1
@@ -108,7 +109,7 @@ def backfill_newsapi(query: str, days: int, col):
                 "url": url,
                 "body": a.get("description", ""),
                 "collected_at": utcnow().isoformat() + "Z",
-                "backfilled": True,
+                "origin": "backfill",
             })
             total += 1
         print(f"  → {total} new articles (skipped {len(articles) - total} dupes)")

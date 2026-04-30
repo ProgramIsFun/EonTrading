@@ -49,6 +49,7 @@ class NewsWatcher:
                             "source": news.source, "headline": news.headline,
                             "timestamp": news.timestamp, "url": news.url, "body": news.body,
                             "collected_at": utcnow().isoformat() + "Z",
+                            "origin": "live",
                         })
                     except Exception:
                         pass  # duplicate URL
