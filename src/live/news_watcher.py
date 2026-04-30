@@ -74,13 +74,18 @@ class NewsWatcher:
             return []
         events = []
         for i, result in enumerate(results):
+            source_name = self.poller.sources[i].__class__.__name__
             if isinstance(result, Exception):
-                logger.error("Source %s failed: %s", self.poller.sources[i].__class__.__name__, result)
+                logger.error("Source %s failed: %s", source_name, result)
                 continue
+            count = 0
             for event in result:
                 if self.poller._seen_col is not None:
                     if self.poller._is_seen(event.url):
                         continue
                     self.poller._mark_seen(event.url)
                 events.append(event)
+                count += 1
+            if count:
+                logger.info("  %s: %d articles", source_name, count)
         return events
