@@ -98,7 +98,8 @@ async def main_single():
                              trade_log=get_mongo_client()["EonTradingDB"]["trades"],
                              broker=broker, price_monitor=monitor)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
-    watcher = NewsWatcher(bus, sources=sources, interval_sec=120)
+    watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
+                          persist_news=bool(os.getenv("PERSIST_NEWS")))
     executor = TradeExecutor(bus, broker)
 
     await analyzer_svc.start()

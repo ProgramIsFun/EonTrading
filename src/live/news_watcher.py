@@ -11,13 +11,27 @@ logger = logging.getLogger(__name__)
 
 
 class NewsWatcher:
-    """Polls news sources and publishes raw news events. That's it."""
+    """Polls news sources and publishes raw news events.
 
-    def __init__(self, bus: EventBus, sources: list = None, interval_sec: int = 120, persist_seen: bool = True):
+    Optionally persists articles to MongoDB for later backtest/replay.
+    Set persist_news=True or PERSIST_NEWS=1 env var to enable.
+    """
+
+    def __init__(self, bus: EventBus, sources: list = None, interval_sec: int = 120,
+                 persist_seen: bool = True, persist_news: bool = False):
         self.bus = bus
         self.poller = NewsPoller(sources=sources or [], interval_sec=interval_sec, persist_seen=persist_seen)
         self.last_poll: datetime | None = None
         self.last_poll_count: int = 0
+        self._news_col = None
+        if persist_news:
+            try:
+                from src.data.utils.db_helper import get_mongo_client
+                self._news_col = get_mongo_client()["EonTradingDB"]["news"]
+                self._news_col.create_index("url", unique=True, sparse=True)
+                logger.info("News persistence enabled — writing to MongoDB EonTradingDB.news")
+            except Exception:
+                logger.warning("Failed to init news persistence", exc_info=True)
 
     async def run(self):
         logger.info("NewsWatcher started, polling every %ds", self.poller.interval)
@@ -27,6 +41,15 @@ class NewsWatcher:
             self.last_poll_count = len(events)
             for news in events:
                 await self.bus.publish(CHANNEL_NEWS, news.to_dict())
+                if self._news_col:
+                    try:
+                        self._news_col.insert_one({
+                            "source": news.source, "headline": news.headline,
+                            "timestamp": news.timestamp, "url": news.url, "body": news.body,
+                            "collected_at": utcnow().isoformat() + "Z",
+                        })
+                    except Exception:
+                        pass  # duplicate URL
             if not events:
                 logger.info("No new articles at %s", self.last_poll.strftime('%H:%M:%S'))
             await asyncio.sleep(self.poller.interval)
