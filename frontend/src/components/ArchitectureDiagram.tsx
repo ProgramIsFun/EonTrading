@@ -93,19 +93,23 @@ export default function ArchitectureDiagram() {
 
       {/* Core Channel Flow */}
       <div style={{ ...section }}>
-        {sectionTitle("Core Pipeline", "#818cf8")}
+        {sectionTitle("Core Pipeline — Event Channels", "#818cf8")}
+        <div style={{ fontSize: 10, color: "#888", marginBottom: 8 }}>
+          These are <strong style={{ color: "#ccc" }}>channels</strong> (message queues), not components. Components publish to and subscribe from them.
+        </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap", padding: "12px 0" }}>
           {[
-            { ch: "news", desc: "raw headlines" },
-            { ch: "sentiment", desc: "scored signals" },
-            { ch: "trade", desc: "buy/sell orders" },
-            { ch: "fill", desc: "broker confirmation" },
+            { ch: "news", desc: "raw headlines", producers: "NewsWatcher", consumers: "Analyzer" },
+            { ch: "sentiment", desc: "scored signals", producers: "Analyzer", consumers: "Trader" },
+            { ch: "trade", desc: "buy/sell orders", producers: "Trader, PriceMonitor", consumers: "Executor" },
+            { ch: "fill", desc: "broker confirmation", producers: "Executor", consumers: "Trader" },
           ].map((c, i) => (
             <div key={c.ch} style={{ display: "flex", alignItems: "center", gap: 12 }}>
               {i > 0 && <span style={{ color: "#818cf8", fontSize: 20 }}>→</span>}
               <div style={{ textAlign: "center" }}>
                 <code style={{ fontSize: 14, color: "#818cf8", fontWeight: 600 }}>[{c.ch}]</code>
                 <div style={{ fontSize: 9, color: "#666" }}>{c.desc}</div>
+                <div style={{ fontSize: 8, color: "#555" }}>{c.producers} → {c.consumers}</div>
               </div>
             </div>
           ))}
