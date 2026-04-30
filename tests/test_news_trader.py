@@ -143,6 +143,24 @@ class TestSentimentTrader:
         assert len(broker.trades) == 0
 
     @pytest.mark.asyncio
+    async def test_no_trade_when_price_unavailable(self, setup):
+        bus, trader, executor, broker = setup
+        await bus.start()
+        await trader.start()
+        await executor.start()
+
+        with patch("src.live.sentiment_trader.get_price", return_value=0.0):
+            sentiment = SentimentEvent(
+                source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
+                analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
+                sentiment=0.8, confidence=0.9, urgency="high",
+            )
+            await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
+            await asyncio.sleep(0.2)
+
+        assert len(broker.trades) == 0  # no price = no trade
+
+    @pytest.mark.asyncio
     async def test_no_duplicate_buy(self, setup):
         bus, trader, executor, broker = setup
         await bus.start()
