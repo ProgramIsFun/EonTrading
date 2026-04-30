@@ -13,13 +13,17 @@ class PositionStore:
     def __init__(self, collection: str = "positions"):
         self._col = get_mongo_client()[DB][collection]
 
-    def set_positions(self, holdings: dict[str, datetime]):
+    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None):
         """Sync holdings to MongoDB — upsert active, remove closed."""
+        prices = entry_prices or {}
         active = set(holdings.keys())
         for symbol, entry_time in holdings.items():
+            fields = {"entryTime": entry_time.isoformat(), "updatedAt": utcnow()}
+            if symbol in prices:
+                fields["entryPrice"] = prices[symbol]
             self._col.update_one(
                 {"symbol": symbol},
-                {"$set": {"entryTime": entry_time.isoformat(), "updatedAt": utcnow()}},
+                {"$set": fields},
                 upsert=True,
             )
         if active:

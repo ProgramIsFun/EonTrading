@@ -6,6 +6,7 @@ from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL, SentimentEvent, TradeEvent, FillEvent
 from src.common.price import get_price
+from src.common.trade_store import trade_to_doc
 from src.common.trading_logic import TradingLogic
 
 logger = logging.getLogger(__name__)
@@ -54,11 +55,8 @@ class SentimentTrader:
         if event.success:
             logger.info("✅ %s %s confirmed by broker", action.upper(), symbol)
             if self._trades_col:
-                self._trades_col.insert_one({
-                    "symbol": symbol, "action": action,
-                    "price": entry_price, "shares": shares,
-                    "reason": event.reason, "timestamp": event.timestamp,
-                })
+                self._trades_col.insert_one(trade_to_doc(
+                    symbol, action, entry_price, shares, event.reason, event.timestamp))
             if self.position_store:
                 if action == "buy":
                     self.position_store.open_position(symbol, self.holdings[symbol], entry_price=entry_price)
