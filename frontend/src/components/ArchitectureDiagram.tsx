@@ -504,21 +504,27 @@ export default function ArchitectureDiagram() {
       {/* MongoDB summary */}
       <div style={{ background: "#1a1a2e", borderRadius: 8, padding: 12, marginBottom: 20, border: `1px solid ${borders[SERVICE]}` }}>
         {sectionTitle("MongoDB Collections (EonTradingDB)", "#f59e0b")}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 10, color: "#888" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 10, color: "#888" }}>
           {[
-            { name: "news", desc: "Articles — written by collect/backfill scripts, read by backtest" },
-            { name: "ohlcv", desc: "Price candles — written by ingest/migrations, read by backtest" },
-            { name: "positions", desc: "Open trades — written on broker fill, read by Analyzer" },
-            { name: "trades", desc: "Confirmed trade history — written on broker fill, read by API" },
-            { name: "replay_trades", desc: "Replay backtest trades — written by replay mode" },
-            { name: "symbols", desc: "Stock list — written by update_sp500.py, read by API & scripts" },
-            { name: "seen_urls", desc: "Dedup — written/read by NewsPoller, survives restarts" },
+            { name: "news", desc: "Articles from all sources", doc: `{ "source": "rss", "headline": "Apple beats Q2 earnings", "timestamp": "2026-04-30T09:15:00Z", "url": "https://...", "body": "...", "collected_at": "2026-04-30T09:16:02Z", "origin": "live" }` },
+            { name: "trades", desc: "Confirmed trade history (written after broker fill)", doc: `{ "symbol": "AAPL", "action": "buy", "price": 198.50, "shares": 25, "reason": "sentiment:0.72 on Apple beats Q2...", "timestamp": "2026-04-30T09:16:15Z" }` },
+            { name: "positions", desc: "Currently open positions (1 doc per symbol)", doc: `{ "symbol": "AAPL", "entryTime": "2026-04-30T09:16:15", "entryPrice": 198.50, "updatedAt": "2026-04-30T09:16:15Z" }` },
+            { name: "heartbeats", desc: "Component health (updated every 30s)", doc: `{ "component": "trader", "lastBeat": "2026-04-30T09:16:00Z", "host": "macbook.local", "pid": 12345, "mode": "distributed" }` },
+            { name: "seen_urls", desc: "Dedup — survives restarts", doc: `{ "url": "https://finance.yahoo.com/news/..." }` },
+            { name: "symbols", desc: "Tracked stock list", doc: `{ "symbol": "AAPL", "name": "Apple Inc.", "sector": "Technology" }` },
           ].map((c) => (
-            <div key={c.name} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
-              <code style={{ color: "#f59e0b", fontWeight: 600, minWidth: 65 }}>{c.name}</code>
-              <span>{c.desc}</span>
+            <div key={c.name}>
+              <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginBottom: 2 }}>
+                <code style={{ color: "#f59e0b", fontWeight: 600, minWidth: 75 }}>{c.name}</code>
+                <span>{c.desc}</span>
+              </div>
+              <pre style={{ margin: "0 0 0 81px", padding: "3px 6px", background: "#111", borderRadius: 3, color: "#666", fontSize: 9, whiteSpace: "pre-wrap", overflowX: "auto" }}>{c.doc}</pre>
             </div>
           ))}
+          <div style={{ fontSize: 9, color: "#555", marginTop: 4 }}>
+            Replay mode uses separate collections (<code style={{ color: "#f59e0b" }}>replay_trades</code>, <code style={{ color: "#f59e0b" }}>replay_positions</code>) with identical schemas.
+            Schema defined by shared builders: <code style={{ color: "#818cf8" }}>news_to_doc()</code>, <code style={{ color: "#818cf8" }}>trade_to_doc()</code>, <code style={{ color: "#818cf8" }}>PositionStore</code>.
+          </div>
         </div>
       </div>
 
