@@ -33,9 +33,13 @@ class NewsWatcher:
 
     async def _poll_concurrent(self):
         """Poll all sources concurrently, then dedup."""
-        results = await asyncio.gather(*[
-            asyncio.to_thread(source.fetch_latest) for source in self.poller.sources
-        ], return_exceptions=True)
+        try:
+            results = await asyncio.wait_for(asyncio.gather(*[
+                asyncio.to_thread(source.fetch_latest) for source in self.poller.sources
+            ], return_exceptions=True), timeout=30)
+        except asyncio.TimeoutError:
+            logger.warning("Poll cycle timed out after 30s")
+            return []
         events = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
