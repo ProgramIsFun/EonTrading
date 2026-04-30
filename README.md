@@ -59,6 +59,8 @@ Browser (same machine or remote):
 **Important:** The API server's `.env` must have `REDIS_HOST=localhost` (host port mapping).
 Docker containers get `REDIS_HOST=redis` automatically from `docker-compose.yml`.
 
+**Why Docker Compose, not Kubernetes?** This is a single-machine system with 5 fixed containers. Compose gives us per-component restarts, memory limits, health checks, and dashboard control — everything needed. K8s would add operational overhead (cluster management, networking, RBAC) with no benefit at this scale.
+
 ## Architecture
 
 **Databases:**
