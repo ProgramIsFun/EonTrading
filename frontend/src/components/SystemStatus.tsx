@@ -33,6 +33,7 @@ export default function SystemStatus() {
   const [actionMsg, setActionMsg] = useState("");
   const [watcherPersist, setWatcherPersist] = useState(false);
   const [watcherCollectOnly, setWatcherCollectOnly] = useState(false);
+  const [logs, setLogs] = useState<{ name: string; text: string } | null>(null);
 
   useEffect(() => {
     const poll = () => {
@@ -48,6 +49,13 @@ export default function SystemStatus() {
     setPinging(true);
     fetch("/api/ping").then((r) => r.json()).then((d) => { setPing(d); setPinging(false); }).catch(() => setPinging(false));
   }, []);
+
+  const fetchLogs = useCallback((name: string) => {
+    if (logs?.name === name) { setLogs(null); return; }
+    fetch(`/api/docker/logs/${name}?lines=50`).then((r) => r.json())
+      .then((d) => setLogs({ name, text: d.stdout || d.stderr || "No logs" }))
+      .catch(() => setLogs({ name, text: "Failed to fetch logs" }));
+  }, [logs]);
 
   const doAction = useCallback((action: string, name: string) => {
     setActionMsg(`${action}ing ${name}...`);
@@ -161,6 +169,8 @@ export default function SystemStatus() {
                     <button onClick={() => doAction("start", name)} style={{ ...btnStyle, color: "#22c55e" }}>▶</button>
                     <button onClick={() => doAction("stop", name)} style={{ ...btnStyle, color: "#ef4444" }}>⏹</button>
                     <button onClick={() => doAction("restart", name)} style={{ ...btnStyle, color: "#f59e0b" }}>↻</button>
+                    <button onClick={() => fetchLogs(name)}
+                      style={{ ...btnStyle, color: logs?.name === name ? "#818cf8" : "#888" }}>📋</button>
                   </div>
                   {name === "watcher" && (
                     <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
@@ -181,6 +191,18 @@ export default function SystemStatus() {
           {health && (
             <div style={{ fontSize: 10, color: "#666", marginTop: 8 }}>
               Open positions: {health.open_positions}
+            </div>
+          )}
+          {logs && (
+            <div style={{ marginTop: 10, background: "#111", borderRadius: 6, padding: 10, border: "1px solid #333" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 11, color: "#818cf8", fontWeight: 600 }}>📋 {logs.name} logs</span>
+                <button onClick={() => setLogs(null)}
+                  style={{ fontSize: 9, background: "none", border: "none", color: "#666", cursor: "pointer" }}>✕</button>
+              </div>
+              <pre style={{ fontSize: 9, color: "#aaa", margin: 0, maxHeight: 300, overflow: "auto", whiteSpace: "pre-wrap" }}>
+                {logs.text}
+              </pre>
             </div>
           )}
         </>
