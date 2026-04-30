@@ -1,9 +1,12 @@
 """News source interface and NewsAPI implementation."""
+import logging
 import os
 import requests
 from datetime import datetime, timedelta
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
+
+logger = logging.getLogger(__name__)
 
 
 class NewsSource:
@@ -64,5 +67,5 @@ class NewsAPISource(NewsSource):
                     body=article.get("description", ""),
                 ))
         except Exception as e:
-            print(f"NewsAPI error: {e}")
+            logger.error("NewsAPI error: %s", e)
         return events

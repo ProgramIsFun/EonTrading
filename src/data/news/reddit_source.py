@@ -3,9 +3,12 @@
 No API key needed. Uses Reddit's public .json endpoints.
 Rate limit: ~10 req/min without auth.
 """
+import logging
 import requests
 from src.common.events import NewsEvent
 from .newsapi_source import NewsSource
+
+logger = logging.getLogger(__name__)
 
 
 class RedditSource(NewsSource):
@@ -38,7 +41,7 @@ class RedditSource(NewsSource):
                         body=d.get("selftext", "")[:500],
                     ))
             except Exception as e:
-                print(f"Reddit error (r/{sub}): {e}")
+                logger.error("Reddit error (r/%s): %s", sub, e)
         return events
 
     @staticmethod

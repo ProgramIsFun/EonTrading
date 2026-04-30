@@ -5,13 +5,14 @@ Good free feeds:
   - https://www.cnbc.com/id/100003114/device/rss/rss.html  (CNBC top news)
   - https://feeds.reuters.com/reuters/businessNews  (Reuters business)
 """
-import os
+import logging
 import requests
 import re
-from datetime import datetime
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
 from .newsapi_source import NewsSource
+
+logger = logging.getLogger(__name__)
 
 
 class RSSSource(NewsSource):
@@ -31,7 +32,7 @@ class RSSSource(NewsSource):
                 resp = requests.get(feed_url, timeout=10, headers={"User-Agent": "EonTrading/1.0"})
                 events.extend(self._parse_feed(resp.text, feed_url))
             except Exception as e:
-                print(f"RSS error ({feed_url[:50]}): {e}")
+                logger.error("RSS error (%s): %s", feed_url[:50], e)
         return events
 
     def _parse_feed(self, xml: str, feed_url: str) -> list[NewsEvent]:

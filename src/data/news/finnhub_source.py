@@ -2,11 +2,14 @@
 
 Free tier: 60 calls/min. Get key at https://finnhub.io/
 """
+import logging
 import os
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 from src.common.events import NewsEvent
 from .newsapi_source import NewsSource
+
+logger = logging.getLogger(__name__)
 
 
 class FinnhubSource(NewsSource):
@@ -38,5 +41,5 @@ class FinnhubSource(NewsSource):
                     body=article.get("summary", ""),
                 ))
         except Exception as e:
-            print(f"Finnhub error: {e}")
+            logger.error("Finnhub error: %s", e)
         return events

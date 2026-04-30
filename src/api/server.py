@@ -1,4 +1,5 @@
 """REST API for EonTrading dashboard."""
+import logging
 import os
 from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, Query
@@ -13,6 +14,7 @@ import threading
 from dotenv import load_dotenv
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="EonTrading API")
 
@@ -122,6 +124,7 @@ def health():
             "components": components,
         }
     except Exception as e:
+        logger.warning("Health check DB error: %s", e)
         return {"status": "ok", "collector_running": _collector_running, "db_error": str(e)}
 
 
@@ -142,6 +145,7 @@ async def ping_components():
         await bus.stop()
         return {"components": responses, "count": len(responses)}
     except Exception as e:
+        logger.warning("Ping error: %s", e)
         return {"components": [], "count": 0, "error": str(e)}
 
 
@@ -163,6 +167,7 @@ async def reconcile_positions():
             broker = PaperBroker()
         return await reconcile(broker)
     except Exception as e:
+        logger.error("Reconcile error: %s", e)
         return {"ok": False, "error": str(e)}
 
 
@@ -218,6 +223,7 @@ def trades(limit: int = 100):
         docs = list(col.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit))
         return docs
     except Exception:
+        logger.warning("Failed to fetch trades from MongoDB", exc_info=True)
         return []
 
 
@@ -532,6 +538,7 @@ def news(limit: int = 100):
         docs = list(col.find({}, {"_id": 0}).sort("collected_at", -1).limit(limit))
         return docs
     except Exception as e:
+        logger.warning("News fetch error: %s", e)
         return {"error": f"MongoDB unavailable: {e}", "fallback": True, "articles": SAMPLE_NEWS}
 
 
@@ -542,4 +549,5 @@ def news_count():
         col = client["EonTradingDB"]["news"]
         return {"count": col.count_documents({})}
     except Exception:
+        logger.warning("Failed to count news", exc_info=True)
         return {"count": 0}

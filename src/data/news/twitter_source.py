@@ -9,11 +9,13 @@ Official API setup:
 Usage:
   source = TwitterSource(accounts=["elonmusk", "realDonaldTrump"])
 """
+import logging
 import os
-from datetime import datetime
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
 from .newsapi_source import NewsSource
+
+logger = logging.getLogger(__name__)
 
 
 class TwitterSource(NewsSource):
@@ -38,7 +40,7 @@ class TwitterSource(NewsSource):
         try:
             import tweepy
         except ImportError:
-            print("TwitterSource: pip install tweepy")
+            logger.warning("TwitterSource: pip install tweepy")
             return []
 
         client = tweepy.Client(bearer_token=self.bearer_token)
@@ -66,7 +68,7 @@ class TwitterSource(NewsSource):
                         body=tweet.text,
                     ))
             except Exception as e:
-                print(f"Twitter error (@{account}): {e}")
+                logger.error("Twitter error (@%s): %s", account, e)
         return events
 
     def _fetch_alternative(self) -> list[NewsEvent]:
@@ -86,5 +88,5 @@ class TwitterSource(NewsSource):
             ))
         """
         # TODO: Implement your alternative client here
-        print("TwitterSource: alternative client not implemented yet")
+        logger.info("TwitterSource: alternative client not implemented yet")
         return []

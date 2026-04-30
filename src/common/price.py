@@ -32,7 +32,7 @@ def _get_redis():
             _redis_cache.ping()
             return _redis_cache
     except Exception:
-        pass
+        logger.debug("Redis price cache unavailable, using in-memory only")
     _redis_cache = False  # mark as unavailable
     return False
 

@@ -1,6 +1,9 @@
 """Shared news polling logic — used by both live trader and collector."""
+import logging
 from src.data.news.newsapi_source import NewsSource
 from src.common.events import NewsEvent
+
+logger = logging.getLogger(__name__)
 
 
 class NewsPoller:
@@ -16,7 +19,7 @@ class NewsPoller:
                 self._seen_col = get_mongo_client()["EonTradingDB"]["seen_urls"]
                 self._seen_col.create_index("url", unique=True)
             except Exception:
-                pass
+                logger.warning("Failed to init persistent dedup — falling back to in-memory only", exc_info=True)
 
     def _is_seen(self, url: str) -> bool:
         if not self._seen_col or not url:
