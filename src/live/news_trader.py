@@ -83,6 +83,8 @@ async def main_single():
     bus = LocalEventBus()
     await bus.start()
 
+    from src.env import env_bool
+
     from src.live.price_monitor import PriceMonitor
 
     store = PositionStore()
@@ -99,8 +101,8 @@ async def main_single():
                              broker=broker, price_monitor=monitor)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
-                          persist_news=os.getenv("PERSIST_NEWS") == "1",
-                          publish=os.getenv("PUBLISH_PIPELINE", "1") == "1")
+                          persist_news=env_bool("PERSIST_NEWS"),
+                          publish=env_bool("PUBLISH_PIPELINE", default=True))
     executor = TradeExecutor(bus, broker)
 
     await analyzer_svc.start()

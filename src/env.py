@@ -11,3 +11,11 @@ CLICKHOUSE_DB = os.getenv("CLICKHOUSE_DB", "eontrading")
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost" if _is_mac else _default_remote)
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+
+
+def env_bool(key: str, default: bool = False) -> bool:
+    """Read a boolean env var. Treats '1', 'true', 'yes' as True, everything else as False."""
+    val = os.getenv(key)
+    if val is None:
+        return default
+    return val.lower() in ("1", "true", "yes")
