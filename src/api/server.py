@@ -147,8 +147,10 @@ def docker_status():
     for c in containers:
         if c["name"] == "watcher" and c["state"] == "running":
             env = container_env("watcher")
-            c["persist_news"] = env.get("PERSIST_NEWS", "") == "1"
-            c["publish_pipeline"] = env.get("PUBLISH_PIPELINE", "1") != ""
+            c["options"] = {
+                "persist_news": env.get("PERSIST_NEWS", "") == "1",
+                "publish_pipeline": env.get("PUBLISH_PIPELINE", "1") != "",
+            }
     return {"containers": containers}
 
 
