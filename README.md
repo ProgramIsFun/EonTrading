@@ -105,7 +105,7 @@ Sources (NewsAPI, Finnhub, RSS, Reddit, Twitter)
                   → SentimentTrader (persist to MongoDB or rollback)
 ```
 
-- PriceMonitor checks SL/TP independently — you control risk, not the broker
+- PriceMonitor checks SL/TP independently — you control risk, not the broker. Self-managed (not broker OCO orders) because: identical behavior in backtest and live, works with all brokers including PaperBroker, supports trailing SL and custom exit logic. Cash-only = no leverage, so the 60s polling gap is acceptable.
 - MongoDB positions written only after broker confirms fill
 - Rejected orders roll back in-memory state
 - Pending orders block duplicate trades for the same symbol
