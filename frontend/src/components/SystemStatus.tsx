@@ -171,11 +171,11 @@ export default function SystemStatus() {
                     <div key={k} style={{ fontSize: 9, color: "#666", marginTop: 1 }}>{k}: {String(v)}</div>
                   ))}
                   <div style={{ marginTop: 4, display: "flex" }}>
-                    <button onClick={() => doAction("start", name)} style={{ ...btnStyle, color: "#22c55e" }}>▶</button>
-                    <button onClick={() => doAction("stop", name)} style={{ ...btnStyle, color: "#ef4444" }}>⏹</button>
-                    <button onClick={() => doAction("restart", name)} style={{ ...btnStyle, color: "#f59e0b" }}>↻</button>
+                    <button onClick={() => doAction("start", name)} style={{ ...btnStyle, color: "#22c55e" }} title="Start">▶</button>
+                    <button onClick={() => doAction("stop", name)} style={{ ...btnStyle, color: "#ef4444" }} title="Stop">⏹</button>
+                    <button onClick={() => doAction("restart", name)} style={{ ...btnStyle, color: "#f59e0b" }} title="Restart">↻</button>
                     <button onClick={() => fetchLogs(name)}
-                      style={{ ...btnStyle, color: logs?.name === name ? "#818cf8" : "#888" }}>📋</button>
+                      style={{ ...btnStyle, color: logs?.name === name ? "#818cf8" : "#888" }} title="View logs">📋</button>
                   </div>
                   {name === "watcher" && (
                     <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
