@@ -13,6 +13,7 @@ from src.strategies.sentiment import KeywordSentimentAnalyzer
 from src.live.news_watcher import NewsWatcher
 from src.live.sentiment_trader import SentimentTrader
 from src.live.brokers.broker import Broker, TradeExecutor
+from conftest import MockBroker
 
 
 # --- Fake news fixtures ---
@@ -31,20 +32,6 @@ NEUTRAL_NEWS = NewsEvent(
     source="test", headline="Weather forecast for tomorrow is sunny",
     timestamp="2026-04-22T10:02:00Z", body="Nothing to do with stocks.",
 )
-
-
-# --- Mock broker ---
-
-class MockBroker(Broker):
-    def __init__(self):
-        self.trades: list[TradeEvent] = []
-
-    async def execute(self, trade: TradeEvent):
-        self.trades.append(trade)
-        await self._publish_fill(trade.symbol, trade.action, True, "filled (mock)")
-
-    async def get_positions(self) -> dict[str, int]:
-        return {}
 
 
 # --- Keyword sentiment tests ---
