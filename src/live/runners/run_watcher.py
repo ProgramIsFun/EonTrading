@@ -31,8 +31,16 @@ async def main():
     sources.append(RSSSource())
     sources.append(RedditSource())
 
+    persist = env_bool("PERSIST_NEWS")
+    publish = env_bool("PUBLISH_PIPELINE", default=True)
+    mode_parts = []
+    if publish:
+        mode_parts.append("pipeline [news]")
+    if persist:
+        mode_parts.append("MongoDB")
+
     banner("NewsWatcher", {
-        "Publishes to": "[news]",
+        "Publishes to": ", ".join(mode_parts) or "nowhere (dry run)",
         "Sources": ", ".join(source_names),
         "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
@@ -41,8 +49,8 @@ async def main():
     await bus.start()
 
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
-                          persist_news=env_bool("PERSIST_NEWS"),
-                          publish=env_bool("PUBLISH_PIPELINE", default=True))
+                          persist_news=persist,
+                          publish=publish)
     logger.info("🟢 Started. Polling every 120s.")
     asyncio.create_task(Heartbeat("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"}).run())
     ping = PingResponder(bus, ["watcher"], metadata={"watcher": {"sources": ", ".join(source_names), "mode": "distributed"}})
