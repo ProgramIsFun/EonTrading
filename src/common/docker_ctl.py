@@ -40,6 +40,19 @@ def container_status() -> list[dict]:
     return containers
 
 
+def container_env(name: str) -> dict:
+    """Get environment variables from a running container."""
+    result = _run(["docker", "compose", "exec", name, "env"], timeout=5)
+    if not result["ok"]:
+        return {}
+    env = {}
+    for line in result["stdout"].splitlines():
+        if "=" in line:
+            k, _, v = line.partition("=")
+            env[k] = v
+    return env
+
+
 def start_component(name: str, profile: str = "distributed", env: dict = None) -> dict:
     """Start a single service (or 'all' for the full profile)."""
     extra_env = {**os.environ, **(env or {})}

@@ -21,6 +21,8 @@ interface DockerContainer {
   name: string;
   state: string;
   status: string;
+  persist_news?: boolean;
+  publish_pipeline?: boolean;
 }
 
 const ALL = ["watcher", "analyzer", "trader", "executor"];
@@ -39,7 +41,15 @@ export default function SystemStatus() {
 
   const refreshStatus = useCallback(() => {
     fetch("/api/health").then((r) => r.json()).then(setHealth).catch(() => setHealth(null));
-    fetch("/api/docker/status").then((r) => r.json()).then((d) => setDocker(d.containers || [])).catch(() => {});
+    fetch("/api/docker/status").then((r) => r.json()).then((d) => {
+      const containers = d.containers || [];
+      setDocker(containers);
+      const watcher = containers.find((c: DockerContainer) => c.name === "watcher");
+      if (watcher && watcher.persist_news !== undefined) {
+        setWatcherPersist(watcher.persist_news);
+        setWatcherPublish(watcher.publish_pipeline !== false);
+      }
+    }).catch(() => {});
     fetch("/api/queues").then((r) => r.json()).then((d) => setQueues(d.queues || {})).catch(() => {});
   }, []);
 

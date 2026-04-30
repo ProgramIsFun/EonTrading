@@ -141,8 +141,15 @@ async def reconcile_positions():
 @app.get("/api/docker/status")
 def docker_status():
     """Get status of all Docker Compose services."""
-    from src.common.docker_ctl import container_status
-    return {"containers": container_status()}
+    from src.common.docker_ctl import container_status, container_env
+    containers = container_status()
+    # Attach watcher options from running container
+    for c in containers:
+        if c["name"] == "watcher" and c["state"] == "running":
+            env = container_env("watcher")
+            c["persist_news"] = env.get("PERSIST_NEWS", "") == "1"
+            c["publish_pipeline"] = env.get("PUBLISH_PIPELINE", "1") != ""
+    return {"containers": containers}
 
 
 @app.post("/api/docker/start/{name}", dependencies=[Depends(_check_api_key)])
