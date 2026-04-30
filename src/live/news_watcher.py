@@ -22,7 +22,7 @@ class NewsWatcher:
     async def run(self):
         logger.info("NewsWatcher started, polling every %ds", self.poller.interval)
         while True:
-            events = self.poller.poll_once()
+            events = await self._poll_concurrent()
             self.last_poll = utcnow()
             self.last_poll_count = len(events)
             for news in events:
@@ -30,3 +30,21 @@ class NewsWatcher:
             if not events:
                 logger.info("No new articles at %s", self.last_poll.strftime('%H:%M:%S'))
             await asyncio.sleep(self.poller.interval)
+
+    async def _poll_concurrent(self):
+        """Poll all sources concurrently, then dedup."""
+        results = await asyncio.gather(*[
+            asyncio.to_thread(source.fetch_latest) for source in self.poller.sources
+        ], return_exceptions=True)
+        events = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error("Source %s failed: %s", self.poller.sources[i].__class__.__name__, result)
+                continue
+            for event in result:
+                if self.poller._seen_col:
+                    if self.poller._is_seen(event.url):
+                        continue
+                    self.poller._mark_seen(event.url)
+                events.append(event)
+        return events
