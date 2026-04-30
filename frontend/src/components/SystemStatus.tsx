@@ -35,15 +35,16 @@ export default function SystemStatus() {
   const [watcherPublish, setWatcherPublish] = useState(true);
   const [logs, setLogs] = useState<{ name: string; text: string } | null>(null);
 
-  useEffect(() => {
-    const poll = () => {
-      fetch("/api/health").then((r) => r.json()).then(setHealth).catch(() => setHealth(null));
-      fetch("/api/docker/status").then((r) => r.json()).then((d) => setDocker(d.containers || [])).catch(() => {});
-    };
-    poll();
-    const id = setInterval(poll, 10000);
-    return () => clearInterval(id);
+  const refreshStatus = useCallback(() => {
+    fetch("/api/health").then((r) => r.json()).then(setHealth).catch(() => setHealth(null));
+    fetch("/api/docker/status").then((r) => r.json()).then((d) => setDocker(d.containers || [])).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    refreshStatus();
+    const id = setInterval(refreshStatus, 10000);
+    return () => clearInterval(id);
+  }, [refreshStatus]);
 
   const doPing = useCallback(() => {
     setPinging(true);
@@ -70,10 +71,10 @@ export default function SystemStatus() {
       .then((r) => r.json())
       .then((d) => {
         setActionMsg(d.ok ? `${name} ${action}ed ✅` : `${name} failed: ${d.stderr}`);
-        setTimeout(() => setActionMsg(""), 3000);
+        setTimeout(() => { setActionMsg(""); refreshStatus(); }, 2000);
       })
       .catch(() => setActionMsg("API error"));
-  }, [watcherPersist, watcherPublish]);
+  }, [watcherPersist, watcherPublish, refreshStatus]);
 
   const getStatus = (name: string) => {
     if (ping) {
