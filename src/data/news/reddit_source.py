@@ -5,7 +5,9 @@ Rate limit: ~10 req/min without auth.
 """
 import logging
 import requests
+from datetime import datetime, timezone
 from src.common.events import NewsEvent
+from src.common.retry import retry
 from .newsapi_source import NewsSource
 
 logger = logging.getLogger(__name__)
@@ -27,11 +29,7 @@ class RedditSource(NewsSource):
         events = []
         for sub in self.subreddits:
             try:
-                resp = requests.get(
-                    f"https://www.reddit.com/r/{sub}/new.json?limit={self.limit}",
-                    headers={"User-Agent": "EonTrading/1.0"},
-                    timeout=10,
-                )
+                resp = self._fetch_sub(sub)
                 for post in resp.json().get("data", {}).get("children", []):
                     d = post["data"]
                     pid = d.get("id", "")
@@ -48,7 +46,16 @@ class RedditSource(NewsSource):
                 logger.error("Reddit error (r/%s): %s", sub, e)
         return events
 
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
+    def _fetch_sub(self, sub: str):
+        resp = requests.get(
+            f"https://www.reddit.com/r/{sub}/new.json?limit={self.limit}",
+            headers={"User-Agent": "EonTrading/1.0"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp
+
     @staticmethod
     def _epoch_to_iso(epoch: float) -> str:
-        from datetime import datetime
-        return datetime.utcfromtimestamp(epoch).isoformat() + "Z"
+        return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()

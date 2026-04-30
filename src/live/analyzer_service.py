@@ -1,4 +1,5 @@
 """AnalyzerService: subscribes to [news], queries positions, scores sentiment, publishes to [sentiment]."""
+import asyncio
 import logging
 from datetime import datetime
 from src.common.clock import utcnow
@@ -41,8 +42,9 @@ class AnalyzerService:
         event = NewsEvent.from_dict(msg)
         if self._is_stale(event):
             return
-        positions = self.get_positions() if self.get_positions else None
-        sentiment = self.analyzer.analyze(event, positions=positions)
+        # Run synchronous MongoDB + LLM calls off the event loop
+        positions = await asyncio.to_thread(self.get_positions) if self.get_positions else None
+        sentiment = await asyncio.to_thread(self.analyzer.analyze, event, positions)
         if sentiment.confidence > 0:
             await self.bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
             logger.info("[%+.2f] %s", sentiment.sentiment, sentiment.headline[:80])

@@ -10,7 +10,7 @@ import glob
 def _get_all_conditionals_on_col_attrs(path: str) -> list[str]:
     """Find all conditionals that test a _col attribute with bool() instead of 'is not None'."""
     issues = []
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         source = f.read()
     try:
         tree = ast.parse(source)

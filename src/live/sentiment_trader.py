@@ -55,15 +55,16 @@ class SentimentTrader:
         if event.success:
             logger.info("✅ %s %s confirmed by broker", action.upper(), symbol)
             if self._trades_col is not None:
-                self._trades_col.insert_one(trade_to_doc(
-                    symbol, action, entry_price, shares, event.reason, event.timestamp))
+                doc = trade_to_doc(symbol, action, entry_price, shares, event.reason, event.timestamp)
+                await asyncio.to_thread(self._trades_col.insert_one, doc)
             if self.position_store:
                 if action == "buy":
-                    self.position_store.open_position(symbol, self.holdings[symbol], entry_price=entry_price)
+                    await asyncio.to_thread(
+                        self.position_store.open_position, symbol, self.holdings[symbol], entry_price)
                     if self.price_monitor:
                         self.price_monitor.register_entry(symbol, entry_price, shares)
                 elif action == "sell":
-                    self.position_store.close_position(symbol)
+                    await asyncio.to_thread(self.position_store.close_position, symbol)
         else:
             logger.warning("⚠️ %s %s rejected by broker: %s", action.upper(), symbol, event.reason)
             if action == "buy":

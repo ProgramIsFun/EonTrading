@@ -30,3 +30,22 @@ asyncio_mode = "strict"
 markers = [
     "redis: tests requiring a running Redis instance (deselect with '-m not redis')",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",   # line too long — handled by formatter, not linter
+    "E402",   # module-level import not at top — needed for dotenv/logging setup
+    "F401",   # unused import — __init__.py re-exports
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"scripts/**" = ["E402"]
+"src/live/runners/**" = ["E402"]
+"src/live/news_trader.py" = ["E402"]
+"src/live/replay.py" = ["E402"]

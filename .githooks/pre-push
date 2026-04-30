@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Pre-push hook: lint + test before pushing.
+# Install: git config core.hooksPath .githooks
+set -e
+
+echo "🔍 Running ruff..."
+ruff check src/ tests/ scripts/ || { echo "❌ Lint failed"; exit 1; }
+
+echo "🧪 Running tests (no Redis)..."
+PYTHONPATH=. python -m pytest tests/ -m "not redis" -q || { echo "❌ Tests failed"; exit 1; }
+
+echo "✅ All checks passed"

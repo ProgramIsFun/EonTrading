@@ -1,5 +1,6 @@
 import os
 import logging
+from urllib.parse import quote_plus
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
@@ -21,7 +22,8 @@ def get_mongo_client():
     if not all([MONGODB_URI, MONGODB_USER, MONGODB_PASS, MONGODB_CLUSTERNAME]):
         raise ValueError("Missing one or more required MongoDB environment variables.")
 
-    uri = f"mongodb+srv://{MONGODB_USER}:{MONGODB_PASS}@{MONGODB_URI}/?appName={MONGODB_CLUSTERNAME}"
+    # URL-encode user/pass to handle special characters (@, :, /, %, etc.)
+    uri = f"mongodb+srv://{quote_plus(MONGODB_USER)}:{quote_plus(MONGODB_PASS)}@{MONGODB_URI}/?appName={MONGODB_CLUSTERNAME}"
 
     # Create a new client
     client = MongoClient(uri, server_api=ServerApi('1'))
@@ -36,13 +38,12 @@ def get_mongo_client():
         raise ConnectionError(f"Failed to connect to MongoDB: {e}") from e
     
 
-def getSymbolsList():
-    # get list of stock first
+def get_symbols_list():
+    """Return all documents from the symbols collection."""
     client = get_mongo_client()
     db = client['EonTradingDB']
-    collection = db['symbols']
-    documents = collection.find({})
-    stock_list = []
-    for doc in documents:
-        stock_list.append(doc)
-    return stock_list
+    return list(db['symbols'].find({}))
+
+
+# Backward compat alias
+getSymbolsList = get_symbols_list

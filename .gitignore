@@ -11,3 +11,4 @@ build/
 .venv/
 .ipynb_checkpoints/
 uv.lock
+test_results.txt

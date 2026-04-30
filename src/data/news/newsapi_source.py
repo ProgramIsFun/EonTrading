@@ -5,6 +5,7 @@ import requests
 from datetime import datetime, timedelta
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
+from src.common.retry import retry
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +51,7 @@ class NewsAPISource(NewsSource):
         """
         events = []
         try:
-            resp = requests.get(f"{self.base_url}/everything", params={
-                "apiKey": self.api_key,
-                "q": query,
-                "language": "en",
-                "sortBy": "publishedAt",
-                "pageSize": 20,
-                "from": (utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            }, timeout=10)
+            resp = self._fetch_with_retry(query)
             data = resp.json()
             for article in data.get("articles", []):
                 url = article.get("url", "")
@@ -73,3 +67,16 @@ class NewsAPISource(NewsSource):
         except Exception as e:
             logger.error("NewsAPI error: %s", e)
         return events
+
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
+    def _fetch_with_retry(self, query: str):
+        resp = requests.get(f"{self.base_url}/everything", params={
+            "apiKey": self.api_key,
+            "q": query,
+            "language": "en",
+            "sortBy": "publishedAt",
+            "pageSize": 20,
+            "from": (utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }, timeout=10)
+        resp.raise_for_status()
+        return resp

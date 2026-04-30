@@ -10,6 +10,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 from src.common.clock import utcnow
+from src.common.retry import retry
 logger = logging.getLogger(__name__)
 PRICE_SOURCE = os.getenv("PRICE_SOURCE", "yfinance").lower()
 _YFINANCE_TIMEOUT = int(os.getenv("PRICE_TIMEOUT", "15"))
@@ -90,31 +91,37 @@ def _parse_time(as_of: str = None) -> datetime | None:
 
 
 def _from_yfinance(symbol: str, as_of: str = None) -> float:
-    import yfinance as yf
     try:
-        t = _parse_time(as_of)
-        if t:
-            start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
-            end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
-            logger.info("Fetching %s price @ %s", symbol, t.strftime('%Y-%m-%d %H:%M'))
-            data = yf.download(symbol, start=start, end=end, interval="1h", progress=False, timeout=_YFINANCE_TIMEOUT)
-            if not data.empty:
-                # Find the closest candle at or before the target time
-                data.index = data.index.tz_localize(None) if data.index.tz is None else data.index.tz_convert(None)
-                mask = data.index <= t
-                if mask.any():
-                    data = data[mask]
-        else:
-            logger.info("Fetching %s latest price", symbol)
-            data = yf.download(symbol, period="1d", interval="1m", progress=False, timeout=_YFINANCE_TIMEOUT)
-        if not data.empty:
-            val = data["Close"].iloc[-1]
-            price = float(val.iloc[0]) if hasattr(val, "iloc") else float(val)
-            logger.info("%s → $%.2f", symbol, price)
-            return price
-        logger.warning("%s → no data", symbol)
+        return _yfinance_download(symbol, as_of)
     except Exception as e:
-        logger.error("%s → error: %s", symbol, e)
+        logger.error("%s → error after retries: %s", symbol, e)
+    return 0.0
+
+
+@retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
+def _yfinance_download(symbol: str, as_of: str = None) -> float:
+    import yfinance as yf
+    t = _parse_time(as_of)
+    if t:
+        start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
+        end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
+        logger.info("Fetching %s price @ %s", symbol, t.strftime('%Y-%m-%d %H:%M'))
+        data = yf.download(symbol, start=start, end=end, interval="1h", progress=False, timeout=_YFINANCE_TIMEOUT)
+        if not data.empty:
+            # Find the closest candle at or before the target time
+            data.index = data.index.tz_localize(None) if data.index.tz is None else data.index.tz_convert(None)
+            mask = data.index <= t
+            if mask.any():
+                data = data[mask]
+    else:
+        logger.info("Fetching %s latest price", symbol)
+        data = yf.download(symbol, period="1d", interval="1m", progress=False, timeout=_YFINANCE_TIMEOUT)
+    if not data.empty:
+        val = data["Close"].iloc[-1]
+        price = float(val.iloc[0]) if hasattr(val, "iloc") else float(val)
+        logger.info("%s → $%.2f", symbol, price)
+        return price
+    logger.warning("%s → no data", symbol)
     return 0.0
 
 

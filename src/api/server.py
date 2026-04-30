@@ -288,6 +288,17 @@ def backtest(
 
 # --- Live pipeline backtest (background task) ---
 _backtest_jobs: dict[str, dict] = {}
+_JOB_TTL_SEC = 600  # auto-cleanup jobs older than 10 minutes
+
+
+def _cleanup_stale_jobs():
+    """Remove backtest jobs that have been sitting around too long (prevents memory leak)."""
+    now = datetime.now()
+    stale = [jid for jid, job in _backtest_jobs.items()
+             if (now - job.get("_created", now)).total_seconds() > _JOB_TTL_SEC
+             and job.get("status") in ("done", "error")]
+    for jid in stale:
+        del _backtest_jobs[jid]
 
 
 async def _run_live_backtest(job_id: str, params: dict):
@@ -471,8 +482,9 @@ async def start_live_backtest(
 ):
     """Start a live pipeline backtest as a background task."""
     import uuid
+    _cleanup_stale_jobs()
     job_id = str(uuid.uuid4())[:8]
-    _backtest_jobs[job_id] = {"status": "running", "progress": 0, "log": []}
+    _backtest_jobs[job_id] = {"status": "running", "progress": 0, "log": [], "_created": datetime.now()}
     params = dict(capital=capital, threshold=threshold, max_allocation=max_allocation,
                   stop_loss=stop_loss, take_profit=take_profit, max_hold_days=max_hold_days,
                   sl_check_hours=sl_check_hours, analyzer=analyzer,
@@ -484,6 +496,7 @@ async def start_live_backtest(
 @app.get("/api/live-backtest/{job_id}")
 def get_live_backtest(job_id: str):
     """Poll backtest status/result."""
+    _cleanup_stale_jobs()
     job = _backtest_jobs.get(job_id)
     if not job:
         return {"status": "not_found"}

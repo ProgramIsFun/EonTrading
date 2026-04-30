@@ -10,6 +10,7 @@ import requests
 import re
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
+from src.common.retry import retry
 from .newsapi_source import NewsSource
 
 logger = logging.getLogger(__name__)
@@ -34,11 +35,17 @@ class RSSSource(NewsSource):
         events = []
         for feed_url in self.feeds:
             try:
-                resp = requests.get(feed_url, timeout=10, headers={"User-Agent": "EonTrading/1.0"})
+                resp = self._fetch_feed(feed_url)
                 events.extend(self._parse_feed(resp.text, feed_url))
             except Exception as e:
                 logger.error("RSS error (%s): %s", feed_url[:50], e)
         return events
+
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
+    def _fetch_feed(self, feed_url: str):
+        resp = requests.get(feed_url, timeout=10, headers={"User-Agent": "EonTrading/1.0"})
+        resp.raise_for_status()
+        return resp
 
     def _parse_feed(self, xml: str, feed_url: str) -> list[NewsEvent]:
         """Simple regex XML parser — no lxml/feedparser dependency."""

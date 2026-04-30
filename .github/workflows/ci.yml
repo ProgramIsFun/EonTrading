@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[test]"
+          pip install ruff
+
+      - name: Lint with ruff
+        run: ruff check src/ tests/ scripts/
+
+      - name: Run tests (no Redis)
+        run: python -m pytest tests/ -m "not redis" -v
+        env:
+          PYTHONPATH: .
+          # Dummy values so MongoDB client init doesn't fail during import
+          MONGODB_URI: test-cluster.mongodb.net
+          MONGODB_USER: testuser
+          MONGODB_PASS: testpass
+          MONGODB_CLUSTERNAME: TestCluster

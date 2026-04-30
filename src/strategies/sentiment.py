@@ -6,6 +6,7 @@ import logging
 from abc import ABC, abstractmethod
 from ..common.clock import utcnow
 from ..common.events import NewsEvent, SentimentEvent
+from ..common.retry import retry
 
 logger = logging.getLogger(__name__)
 
@@ -167,15 +168,7 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         else:
             prompt = LLM_PROMPT.format(headline=event.headline)
         try:
-            url = f"{self.base_url}/chat/completions"
-            headers = {"api-key": self.api_key} if self._is_azure else {"Authorization": f"Bearer {self.api_key}"}
-            params = {"api-version": self.api_version} if self._is_azure and self.api_version else {}
-            resp = requests.post(
-                url, headers=headers, params=params,
-                json={"model": self.model, "messages": [{"role": "user", "content": prompt}], "temperature": 0},
-                timeout=15,
-            )
-            content = resp.json()["choices"][0]["message"]["content"]
+            content = self._call_llm(prompt)
             # Extract JSON from response (handle markdown code blocks)
             content = re.sub(r"```json?\s*", "", content).replace("```", "").strip()
             data = json.loads(content)
@@ -197,3 +190,17 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
                 timestamp=event.timestamp,
                 analyzed_at=utcnow().isoformat() + "Z",
             )
+
+    @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
+    def _call_llm(self, prompt: str) -> str:
+        import requests
+        url = f"{self.base_url}/chat/completions"
+        headers = {"api-key": self.api_key} if self._is_azure else {"Authorization": f"Bearer {self.api_key}"}
+        params = {"api-version": self.api_version} if self._is_azure and self.api_version else {}
+        resp = requests.post(
+            url, headers=headers, params=params,
+            json={"model": self.model, "messages": [{"role": "user", "content": prompt}], "temperature": 0},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]

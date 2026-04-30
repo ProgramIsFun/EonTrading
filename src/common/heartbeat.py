@@ -44,5 +44,5 @@ class Heartbeat:
     async def run(self):
         """Background task — call once, runs forever."""
         while True:
-            self.beat()
+            await asyncio.to_thread(self.beat)
             await asyncio.sleep(self.interval)
