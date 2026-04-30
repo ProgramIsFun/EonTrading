@@ -6,6 +6,7 @@ from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_NEWS
 from src.common.news_poller import NewsPoller
+from src.common.news_store import news_to_doc
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +46,7 @@ class NewsWatcher:
                     await self.bus.publish(CHANNEL_NEWS, news.to_dict())
                 if self._news_col:
                     try:
-                        self._news_col.insert_one({
-                            "source": news.source, "headline": news.headline,
-                            "timestamp": news.timestamp, "url": news.url, "body": news.body,
-                            "collected_at": utcnow().isoformat() + "Z",
-                            "origin": "live",
-                        })
+                        self._news_col.insert_one(news_to_doc(news, origin="live"))
                     except Exception:
                         pass  # duplicate URL
             if not events:

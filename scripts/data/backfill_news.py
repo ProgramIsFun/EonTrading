@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.common.clock import utcnow
+from src.common.events import NewsEvent
+from src.common.news_store import news_to_doc
 
 load_dotenv()
 
@@ -55,17 +57,14 @@ def backfill_finnhub(symbol: str, days: int, col):
             url = a.get("url", "")
             if url and col.find_one({"url": url}):
                 continue
-            col.insert_one({
-                "source": "finnhub",
-                "headline": a.get("headline", ""),
-                "timestamp": datetime.utcfromtimestamp(a.get("datetime", 0)).isoformat() + "Z",
-                "url": url,
-                "body": a.get("summary", ""),
-                "symbol": symbol,
-                "collected_at": utcnow().isoformat() + "Z",
-                "origin": "backfill",
-                "backfilled": True,
-            })
+            event = NewsEvent(
+                source="finnhub", headline=a.get("headline", ""),
+                timestamp=datetime.utcfromtimestamp(a.get("datetime", 0)).isoformat() + "Z",
+                url=url, body=a.get("summary", ""),
+            )
+            doc = news_to_doc(event, origin="backfill")
+            doc["symbol"] = symbol
+            col.insert_one(doc)
             total += 1
         print(f"  → {total} new articles (skipped {len(articles) - total} dupes)")
     except Exception as e:
@@ -102,15 +101,12 @@ def backfill_newsapi(query: str, days: int, col):
             url = a.get("url", "")
             if url and col.find_one({"url": url}):
                 continue
-            col.insert_one({
-                "source": "newsapi",
-                "headline": a.get("title", ""),
-                "timestamp": a.get("publishedAt", ""),
-                "url": url,
-                "body": a.get("description", ""),
-                "collected_at": utcnow().isoformat() + "Z",
-                "origin": "backfill",
-            })
+            event = NewsEvent(
+                source="newsapi", headline=a.get("title", ""),
+                timestamp=a.get("publishedAt", ""),
+                url=url, body=a.get("description", ""),
+            )
+            col.insert_one(news_to_doc(event, origin="backfill"))
             total += 1
         print(f"  → {total} new articles (skipped {len(articles) - total} dupes)")
     except Exception as e:
