@@ -335,6 +335,7 @@ env.sh                               # Environment profile switcher
 - [x] 101 tests passing (unit + integration + Redis)
 
 ### To Do
+- [ ] Cross-source headline dedup (same story from different sources has different URLs — currently only URL-based dedup)
 - [ ] LLM analyzer improvements (context-aware, inverse ETFs)
 - [ ] Sector-based trading
 - [ ] Backtest with collected real news from MongoDB
