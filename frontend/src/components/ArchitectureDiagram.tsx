@@ -524,6 +524,7 @@ export default function ArchitectureDiagram() {
           <div style={{ fontSize: 9, color: "#555", marginTop: 4 }}>
             Replay mode uses separate collections (<code style={{ color: "#f59e0b" }}>replay_trades</code>, <code style={{ color: "#f59e0b" }}>replay_positions</code>) with identical schemas.
             Schema defined by shared builders: <code style={{ color: "#818cf8" }}>news_to_doc()</code>, <code style={{ color: "#818cf8" }}>trade_to_doc()</code>, <code style={{ color: "#818cf8" }}>PositionStore</code>.
+            <br />⚠️ Examples above are hardcoded — source of truth is the builder functions. Ask AI to verify/update these if schemas change.
           </div>
         </div>
       </div>
