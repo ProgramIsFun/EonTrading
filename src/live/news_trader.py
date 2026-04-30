@@ -86,8 +86,13 @@ async def main_single():
     from src.live.price_monitor import PriceMonitor
 
     store = PositionStore()
-    logic = TradingLogic(threshold=0.4, min_confidence=0.15, max_allocation=0.2,
-                         stop_loss_pct=0.05, take_profit_pct=0.10)
+    logic = TradingLogic(
+        threshold=float(os.getenv("THRESHOLD", "0.4")),
+        min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.15")),
+        max_allocation=float(os.getenv("MAX_ALLOCATION", "0.2")),
+        stop_loss_pct=float(os.getenv("STOP_LOSS_PCT", "0.05")),
+        take_profit_pct=float(os.getenv("TAKE_PROFIT_PCT", "0.10")),
+    )
     monitor = PriceMonitor(bus, store, logic, interval_sec=60)
     trader = SentimentTrader(bus, logic=logic, position_store=store,
                              trade_log=get_mongo_client()["EonTradingDB"]["trades"],

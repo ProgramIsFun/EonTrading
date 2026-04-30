@@ -11,7 +11,6 @@ To add a new broker:
 """
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, CHANNEL_FILL, TradeEvent, FillEvent
@@ -376,16 +375,26 @@ class TradeExecutor:
 
     Safety: in replay mode (clock.is_replay), real brokers are blocked.
     Only PaperBroker is allowed during backtest replay.
+    Dedup: tracks recent trade keys to prevent duplicate execution (at-least-once delivery).
     """
 
     def __init__(self, bus: EventBus, broker: Broker):
         self.bus = bus
         self.broker = broker
         self.broker.set_bus(bus)
+        self._seen: set[str] = set()
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_TRADE, self._on_trade)
 
     async def _on_trade(self, msg: dict):
         trade = TradeEvent.from_dict(msg)
+        dedup_key = f"{trade.symbol}:{trade.action}:{trade.timestamp}"
+        if dedup_key in self._seen:
+            logger.warning("Duplicate trade ignored: %s %s @ %s", trade.action, trade.symbol, trade.timestamp)
+            return
+        self._seen.add(dedup_key)
+        # Cap dedup set size
+        if len(self._seen) > 10000:
+            self._seen = set(list(self._seen)[-5000:])
         await self.broker.execute(trade)

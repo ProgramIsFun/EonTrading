@@ -20,12 +20,15 @@ from src.live.price_monitor import PriceMonitor
 
 
 async def main():
+    sl_pct = os.getenv("STOP_LOSS_PCT", "0.05")
+    tp_pct = os.getenv("TAKE_PROFIT_PCT", "0.10")
+    interval = os.getenv("SL_CHECK_INTERVAL", "60")
     banner("PriceMonitor", {
         "Publishes to": "[trade]",
         "Reads from": "MongoDB positions",
-        "SL": "5%",
-        "TP": "10%",
-        "Interval": "60s",
+        "SL": f"{float(sl_pct)*100:.0f}%",
+        "TP": f"{float(tp_pct)*100:.0f}%",
+        "Interval": f"{interval}s",
         "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
 
@@ -33,8 +36,11 @@ async def main():
     await bus.start()
 
     store = PositionStore()
-    logic = TradingLogic(stop_loss_pct=0.05, take_profit_pct=0.10)
-    monitor = PriceMonitor(bus, store, logic, interval_sec=60)
+    logic = TradingLogic(
+        stop_loss_pct=float(os.getenv("STOP_LOSS_PCT", "0.05")),
+        take_profit_pct=float(os.getenv("TAKE_PROFIT_PCT", "0.10")),
+    )
+    monitor = PriceMonitor(bus, store, logic, interval_sec=int(os.getenv("SL_CHECK_INTERVAL", "60")))
 
     asyncio.create_task(Heartbeat("monitor", metadata={"mode": "distributed"}).run())
     ping = PingResponder(bus, ["monitor"], metadata={"monitor": {"mode": "distributed"}})

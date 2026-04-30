@@ -15,8 +15,10 @@ from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
+from src.common.trading_logic import TradingLogic
 from src.data.utils.db_helper import get_mongo_client
 from src.live.sentiment_trader import SentimentTrader
+from src.live.price_monitor import PriceMonitor
 
 
 async def main():
@@ -32,8 +34,17 @@ async def main():
     await bus.start()
 
     store = PositionStore()
-    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15, position_store=store,
-                             trade_log=get_mongo_client()["EonTradingDB"]["trades"])
+    logic = TradingLogic(
+        threshold=float(os.getenv("THRESHOLD", "0.4")),
+        min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.15")),
+        max_allocation=float(os.getenv("MAX_ALLOCATION", "0.2")),
+        stop_loss_pct=float(os.getenv("STOP_LOSS_PCT", "0.05")),
+        take_profit_pct=float(os.getenv("TAKE_PROFIT_PCT", "0.10")),
+    )
+    monitor = PriceMonitor(bus, store, logic, interval_sec=0)
+    trader = SentimentTrader(bus, logic=logic, position_store=store,
+                             trade_log=get_mongo_client()["EonTradingDB"]["trades"],
+                             price_monitor=monitor)
     await trader.start()
     logger.info("🟢 Started. Waiting for [sentiment] events.")
     asyncio.create_task(Heartbeat("trader", metadata={"mode": "distributed"}).run())

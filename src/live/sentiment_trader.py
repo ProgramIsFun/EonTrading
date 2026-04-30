@@ -5,6 +5,7 @@ from datetime import datetime
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL, SentimentEvent, TradeEvent, FillEvent
+from src.common.price import get_price
 from src.common.trading_logic import TradingLogic
 
 logger = logging.getLogger(__name__)
@@ -114,14 +115,12 @@ class SentimentTrader:
                     shares = broker_positions.get(symbol, 1)
                 else:
                     shares = 1
-                from src.common.price import get_price
-                price = get_price(symbol, as_of=event_ts)
+                price = await asyncio.to_thread(get_price, symbol, event_ts)
                 self.holdings.pop(symbol, None)
             elif symbol not in self.holdings:
                 if event.confidence < self.logic.min_confidence or event.sentiment < self.logic.threshold:
                     continue
-                from src.common.price import get_price
-                price = get_price(symbol, as_of=event_ts)
+                price = await asyncio.to_thread(get_price, symbol, event_ts)
                 if price <= 0:
                     continue
                 cash = await self.broker.get_cash() if self.broker else 0.0
