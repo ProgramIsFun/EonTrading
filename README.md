@@ -17,18 +17,23 @@ Everything flows through event channels (LocalEventBus or RedisStreamBus). See t
 ## Quick Start
 
 ```bash
-# 1. Set up environment profile
+# 1. Python 3.11 + venv (Docker uses 3.11, match it locally)
+brew install python@3.11
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+# 2. Set up environment profile
 ./env.sh dev       # PaperBroker, keyword analyzer, no API keys needed
 ./env.sh llm       # PaperBroker + LLM analyzer (needs OPENAI_API_KEY)
 ./env.sh live      # Real broker + LLM (needs broker API keys)
 
-# 2. Install (for local dev / API server on host)
+# 3. Install (for local dev / API server on host)
 pip install -e .
 
-# 3. Start API server on host (manages Docker + serves dashboard)
+# 4. Start API server on host (manages Docker + serves dashboard)
 PYTHONPATH=. uvicorn src.api.server:app --host 0.0.0.0 --port 8000
 
-# 4. Start pipeline
+# 5. Start pipeline
 PYTHONPATH=. python -m src.live.news_trader                # single process
 docker compose --profile distributed up -d                  # distributed (Docker)
 docker compose up -d redis                                  # just Redis (if starting components from dashboard)
