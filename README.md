@@ -67,6 +67,16 @@ Docker containers get `REDIS_HOST=redis` automatically from `docker-compose.yml`
 - **MongoDB** (`EonTradingDB`) — all persistent state: news, positions, trades, OHLCV, symbols
 - **Redis** — message queue (Streams) for distributed pipeline, pub/sub for ping/pong, price cache
 
+**Document builders:** Multiple components write to the same MongoDB collections. To prevent schema drift (missing fields, inconsistent naming), each collection has a shared builder function — one place to define the document shape:
+
+| Collection | Builder | Used by |
+|-----------|---------|---------|
+| `news` | `news_to_doc()` in `common/news_store.py` | NewsWatcher, backfill_news.py |
+| `trades` / `replay_trades` | `trade_to_doc()` in `common/trade_store.py` | SentimentTrader |
+| `positions` | `PositionStore` in `common/position_store.py` | SentimentTrader, PriceMonitor |
+
+Rule: never build a MongoDB document as an inline dict. Use the builder so adding a field changes one place.
+
 ### Deployment Modes
 
 | Mode | Command | Transport |
