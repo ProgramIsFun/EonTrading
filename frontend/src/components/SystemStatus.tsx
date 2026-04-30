@@ -124,6 +124,7 @@ export default function SystemStatus() {
     <div style={{ background: "#1e1e2e", borderRadius: 8, padding: 16, marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <span style={{ fontSize: 13, color: "#888", fontWeight: 600 }}>Live Pipeline Status</span>
+        <span style={{ fontSize: 9, color: "#555" }}>(distributed mode — Docker containers)</span>
         <button onClick={doPing} disabled={pinging}
           style={{ fontSize: 10, padding: "3px 10px", borderRadius: 4, cursor: "pointer",
             background: "#818cf822", color: "#818cf8", border: "1px solid #818cf844" }}>
