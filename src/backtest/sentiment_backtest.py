@@ -1,10 +1,12 @@
 """Backtest sentiment strategy against historical price data with synthetic news."""
+from dataclasses import dataclass, field
+
 import pandas as pd
 import yfinance as yf
-from dataclasses import dataclass, field
+
+from ..common.costs import ZERO, CostModel
 from ..common.events import NewsEvent
-from ..strategies.sentiment import KeywordSentimentAnalyzer, BaseSentimentAnalyzer
-from ..common.costs import CostModel, ZERO
+from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
 
 
 @dataclass
@@ -184,7 +186,7 @@ def run_sentiment_backtest(
                 cash += shares * exec_price - cost
                 trades.append(SentimentTrade(
                     symbol=symbol, action="sell (expire)", date=ts,
-                    price=price, sentiment=0, headline=f"Max hold reached",
+                    price=price, sentiment=0, headline="Max hold reached",
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0

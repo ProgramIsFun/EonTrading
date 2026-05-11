@@ -1,5 +1,6 @@
 """Tests for TwitterSource — mocked, no real API calls."""
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from src.data.news.twitter_source import TwitterSource
 
 
@@ -33,7 +34,7 @@ class TestTwitterSourceOfficial:
         source = TwitterSource(use_official=True)
         first = source.fetch_latest()
         mock_fetch.return_value = [ev]
-        second = source.fetch_latest()
+        source.fetch_latest()
         # Both calls return events since dedup is inside _fetch_official
         assert len(first) == 1
 

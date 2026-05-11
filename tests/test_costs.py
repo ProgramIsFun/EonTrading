@@ -1,5 +1,6 @@
 import pytest
-from src.common.costs import CostModel, US_STOCKS, ZERO
+
+from src.common.costs import US_STOCKS, ZERO, CostModel
 
 
 def test_zero_cost():

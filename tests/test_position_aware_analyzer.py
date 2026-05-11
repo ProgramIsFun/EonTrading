@@ -1,8 +1,13 @@
 """Tests for position-aware sentiment analysis."""
-from unittest.mock import patch, MagicMock
-from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer, LLM_PROMPT, LLM_PROMPT_WITH_POSITIONS
-from src.common.events import NewsEvent
+from unittest.mock import MagicMock, patch
 
+from src.common.events import NewsEvent
+from src.strategies.sentiment import (
+    LLM_PROMPT,
+    LLM_PROMPT_WITH_POSITIONS,
+    KeywordSentimentAnalyzer,
+    LLMSentimentAnalyzer,
+)
 
 TARIFF_NEWS = NewsEvent(
     source="test", headline="Trump announces sweeping tariffs on China, Apple supply chain at risk",
@@ -88,7 +93,7 @@ class TestLLMPromptSelection:
         mock_post.return_value = mock_resp
 
         analyzer = LLMSentimentAnalyzer(api_key="test-key")
-        result = analyzer.analyze(TARIFF_NEWS, positions={})
+        analyzer.analyze(TARIFF_NEWS, positions={})
 
         # Empty dict is falsy — uses basic prompt (no positions to report)
         call_args = mock_post.call_args

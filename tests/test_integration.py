@@ -4,22 +4,29 @@ No real API keys, no MongoDB, no Redis, no yfinance calls.
 Tests verify that components wire together correctly through the event bus.
 """
 import asyncio
-import pytest
-from unittest.mock import MagicMock, patch
 from datetime import datetime
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from src.common.costs import US_STOCKS
 from src.common.event_bus import LocalEventBus
 from src.common.events import (
-    NewsEvent, SentimentEvent, TradeEvent, FillEvent,
-    CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL,
+    CHANNEL_FILL,
+    CHANNEL_NEWS,
+    CHANNEL_SENTIMENT,
+    CHANNEL_TRADE,
+    FillEvent,
+    NewsEvent,
+    SentimentEvent,
+    TradeEvent,
 )
-from src.strategies.sentiment import KeywordSentimentAnalyzer
+from src.common.trading_logic import PositionState, TradingLogic
 from src.live.analyzer_service import AnalyzerService
-from src.live.sentiment_trader import SentimentTrader
 from src.live.brokers.broker import PaperBroker, TradeExecutor
 from src.live.price_monitor import PriceMonitor
-from src.common.trading_logic import TradingLogic, PositionState
-from src.common.costs import US_STOCKS
+from src.live.sentiment_trader import SentimentTrader
+from src.strategies.sentiment import KeywordSentimentAnalyzer
 
 
 @pytest.fixture(autouse=True)

@@ -3,6 +3,7 @@
 All tests mock MongoDB. If complex queries or aggregations are added, consider a real test DB.
 """
 import pytest
+
 from src.common.event_bus import LocalEventBus
 from src.common.events import TradeEvent
 from src.live.brokers.broker import Broker

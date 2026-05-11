@@ -1,9 +1,10 @@
 """Sentiment analysis interface and implementations."""
-import re
 import json
-import os
 import logging
+import os
+import re
 from abc import ABC, abstractmethod
+
 from ..common.clock import utcnow
 from ..common.events import NewsEvent, SentimentEvent
 from ..common.retry import retry

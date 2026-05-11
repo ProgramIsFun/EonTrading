@@ -4,10 +4,13 @@ No API key needed. Uses Reddit's public .json endpoints.
 Rate limit: ~10 req/min without auth.
 """
 import logging
-import requests
 from datetime import datetime, timezone
+
+import requests
+
 from src.common.events import NewsEvent
 from src.common.retry import retry
+
 from .newsapi_source import NewsSource
 
 logger = logging.getLogger(__name__)

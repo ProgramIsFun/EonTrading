@@ -1,6 +1,11 @@
 """Run TradeExecutor as its own process. Subscribes to [trade], broker publishes to [fill]."""
-import asyncio, logging, os, signal
+import asyncio
+import logging
+import os
+import signal
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 logging.basicConfig(
@@ -11,10 +16,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus
-from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
-from src.live.brokers.broker import TradeExecutor, PaperBroker, FutuBroker, IBKRBroker, AlpacaBroker
+from src.common.startup import banner
+from src.live.brokers.broker import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker, TradeExecutor
 
 
 async def main():

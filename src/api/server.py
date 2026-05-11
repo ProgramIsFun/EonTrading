@@ -1,16 +1,18 @@
 """REST API for EonTrading dashboard."""
+import asyncio
 import logging
 import os
 from datetime import datetime
-from fastapi import FastAPI, Depends, HTTPException, Query
+
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
-from src.common.clock import utcnow
+
 from src.backtest.portfolio_backtest import run_portfolio_backtest
+from src.common.clock import utcnow
 from src.common.costs import US_STOCKS
 from src.data.utils.db_helper import get_mongo_client
-import asyncio
-from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -106,7 +108,7 @@ async def reconcile_positions():
     import os
     try:
         from src.common.reconcile import reconcile
-        from src.live.brokers.broker import PaperBroker, FutuBroker, IBKRBroker, AlpacaBroker
+        from src.live.brokers.broker import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker
         broker_name = os.getenv("BROKER", "log").lower()
         if broker_name == "futu":
             broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
@@ -125,7 +127,7 @@ async def reconcile_positions():
 @app.get("/api/docker/status")
 def docker_status():
     """Get status of all Docker Compose services."""
-    from src.common.docker_ctl import container_status, container_env
+    from src.common.docker_ctl import container_env, container_status
     containers = container_status()
     # Attach watcher options from running container
     for c in containers:
@@ -207,8 +209,9 @@ def price_backtest(
     overbought: float = Query(default=70, ge=0, le=100),
 ):
     import yfinance as yf
+
     from src.backtest import run_backtest
-    from src.strategies import SMACrossover, RSIMeanReversion
+    from src.strategies import RSIMeanReversion, SMACrossover
 
     df = yf.download(symbol, start=start, end=end, auto_adjust=True, progress=False)
     if df.empty:
@@ -303,18 +306,19 @@ def _cleanup_stale_jobs():
 
 async def _run_live_backtest(job_id: str, params: dict):
     """Background task: runs the live pipeline backtest."""
-    from src.common.event_bus import LocalEventBus
-    from src.common.events import CHANNEL_NEWS, CHANNEL_FILL, NewsEvent
-    from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
-    from src.live.analyzer_service import AnalyzerService
-    from src.live.sentiment_trader import SentimentTrader
-    from src.live.brokers.broker import TradeExecutor, PaperBroker
-    from src.common.trading_logic import TradingLogic
-    from src.live.price_monitor import PriceMonitor
-    from src.common.price import get_price
-    from src.common.costs import US_STOCKS, HK_STOCKS, CRYPTO, ZERO
-    from datetime import timedelta
     import os
+    from datetime import timedelta
+
+    from src.common.costs import CRYPTO, HK_STOCKS, US_STOCKS, ZERO
+    from src.common.event_bus import LocalEventBus
+    from src.common.events import CHANNEL_FILL, CHANNEL_NEWS, NewsEvent
+    from src.common.price import get_price
+    from src.common.trading_logic import TradingLogic
+    from src.live.analyzer_service import AnalyzerService
+    from src.live.brokers.broker import PaperBroker, TradeExecutor
+    from src.live.price_monitor import PriceMonitor
+    from src.live.sentiment_trader import SentimentTrader
+    from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
     job = _backtest_jobs[job_id]
     try:

@@ -10,8 +10,14 @@ For distributed mode, run each runner in its own terminal:
   python3 -m src.live.runners.run_trader
   python3 -m src.live.runners.run_executor
 """
-import asyncio, logging, os, signal, sys
+import asyncio
+import logging
+import os
+import signal
+import sys
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 logging.basicConfig(
@@ -25,28 +31,31 @@ logger = logging.getLogger(__name__)
 async def main_single():
     """All components in one process via LocalEventBus."""
     from src.common.event_bus import LocalEventBus
-    from src.common.startup import banner, env_status
-    from src.data.news import NewsAPISource, FinnhubSource, RSSSource, RedditSource, TwitterSource
-    from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
-    from src.live.news_watcher import NewsWatcher
-    from src.live.analyzer_service import AnalyzerService
-    from src.live.sentiment_trader import SentimentTrader
-    from src.live.brokers.broker import TradeExecutor, PaperBroker, FutuBroker, IBKRBroker, AlpacaBroker
-    from src.common.position_store import PositionStore
-    from src.common.trading_logic import TradingLogic
-    from src.data.utils.db_helper import get_mongo_client
     from src.common.heartbeat import Heartbeat
     from src.common.ping import PingResponder
+    from src.common.position_store import PositionStore
+    from src.common.startup import banner, env_status
+    from src.common.trading_logic import TradingLogic
+    from src.data.news import FinnhubSource, NewsAPISource, RedditSource, RSSSource, TwitterSource
+    from src.data.utils.db_helper import get_mongo_client
+    from src.live.analyzer_service import AnalyzerService
+    from src.live.brokers.broker import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker, TradeExecutor
+    from src.live.news_watcher import NewsWatcher
+    from src.live.sentiment_trader import SentimentTrader
+    from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
     # --- Sources ---
     sources = []
     source_names = ["RSS", "Reddit"]
     if os.getenv("NEWSAPI_KEY"):
-        sources.append(NewsAPISource()); source_names.append("NewsAPI")
+        sources.append(NewsAPISource())
+        source_names.append("NewsAPI")
     if os.getenv("FINNHUB_KEY"):
-        sources.append(FinnhubSource()); source_names.append("Finnhub")
+        sources.append(FinnhubSource())
+        source_names.append("Finnhub")
     if os.getenv("TWITTER_BEARER_TOKEN"):
-        sources.append(TwitterSource()); source_names.append("Twitter")
+        sources.append(TwitterSource())
+        source_names.append("Twitter")
     sources.append(RSSSource())
     sources.append(RedditSource())
 
@@ -84,7 +93,6 @@ async def main_single():
     await bus.start()
 
     from src.env import env_bool
-
     from src.live.price_monitor import PriceMonitor
 
     store = PositionStore()

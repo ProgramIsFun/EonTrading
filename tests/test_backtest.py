@@ -1,8 +1,9 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 from src.backtest import run_backtest
+from src.common.costs import US_STOCKS, ZERO, CostModel
 from src.strategies import SMACrossover
-from src.common.costs import CostModel, ZERO, US_STOCKS
 
 
 def _make_df(prices, highs=None, lows=None):

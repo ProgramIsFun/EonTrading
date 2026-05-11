@@ -1,5 +1,6 @@
 """Simple Moving Average crossover. Buy when fast SMA crosses above slow SMA."""
 import pandas as pd
+
 from .base_strategy import Strategy
 
 

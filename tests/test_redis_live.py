@@ -6,6 +6,7 @@ Skip with: python -m pytest -m "not redis"
 """
 import asyncio
 import json
+
 import pytest
 
 redis_available = False
@@ -60,8 +61,9 @@ class TestRedisStreamsLive:
     @pytest.mark.asyncio
     async def test_messages_survive_reconnect(self):
         """Messages published while consumer is down are delivered after reconnect."""
-        from src.common.event_bus import RedisStreamBus
         import redis.asyncio as aioredis
+
+        from src.common.event_bus import RedisStreamBus
 
         stream_key = "stream:test_persist"
         group = "test-persist"

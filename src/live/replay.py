@@ -13,10 +13,12 @@ This runs the exact same pipeline as live mode, but:
   - Prices are fetched at the simulated time via yfinance
   - Everything else (analyzer, trader, executor, broker) is identical
 """
-import asyncio
 import argparse
+import asyncio
 import os
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -24,13 +26,13 @@ async def main(start: str, end: str):
     from src.common.clock import clock
     from src.common.event_bus import LocalEventBus
     from src.common.events import CHANNEL_NEWS, NewsEvent
-    from src.common.startup import banner
-    from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
-    from src.live.analyzer_service import AnalyzerService
-    from src.live.sentiment_trader import SentimentTrader
-    from src.live.brokers.broker import TradeExecutor, PaperBroker
     from src.common.position_store import PositionStore
+    from src.common.startup import banner
     from src.data.utils.db_helper import get_mongo_client
+    from src.live.analyzer_service import AnalyzerService
+    from src.live.brokers.broker import PaperBroker, TradeExecutor
+    from src.live.sentiment_trader import SentimentTrader
+    from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
     banner("EonTrading — Replay Mode", {
         "Period": f"{start} → {end}",
@@ -95,7 +97,7 @@ async def main(start: str, end: str):
     print(f"\n{'═' * 50}")
     print(f"  Replay complete: {len(news_docs)} events")
     print(f"  Final holdings: {list(trader.holdings.keys()) or 'none'}")
-    print(f"  Trades logged to: EonTradingDB.replay_trades")
+    print("  Trades logged to: EonTradingDB.replay_trades")
     print(f"{'═' * 50}\n")
 
 

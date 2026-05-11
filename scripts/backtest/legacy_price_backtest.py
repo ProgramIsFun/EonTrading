@@ -1,12 +1,15 @@
 """Test backtest: SMA crossover on AAPL with and without costs."""
-import os, sys
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime
-from src.data.storage import ClickHouseStorage
-from src.strategies import SMACrossover, RSIMeanReversion
+
 from src.backtest import run_backtest
 from src.common.costs import US_STOCKS, ZERO
+from src.data.storage import ClickHouseStorage
+from src.strategies import RSIMeanReversion, SMACrossover
 
 storage = ClickHouseStorage()
 

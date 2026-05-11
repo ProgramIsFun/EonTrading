@@ -54,7 +54,7 @@ result = run_portfolio_backtest(
 )
 
 print(f"\n{result.summary()}")
-print(f"\n  Trade log:")
+print("\n  Trade log:")
 print(f"  {'Date':<22s} {'Symbol':<7s} {'Action':<14s} {'Shares':>6s} {'Price':>9s} {'Sent':>6s} {'P&L':>10s}  Headline")
 print(f"  {'─'*22} {'─'*7} {'─'*14} {'─'*6} {'─'*9} {'─'*6} {'─'*10}  {'─'*40}")
 for t in result.trades:

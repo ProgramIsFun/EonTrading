@@ -1,6 +1,7 @@
-import pandas as pd
 import numpy as np
-from src.strategies import SMACrossover, RSIMeanReversion
+import pandas as pd
+
+from src.strategies import RSIMeanReversion, SMACrossover
 
 
 def _make_df(prices):

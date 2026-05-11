@@ -1,8 +1,10 @@
 """News source interface and NewsAPI implementation."""
 import logging
 import os
-import requests
 from datetime import datetime, timedelta
+
+import requests
+
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
 from src.common.retry import retry

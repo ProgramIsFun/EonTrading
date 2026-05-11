@@ -1,8 +1,10 @@
 """Ingest OHLCV data from providers into storage."""
-import yfinance as yf
-import pandas as pd
 from datetime import datetime, timedelta
+
+import pandas as pd
+import yfinance as yf
 from tqdm import tqdm
+
 from ..storage.base_storage import StorageBackend
 
 

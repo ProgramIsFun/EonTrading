@@ -9,10 +9,12 @@ Usage:
 Timestamps flow with the events — no clock sync needed.
 Each component uses the event's timestamp for price lookups.
 """
-import asyncio
 import argparse
+import asyncio
 import os
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from src.common.sample_news import SAMPLE_NEWS
@@ -32,10 +34,10 @@ async def main(start: str, end: str):
     await bus.subscribe("fill", on_fill)
 
     print(f"\n{'═' * 60}")
-    print(f"  Distributed Replay Controller")
+    print("  Distributed Replay Controller")
     print(f"  Redis: {redis_host}")
     print(f"  News events: {len(SAMPLE_NEWS)}")
-    print(f"  ⚠️  Make sure BROKER=log in executor container!")
+    print("  ⚠️  Make sure BROKER=log in executor container!")
     print(f"{'═' * 60}\n")
 
     for doc in SAMPLE_NEWS:

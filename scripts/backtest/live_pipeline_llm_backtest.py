@@ -10,7 +10,9 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timedelta
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Pre-scored sentiment — simulates LLM analyzer output
@@ -54,14 +56,14 @@ async def main():
     def elapsed():
         return f"[{time.time()-t0:.1f}s]"
 
+    from src.common.costs import US_STOCKS
     from src.common.event_bus import LocalEventBus
     from src.common.events import CHANNEL_SENTIMENT, SentimentEvent
-    from src.live.sentiment_trader import SentimentTrader
-    from src.live.brokers.broker import TradeExecutor, PaperBroker
-    from src.common.costs import US_STOCKS
-    from src.common.trading_logic import TradingLogic
-    from src.live.price_monitor import PriceMonitor
     from src.common.position_store import PositionStore
+    from src.common.trading_logic import TradingLogic
+    from src.live.brokers.broker import PaperBroker, TradeExecutor
+    from src.live.price_monitor import PriceMonitor
+    from src.live.sentiment_trader import SentimentTrader
 
     print(f"  {elapsed()} imports done")
 
@@ -115,10 +117,10 @@ async def main():
         print(f"  {elapsed()} Cache: {len(_price_cache)} entries in memory\n")
 
     print(f"\n{'═' * 60}")
-    print(f"  Replay Backtest — Pre-scored LLM Sentiment")
-    print(f"  Capital: $70,000 | Threshold: 0.4 | Max alloc: 20%")
+    print("  Replay Backtest — Pre-scored LLM Sentiment")
+    print("  Capital: $70,000 | Threshold: 0.4 | Max alloc: 20%")
     print(f"  SL: 5% | TP: 10% | SL check: every {SL_CHECK_INTERVAL}h")
-    print(f"  Analyzer: Pre-scored (LLM simulation)")
+    print("  Analyzer: Pre-scored (LLM simulation)")
     print(f"  News events: {len(SCORED_NEWS)}")
     print(f"{'═' * 60}\n")
 
@@ -141,7 +143,7 @@ async def main():
                 checks_done += 1
                 if sold:
                     for sym, price, qty in sold:
-                        from src.common.events import TradeEvent, CHANNEL_TRADE
+                        from src.common.events import CHANNEL_TRADE, TradeEvent
                         trade = TradeEvent(symbol=sym, action="sell",
                                            reason=f"SL/TP @ ${price:.2f}",
                                            timestamp=check_time.isoformat(), price=price, size=float(qty))
@@ -185,7 +187,7 @@ async def main():
     last_date = SCORED_NEWS[-1]["date"]
     portfolio_value = cash
     print(f"\n{'═' * 60}")
-    print(f"  Replay Complete (LLM pre-scored)")
+    print("  Replay Complete (LLM pre-scored)")
     print(f"{'─' * 60}")
     print(f"  {'Symbol':<8s} {'Qty':>5s} {'Current':>10s} {'Value':>12s}")
     print(f"  {'─'*8} {'─'*5} {'─'*10} {'─'*12}")
@@ -202,7 +204,7 @@ async def main():
     print(f"  Positions value:   ${portfolio_value - cash:,.2f}")
     print(f"  Total value:       ${portfolio_value:,.2f}")
     print(f"  P&L:               ${pnl:+,.2f} ({pnl_pct:+.1f}%)")
-    print(f"  Initial capital:   $70,000.00")
+    print("  Initial capital:   $70,000.00")
     print(f"{'═' * 60}\n")
 
 

@@ -1,5 +1,6 @@
 """Buy when RSI < oversold, sell when RSI > overbought."""
 import pandas as pd
+
 from .base_strategy import Strategy
 
 

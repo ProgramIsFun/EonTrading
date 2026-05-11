@@ -1,8 +1,11 @@
+from datetime import datetime
+
 import clickhouse_connect
 import pandas as pd
-from datetime import datetime
+
+from src.env import CLICKHOUSE_DB, CLICKHOUSE_HOST, CLICKHOUSE_PORT
+
 from .base_storage import StorageBackend
-from src.env import CLICKHOUSE_HOST, CLICKHOUSE_PORT, CLICKHOUSE_DB
 
 
 class ClickHouseStorage(StorageBackend):

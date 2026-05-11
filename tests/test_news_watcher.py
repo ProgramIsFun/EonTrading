@@ -1,7 +1,9 @@
 """Tests for NewsWatcher concurrent polling and timeout."""
 import asyncio
 import time
+
 import pytest
+
 from src.common.event_bus import LocalEventBus
 from src.common.events import CHANNEL_NEWS, NewsEvent
 from src.data.news.newsapi_source import NewsSource

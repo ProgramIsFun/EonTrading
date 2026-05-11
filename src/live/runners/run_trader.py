@@ -1,6 +1,11 @@
 """Run SentimentTrader as its own process. Subscribes to [sentiment]+[fill], publishes to [trade]."""
-import asyncio, logging, os, signal
+import asyncio
+import logging
+import os
+import signal
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 logging.basicConfig(
@@ -11,14 +16,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus
-from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
+from src.common.startup import banner
 from src.common.trading_logic import TradingLogic
 from src.data.utils.db_helper import get_mongo_client
-from src.live.sentiment_trader import SentimentTrader
 from src.live.price_monitor import PriceMonitor
+from src.live.sentiment_trader import SentimentTrader
 
 
 async def main():

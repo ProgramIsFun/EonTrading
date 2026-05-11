@@ -1,6 +1,7 @@
 # src\eontrading_datagrabber\providers\base_provider.py
 from abc import ABC, abstractmethod
 
+
 class MarketDataProviderError(Exception):
     """Custom exception for market data provider errors."""
     pass

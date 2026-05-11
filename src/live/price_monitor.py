@@ -5,12 +5,13 @@ Uses the same TradingLogic as backtest — identical SL/TP behavior.
 """
 import asyncio
 import logging
+
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
-from src.common.price import get_price
 from src.common.position_store import PositionStore
-from src.common.trading_logic import TradingLogic, PositionState
+from src.common.price import get_price
+from src.common.trading_logic import PositionState, TradingLogic
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,6 @@ class PriceMonitor:
         from src.common.price import get_price
         if not self._states:
             return []
-        ts = as_of or ""
         sold = []
         for symbol in list(self._states.keys()):
             state = self._states[symbol]

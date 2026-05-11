@@ -1,8 +1,9 @@
 """Tests for the API endpoints — backtest job lifecycle, health."""
 import asyncio
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture

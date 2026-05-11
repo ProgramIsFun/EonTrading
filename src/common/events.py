@@ -1,5 +1,5 @@
 """Event message schemas for the EventBus."""
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 
 
 @dataclass

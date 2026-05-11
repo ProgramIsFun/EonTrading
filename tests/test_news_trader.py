@@ -1,19 +1,27 @@
 """Tests for news sentiment trading pipeline."""
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from conftest import MockBroker
+
 from src.common.clock import utcnow
 from src.common.event_bus import LocalEventBus
 from src.common.events import (
-    NewsEvent, SentimentEvent, TradeEvent, FillEvent,
-    CHANNEL_NEWS, CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL,
+    CHANNEL_FILL,
+    CHANNEL_NEWS,
+    CHANNEL_SENTIMENT,
+    CHANNEL_TRADE,
+    FillEvent,
+    NewsEvent,
+    SentimentEvent,
+    TradeEvent,
 )
-from src.strategies.sentiment import KeywordSentimentAnalyzer
+from src.live.brokers.broker import Broker, TradeExecutor
 from src.live.news_watcher import NewsWatcher
 from src.live.sentiment_trader import SentimentTrader
-from src.live.brokers.broker import Broker, TradeExecutor
-from conftest import MockBroker
+from src.strategies.sentiment import KeywordSentimentAnalyzer
 
 
 @pytest.fixture(autouse=True)

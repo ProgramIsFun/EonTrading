@@ -1,6 +1,7 @@
 """Tests for PositionStore — mocked MongoDB, no real connection needed."""
-from unittest.mock import MagicMock, patch
 from datetime import datetime
+from unittest.mock import MagicMock, patch
+
 from src.common.clock import utcnow
 from src.common.position_store import PositionStore
 

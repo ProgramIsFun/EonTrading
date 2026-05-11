@@ -1,11 +1,14 @@
 """Daily update: fetch latest S&P 500 data since last stored timestamp."""
-import os, sys
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("SSL_CERT_FILE", os.popen("python3 -c 'import certifi; print(certifi.where())'").read().strip())
 
 from datetime import timedelta
-from src.data.storage import ClickHouseStorage
+
 from src.data.ingest import ingest_yfinance
+from src.data.storage import ClickHouseStorage
 
 storage = ClickHouseStorage()
 

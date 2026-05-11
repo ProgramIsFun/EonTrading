@@ -1,8 +1,11 @@
 # src\eontrading_datagrabber\providers\yfinance_provider.py
-from eontrading_datagrabber.providers.base_provider import MarketDataProvider,MarketDataProviderError
-import yfinance as yf
-from typing import List, Optional, Any, Union
+from typing import Any, List, Optional, Union
+
 import pandas as pd
+import yfinance as yf
+from eontrading_datagrabber.providers.base_provider import MarketDataProvider, MarketDataProviderError
+
+
 class YFinanceProvider(MarketDataProvider):
     def fetchMarketDataFromSymbol(self, symbol: str) -> dict:
         try:
@@ -49,55 +52,55 @@ class YFinanceProvider(MarketDataProvider):
         '''period 5d, interval 1d, 1000 tickers is ok'''
         '''
         success:
-           
+
              yahoo_symbols[:1500], # str, list
-             start=None, 
-             end=None, 
-             actions=False, 
-             threads=True, 
-             ignore_tz=None, 
-             group_by='ticker', 
-             auto_adjust=None, 
-             back_adjust=False, 
-             repair=False, 
-             keepna=False, 
-             progress=True, 
+             start=None,
+             end=None,
+             actions=False,
+             threads=True,
+             ignore_tz=None,
+             group_by='ticker',
+             auto_adjust=None,
+             back_adjust=False,
+             repair=False,
+             keepna=False,
+             progress=True,
              period='5d', # Valid periods: 1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max Default: 1mo Either Use period parameter or use start and end
              interval='1d', # Valid intervals: 1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo Intraday data cannot extend last 60 days
-             prepost=True, 
+             prepost=True,
              #  proxy=<object object>,
-             rounding=False, 
-             timeout=10, 
-             session=None, 
+             rounding=False,
+             timeout=10,
+             session=None,
              multi_level_index=True
-             
+
              if change to 8000 tickers, will get rate limit
 
 
         success:  thread disabled
 
              yahoo_symbols[:3000], # str, list
-             start=None, 
-             end=None, 
-             actions=False, 
-             threads=False, 
-             ignore_tz=None, 
-             group_by='ticker', 
-             auto_adjust=None, 
-             back_adjust=False, 
-             repair=False, 
-             keepna=False, 
-             progress=True, 
+             start=None,
+             end=None,
+             actions=False,
+             threads=False,
+             ignore_tz=None,
+             group_by='ticker',
+             auto_adjust=None,
+             back_adjust=False,
+             repair=False,
+             keepna=False,
+             progress=True,
              period='5d', # Valid periods: 1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max Default: 1mo Either Use period parameter or use start and end
              interval='1d', # Valid intervals: 1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo Intraday data cannot extend last 60 days
-             prepost=True, 
+             prepost=True,
              #  proxy=<object object>,
-             rounding=False, 
-             timeout=10, 
-             session=None, 
+             rounding=False,
+             timeout=10,
+             session=None,
              multi_level_index=True
-             
-             
+
+
         '''
         return yf.download(
             tickers=tickers,
@@ -164,7 +167,7 @@ class YFinanceProvider(MarketDataProvider):
                 raise ValueError("Invalid mode selected.")
 
         raise NotImplementedError("getAvailableSymbols is not implemented for YFinanceProvider.")
-    
+
 
 
     def getProviderName(self) -> str:

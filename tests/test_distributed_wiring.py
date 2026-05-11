@@ -5,6 +5,7 @@ but breaks in distributed mode because the runner forgot to wire something.
 """
 import ast
 import inspect
+
 import pytest
 
 
@@ -40,7 +41,6 @@ class TestDistributedWiring:
     def test_executor_has_dedup(self):
         """TradeExecutor must deduplicate trades (at-least-once delivery protection)."""
         from src.live.brokers.broker import TradeExecutor
-        executor = TradeExecutor.__init__
         src = inspect.getsource(TradeExecutor)
         assert "_seen" in src, "TradeExecutor must have dedup tracking"
 

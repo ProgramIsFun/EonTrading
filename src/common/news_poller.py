@@ -1,7 +1,8 @@
 """Shared news polling logic — used by both live trader and collector."""
 import logging
-from src.data.news.newsapi_source import NewsSource
+
 from src.common.events import NewsEvent
+from src.data.news.newsapi_source import NewsSource
 
 logger = logging.getLogger(__name__)
 

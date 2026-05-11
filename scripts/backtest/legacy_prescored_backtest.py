@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Portfolio backtest with pre-scored events — includes SL/TP, trailing SL, costs."""
 from src.backtest.portfolio_backtest import run_portfolio_backtest
-from src.common.costs import US_STOCKS
-from src.strategies.sentiment import BaseSentimentAnalyzer
-from src.common.events import NewsEvent, SentimentEvent
 from src.common.clock import utcnow
+from src.common.costs import US_STOCKS
+from src.common.events import NewsEvent, SentimentEvent
+from src.strategies.sentiment import BaseSentimentAnalyzer
 
 
 class PreScoredAnalyzer(BaseSentimentAnalyzer):
@@ -86,7 +86,7 @@ for cfg in configs:
     print(f"  {cfg['label']:<30s} {result.total_return_pct:>+7.2f}% {result.max_drawdown_pct:>6.2f}% {result.total_trades:>7} {result.win_rate:>5.1f}% ${result.final_value:>9,.2f}")
 
 # Show trade log for best config
-print(f"\n  Trade log (Trailing SL 5% / TP 10%):")
+print("\n  Trade log (Trailing SL 5% / TP 10%):")
 result = run_portfolio_backtest(
     news_events=news_events, start="2025-01-01", end="2025-12-31",
     initial_capital=70000.0, threshold=0.4, min_confidence=0.15,

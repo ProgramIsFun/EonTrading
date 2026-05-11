@@ -48,7 +48,7 @@ for symbol, news in [("AAPL", AAPL_NEWS), ("TSLA", TSLA_NEWS)]:
         print(f"  {iv:<12s} {result.total_return_pct:>+7.2f}% {result.max_drawdown_pct:>6.2f}% {result.total_trades:>7} {result.win_rate:>5.1f}% ${result.final_value:>9,.2f}")
 
     # Show hourly trade log
-    print(f"\n  Hourly trade log:")
+    print("\n  Hourly trade log:")
     result = run_sentiment_backtest(
         symbol=symbol, news_events=news,
         start="2025-01-01", end="2025-12-31",

@@ -11,8 +11,10 @@ Usage:
 """
 import logging
 import os
+
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
+
 from .newsapi_source import NewsSource
 
 logger = logging.getLogger(__name__)

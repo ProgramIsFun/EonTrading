@@ -5,8 +5,10 @@ Usage:
   python3 -m scripts.backfill_news --source finnhub --symbol AAPL --days 365
   python3 -m scripts.backfill_news --source newsapi --query "stock market" --days 30
 """
-import os, argparse
+import argparse
+import os
 from datetime import datetime, timedelta
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -144,7 +146,7 @@ def main():
     kwargs["days"] = args.days
     kwargs["col"] = col
 
-    total = src["fn"](**kwargs)
+    src["fn"](**kwargs)
     print(f"\nDone. Total in DB: {col.count_documents({})}")
 
 

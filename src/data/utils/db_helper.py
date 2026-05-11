@@ -1,6 +1,7 @@
-import os
 import logging
+import os
 from urllib.parse import quote_plus
+
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
@@ -36,7 +37,7 @@ def get_mongo_client():
         return _client
     except Exception as e:
         raise ConnectionError(f"Failed to connect to MongoDB: {e}") from e
-    
+
 
 def get_symbols_list():
     """Return all documents from the symbols collection."""

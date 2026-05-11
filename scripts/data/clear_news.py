@@ -8,7 +8,9 @@ Usage:
 """
 import argparse
 from datetime import timedelta
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from src.common.clock import utcnow

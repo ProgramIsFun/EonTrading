@@ -1,6 +1,11 @@
 """Run AnalyzerService as its own process. Subscribes to [news], publishes to [sentiment]."""
-import asyncio, logging, os, signal
+import asyncio
+import logging
+import os
+import signal
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 logging.basicConfig(
@@ -11,12 +16,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus
-from src.common.startup import banner
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
-from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
+from src.common.startup import banner
 from src.live.analyzer_service import AnalyzerService
+from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
 
 async def main():

@@ -9,8 +9,10 @@ Set via: PRICE_SOURCE=clickhouse or PRICE_SOURCE=yfinance (default)
 import logging
 import os
 from datetime import datetime, timedelta
+
 from src.common.clock import utcnow
 from src.common.retry import retry
+
 logger = logging.getLogger(__name__)
 PRICE_SOURCE = os.getenv("PRICE_SOURCE", "yfinance").lower()
 _YFINANCE_TIMEOUT = int(os.getenv("PRICE_TIMEOUT", "15"))
@@ -25,8 +27,9 @@ def _get_redis():
     if _redis_cache is not None:
         return _redis_cache
     try:
-        import redis
         import os
+
+        import redis
         host = os.getenv("REDIS_HOST")
         if host:
             _redis_cache = redis.Redis(host=host, port=6379, decode_responses=True)

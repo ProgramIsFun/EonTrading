@@ -6,11 +6,14 @@ Good free feeds:
   - https://feeds.reuters.com/reuters/businessNews  (Reuters business)
 """
 import logging
-import requests
 import re
+
+import requests
+
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
 from src.common.retry import retry
+
 from .newsapi_source import NewsSource
 
 logger = logging.getLogger(__name__)

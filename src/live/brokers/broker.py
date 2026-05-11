@@ -11,9 +11,10 @@ To add a new broker:
 """
 import logging
 from abc import ABC, abstractmethod
+
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
-from src.common.events import CHANNEL_TRADE, CHANNEL_FILL, TradeEvent, FillEvent
+from src.common.events import CHANNEL_FILL, CHANNEL_TRADE, FillEvent, TradeEvent
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,8 @@ class FutuBroker(Broker):
 
     async def _execute_poll(self, trade: TradeEvent):
         import asyncio
-        from futu import TrdSide, TrdEnv, OrderStatus
+
+        from futu import OrderStatus, TrdEnv, TrdSide
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         trd_side = TrdSide.BUY if trade.action == "buy" else TrdSide.SELL
         try:
@@ -169,7 +171,8 @@ class FutuBroker(Broker):
     async def _execute_callback(self, trade: TradeEvent):
         """Place order and wait for Futu's push notification on status change."""
         import asyncio
-        from futu import TrdSide, TrdEnv, TradeOrderHandlerBase
+
+        from futu import TradeOrderHandlerBase, TrdEnv, TrdSide
 
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         trd_side = TrdSide.BUY if trade.action == "buy" else TrdSide.SELL
@@ -266,7 +269,8 @@ class IBKRBroker(Broker):
 
     async def execute(self, trade: TradeEvent):
         import asyncio
-        from ib_insync import Stock, MarketOrder
+
+        from ib_insync import MarketOrder, Stock
         try:
             self._connect()
             contract = Stock(trade.symbol, "SMART", "USD")

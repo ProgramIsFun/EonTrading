@@ -1,6 +1,6 @@
 """Docker Compose management — start/stop/status of pipeline containers."""
-import subprocess
 import os
+import subprocess
 
 # Path to docker-compose.yml — same directory as the project root
 COMPOSE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

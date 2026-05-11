@@ -4,10 +4,13 @@ Free tier: 60 calls/min. Get key at https://finnhub.io/
 """
 import logging
 import os
-import requests
 from datetime import datetime, timezone
+
+import requests
+
 from src.common.events import NewsEvent
 from src.common.retry import retry
+
 from .newsapi_source import NewsSource
 
 logger = logging.getLogger(__name__)

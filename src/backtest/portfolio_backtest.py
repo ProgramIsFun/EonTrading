@@ -1,11 +1,13 @@
 """Multi-symbol sentiment backtest — single news feed, shared capital, multiple positions."""
+from dataclasses import dataclass, field
+
 import pandas as pd
 import yfinance as yf
-from dataclasses import dataclass, field
+
+from ..common.costs import ZERO, CostModel
 from ..common.events import NewsEvent
-from ..strategies.sentiment import KeywordSentimentAnalyzer, BaseSentimentAnalyzer
-from ..common.costs import CostModel, ZERO
-from ..common.trading_logic import TradingLogic, PositionState
+from ..common.trading_logic import PositionState, TradingLogic
+from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
 
 
 @dataclass

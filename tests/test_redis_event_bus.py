@@ -5,8 +5,9 @@ Runs in CI — no real Redis needed.
 """
 import asyncio
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture

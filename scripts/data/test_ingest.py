@@ -1,6 +1,6 @@
 """Quick test: ingest a few symbols and query them back."""
-from src.data.storage import ClickHouseStorage
 from src.data.ingest import ingest_yfinance
+from src.data.storage import ClickHouseStorage
 
 storage = ClickHouseStorage()
 
@@ -11,7 +11,9 @@ ingest_yfinance(symbols, storage, exchange="TEST", interval="1d", period="5d")
 
 # Query it back
 from datetime import datetime, timedelta
+
 from src.common.clock import utcnow
+
 end = utcnow()
 start = end - timedelta(days=10)
 

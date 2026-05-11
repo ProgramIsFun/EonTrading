@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Replay backtest with P&L — pre-scored events through live pipeline + real prices."""
 import asyncio
-import yfinance as yf
 from datetime import datetime
+
+import yfinance as yf
+
+from src.common.costs import US_STOCKS
 from src.common.event_bus import LocalEventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, TradeEvent
 from src.live.sentiment_trader import SentimentTrader
-from src.common.costs import US_STOCKS
 
 # Pre-scored real events with timestamps
 EVENTS = [

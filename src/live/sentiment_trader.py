@@ -2,9 +2,10 @@
 import asyncio
 import logging
 from datetime import datetime
+
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
-from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, CHANNEL_FILL, SentimentEvent, TradeEvent, FillEvent
+from src.common.events import CHANNEL_FILL, CHANNEL_SENTIMENT, CHANNEL_TRADE, FillEvent, SentimentEvent, TradeEvent
 from src.common.price import get_price
 from src.common.trade_store import trade_to_doc
 from src.common.trading_logic import TradingLogic

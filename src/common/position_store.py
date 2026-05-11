@@ -1,5 +1,6 @@
 """Position state backed by MongoDB — works in both single-process and distributed mode."""
 from datetime import datetime
+
 from src.common.clock import utcnow
 from src.data.utils.db_helper import get_mongo_client
 
