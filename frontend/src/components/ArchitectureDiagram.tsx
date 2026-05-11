@@ -64,6 +64,7 @@ const sectionTitle = (text: string, color: string) => (
 const section = { marginBottom: 24, borderBottom: "1px solid #333", paddingBottom: 20 };
 
 import { useState, useEffect } from "react";
+import MermaidDiagram from "./MermaidDiagram";
 
 export default function ArchitectureDiagram() {
   const [redisUp, setRedisUp] = useState<boolean | null>(null);
@@ -97,24 +98,13 @@ export default function ArchitectureDiagram() {
         <div style={{ fontSize: 10, color: "#888", marginBottom: 8 }}>
           These are <strong style={{ color: "#ccc" }}>channels</strong> (message queues), not components. Components publish to and subscribe from them.
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap", padding: "12px 0" }}>
-          {[
-            { ch: "news", desc: "raw headlines", producers: "NewsWatcher", consumers: "Analyzer" },
-            { ch: "sentiment", desc: "scored signals", producers: "Analyzer", consumers: "Trader" },
-            { ch: "trade", desc: "buy/sell orders", producers: "Trader, PriceMonitor", consumers: "Executor" },
-            { ch: "fill", desc: "broker confirmation", producers: "Executor", consumers: "Trader" },
-          ].map((c, i) => (
-            <div key={c.ch} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {i > 0 && <span style={{ color: "#818cf8", fontSize: 20 }}>→</span>}
-              <div style={{ textAlign: "center" }}>
-                <code style={{ fontSize: 14, color: "#818cf8", fontWeight: 600 }}>[{c.ch}]</code>
-                <div style={{ fontSize: 9, color: "#666" }}>{c.desc}</div>
-                <div style={{ fontSize: 8, color: "#555" }}>{c.producers} → {c.consumers}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ fontSize: 10, color: "#666", textAlign: "center" }}>
+        <MermaidDiagram chart={`flowchart TD
+  NW[NewsWatcher] -- [news] --> AS[AnalyzerService]
+  AS -- [sentiment] --> ST[SentimentTrader]
+  ST -- [trade] --> TE[TradeExecutor]
+  TE -- [fill] --> ST
+  PM[PriceMonitor] -- [trade] --> TE`} />
+        <div style={{ fontSize: 10, color: "#666", textAlign: "center", marginTop: 8 }}>
           Same channels whether LocalEventBus (in-memory) or RedisStreamBus (persistent message queue).
         </div>
       </div>

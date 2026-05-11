@@ -80,8 +80,10 @@ async def test_buy_and_sell(fast_broker):
         symbol=SYMBOL, action="buy", reason="integration test",
         timestamp=utcnow().isoformat() + "Z", price=PRICE, size=QTY,
     )
+    TIMEOUT = fast_broker.poll_timeout + 5.0
+
     await fast_broker.execute(trade)
-    await asyncio.wait_for(event.wait(), timeout=20.0)
+    await asyncio.wait_for(event.wait(), timeout=TIMEOUT)
 
     assert len(fills) == 1
     assert fills[0]["success"] is True, f"Buy failed: {fills[0].get('reason', '')}"
@@ -100,18 +102,34 @@ async def test_buy_and_sell(fast_broker):
     fills.clear()
     event.clear()
 
-    # --- Sell back ---
+    # --- Verify deal history (only in real trading — simulate mode skips) ---
+    from futu import TrdEnv
+    ctx = fast_broker._get_ctx()
+    ret, deals = ctx.deal_list_query(trd_env=TrdEnv.SIMULATE)
+    if ret == 0:
+        buy_deals = deals[(deals["code"] == SYMBOL) & (deals["trd_side"] == "BUY")]
+        assert len(buy_deals) >= 1, f"No buy deal found for {SYMBOL}"
+        assert buy_deals["deal_qty"].sum() >= QTY
+
+    # --- Sell back (low limit ensures fill at market price) ---
     trade = TradeEvent(
         symbol=SYMBOL, action="sell", reason="integration test revert",
         timestamp=utcnow().isoformat() + "Z", price=1.0, size=QTY,
     )
     await fast_broker.execute(trade)
-    await asyncio.wait_for(event.wait(), timeout=20.0)
+    await asyncio.wait_for(event.wait(), timeout=TIMEOUT)
 
     assert len(fills) == 1
     assert fills[0]["success"] is True, f"Sell failed: {fills[0].get('reason', '')}"
     assert fills[0]["symbol"] == SYMBOL
     assert fills[0]["action"] == "sell"
+
+    # --- Verify deal history shows the sell (if supported) ---
+    ret, deals = ctx.deal_list_query(trd_env=TrdEnv.SIMULATE)
+    if ret == 0:
+        sell_deals = deals[(deals["code"] == SYMBOL) & (deals["trd_side"] == "SELL")]
+        assert len(sell_deals) >= 1, f"No sell deal found for {SYMBOL}"
+        assert sell_deals["deal_qty"].sum() >= QTY
 
     # --- Verify cash / position returned ---
     cash_after = await fast_broker.get_cash()
