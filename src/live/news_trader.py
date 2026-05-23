@@ -56,6 +56,9 @@ class MongoLogHandler(logging.Handler):
             pass
 
 
+# warm the MongoClient cache so MongoLogHandler.emit() doesn't trigger recursive logging
+from src.data.utils.db_helper import get_mongo_client
+get_mongo_client()
 logging.getLogger().addHandler(MongoLogHandler())
 
 
