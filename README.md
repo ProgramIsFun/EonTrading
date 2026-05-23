@@ -17,26 +17,17 @@ Everything flows through event channels (LocalEventBus or RedisStreamBus). See t
 ## Quick Start
 
 ```bash
-# 1. Python 3.11 + venv (Docker uses 3.11, match it locally)
-brew install python@3.11
+# 1. Python 3.11 + venv
 python3.11 -m venv .venv
 source .venv/bin/activate
 
-# 2. Set up environment profile
-./env.sh dev       # PaperBroker, keyword analyzer, no API keys needed
-./env.sh llm       # PaperBroker + LLM analyzer (needs OPENAI_API_KEY)
-./env.sh live      # Real broker + LLM (needs broker API keys)
-
-# 3. Install (for local dev / API server on host)
+# 2. Configure
+cp .env.example .env    # edit with your API keys
 pip install -e .
 
-# 4. Start API server on host (manages Docker + serves dashboard)
-PYTHONPATH=. uvicorn src.api.server:app --host 0.0.0.0 --port 8000
-
-# 5. Start pipeline
-PYTHONPATH=. python -m src.live.news_trader                # single process
-docker compose --profile distributed up -d                  # distributed (Docker)
-docker compose up -d redis                                  # just Redis (if starting components from dashboard)
+# 3. Run
+PYTHONPATH=. python -m src.live.news_trader                # single process (default)
+PYTHONPATH=. uvicorn src.api.server:app --port 8000        # API + dashboard
 ```
 
 ### Deployment layout
@@ -129,16 +120,16 @@ Sources (NewsAPI, Finnhub, RSS, Reddit, Twitter)
 - Entry prices persisted to MongoDB — PriceMonitor survives restarts
 - Graceful shutdown on SIGINT/SIGTERM in all runners
 
-## Environment Profiles
+## Configuration
 
-Switch between configurations without editing `.env` manually:
+Copy `.env.example` to `.env` and fill in your values. All vars are optional — default is PaperBroker + keyword analyzer with no API keys needed.
 
-```bash
-./env.sh          # show available profiles
-./env.sh dev      # PaperBroker, keyword analyzer
-./env.sh llm      # PaperBroker + LLM analyzer
-./env.sh live     # Real broker + LLM
-```
+| Mode | What to set |
+|------|-------------|
+| Dev (paper + keyword) | Nothing — works out of the box |
+| LLM sentiment | Set `OPENAI_API_KEY` |
+| Live broker | Set `BROKER=alpaca` + `ALPACA_API_KEY` + `ALPACA_SECRET_KEY` |
+| News sources | Set `NEWSAPI_KEY`, `FINNHUB_KEY`, etc. |
 
 ## Replay Mode (backtest via live pipeline)
 
@@ -309,7 +300,7 @@ src/
 frontend/                            # React + Vite dashboard
 scripts/                             # Data collection, backfill, backtest scripts
 tests/                               # 101 tests (unit + integration + Redis)
-env.sh                               # Environment profile switcher
+.env.example                         # Configuration template (copy to .env)
 ```
 
 ## Roadmap
@@ -348,7 +339,7 @@ env.sh                               # Environment profile switcher
 - [x] Separate MongoDB collections for replay vs live positions
 - [x] Graceful shutdown (SIGINT/SIGTERM) in all runners
 - [x] Structured logging across all pipeline components
-- [x] Environment profiles (./env.sh dev/llm/live)
+- [x] Single .env configuration (removed profile switcher)
 - [x] 101 tests passing (unit + integration + Redis)
 
 ### To Do
