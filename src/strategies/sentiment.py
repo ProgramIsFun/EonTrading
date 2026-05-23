@@ -145,7 +145,8 @@ Return:
 class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
     """LLM-based scorer. More accurate, needs API key.
 
-    Supports any OpenAI-compatible API (OpenAI, Ollama, local LLMs).
+    Supports any OpenAI-compatible API (OpenAI, opencode Zen, Ollama, local LLMs).
+    Set OPENCODE_API_KEY to use opencode Zen (free big-pickle model by default).
     """
 
     def __init__(
@@ -154,9 +155,15 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         base_url: str = None,
         model: str = None,
     ):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        opencode_key = api_key or os.getenv("OPENCODE_API_KEY")
+        if opencode_key:
+            self.api_key = opencode_key
+            self.base_url = base_url or os.getenv("OPENCODE_BASE_URL", "https://opencode.ai/zen/v1")
+            self.model = model or os.getenv("OPENCODE_MODEL", "big-pickle")
+        else:
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+            self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+            self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         self.api_version = os.getenv("OPENAI_API_VERSION", "")
         self._is_azure = "azure" in self.base_url
 

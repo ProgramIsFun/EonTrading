@@ -353,7 +353,7 @@ async def _run_live_backtest(job_id: str, params: dict):
         bus = LocalEventBus()
         await bus.start()
 
-        if params["analyzer"] == "llm" and os.getenv("OPENAI_API_KEY"):
+        if params["analyzer"] == "llm" and (os.getenv("OPENAI_API_KEY") or os.getenv("OPENCODE_API_KEY")):
             anlzr = LLMSentimentAnalyzer()
         else:
             anlzr = KeywordSentimentAnalyzer()

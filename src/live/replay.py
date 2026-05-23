@@ -44,7 +44,7 @@ async def main(start: str, end: str):
     bus = LocalEventBus()
     await bus.start()
 
-    analyzer = LLMSentimentAnalyzer() if os.getenv("OPENAI_API_KEY") else KeywordSentimentAnalyzer()
+    analyzer = LLMSentimentAnalyzer() if (os.getenv("OPENAI_API_KEY") or os.getenv("OPENCODE_API_KEY")) else KeywordSentimentAnalyzer()
     broker = PaperBroker()
     store = PositionStore()
     db = get_mongo_client()["EonTradingDB"]

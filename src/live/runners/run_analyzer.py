@@ -25,7 +25,7 @@ from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnaly
 
 
 async def main():
-    if os.getenv("OPENAI_API_KEY"):
+    if os.getenv("OPENAI_API_KEY") or os.getenv("OPENCODE_API_KEY"):
         analyzer = LLMSentimentAnalyzer()
         analyzer_name = f"LLM ({analyzer.model})"
     else:
