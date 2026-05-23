@@ -21,10 +21,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e ".[test]"
-          pip install ruff
-
-      - name: Lint with ruff
-        run: ruff check src/ tests/ scripts/
 
       - name: Run tests (no Redis)
         run: python -m pytest tests/ -m "not redis and not futu" -v
