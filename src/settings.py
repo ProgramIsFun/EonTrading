@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     broker: str = "log"
     alpaca_api_key: str = ""
     alpaca_secret_key: str = ""
+    futu_real: bool = False
     futu_confirm: str = "poll"
 
     # Trading params

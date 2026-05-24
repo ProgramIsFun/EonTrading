@@ -75,26 +75,28 @@ async def main_single():
     from src.live.analyzer_service import AnalyzerService
     from src.live.brokers.broker import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker, TradeExecutor
     from src.live.news_watcher import NewsWatcher
+    from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
+    from src.settings import settings
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
     # --- Sources ---
     sources = []
     source_names = ["RSS", "Reddit"]
-    if os.getenv("NEWSAPI_KEY"):
+    if settings.newsapi_key:
         sources.append(NewsAPISource())
         source_names.append("NewsAPI")
-    if os.getenv("FINNHUB_KEY"):
+    if settings.finnhub_key:
         sources.append(FinnhubSource())
         source_names.append("Finnhub")
-    if os.getenv("TWITTER_BEARER_TOKEN"):
+    if settings.twitter_bearer_token:
         sources.append(TwitterSource())
         source_names.append("Twitter")
     sources.append(RSSSource())
     sources.append(RedditSource())
 
     # --- Analyzer ---
-    if os.getenv("OPENAI_API_KEY") or os.getenv("OPENCODE_API_KEY"):
+    if settings.openai_api_key or settings.opencode_api_key:
         analyzer = LLMSentimentAnalyzer()
         analyzer_name = f"LLM ({analyzer.model})"
     else:
@@ -102,10 +104,9 @@ async def main_single():
         analyzer_name = "Keyword (free)"
 
     # --- Broker ---
-    broker_name = os.getenv("BROKER", "log").lower()
+    broker_name = settings.broker.lower()
     if broker_name == "futu":
-        confirm = os.getenv("FUTU_CONFIRM", "poll")  # poll or callback
-        broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"), confirm_mode=confirm)
+        broker = FutuBroker(simulate=not settings.futu_real, confirm_mode=settings.futu_confirm)
     elif broker_name == "ibkr":
         broker = IBKRBroker()
     elif broker_name == "alpaca":
@@ -125,9 +126,6 @@ async def main_single():
     # --- Wire up ---
     bus = LocalEventBus()
     await bus.start()
-
-    from src.settings import settings
-    from src.live.price_monitor import PriceMonitor
 
     store = PositionStore()
     logic = TradingLogic(
