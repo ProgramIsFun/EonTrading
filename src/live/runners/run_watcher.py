@@ -56,9 +56,6 @@ async def main():
     bus = RedisStreamBus(group="watcher")
     await bus.start()
 
-    watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
-                          persist_news=persist,
-                          publish=publish)
     logger.info("🟢 Started. Polling every 120s.")
     asyncio.create_task(Heartbeat("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"}).run())
     ping = PingResponder(bus, ["watcher"], metadata={"watcher": {"sources": ", ".join(source_names), "mode": "distributed"}})
@@ -69,6 +66,9 @@ async def main():
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop_event.set)
 
+    watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
+                          persist_news=persist,
+                          publish=publish)
     watcher_task = asyncio.create_task(watcher.run())
     await stop_event.wait()
     logger.info("Shutting down...")
