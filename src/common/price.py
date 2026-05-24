@@ -7,15 +7,15 @@ Sources:
 Set via: PRICE_SOURCE=clickhouse or PRICE_SOURCE=yfinance (default)
 """
 import logging
-import os
 from datetime import datetime, timedelta
 
 from src.common.clock import utcnow
 from src.common.retry import retry
+from src.settings import settings
 
 logger = logging.getLogger(__name__)
-PRICE_SOURCE = os.getenv("PRICE_SOURCE", "yfinance").lower()
-_YFINANCE_TIMEOUT = int(os.getenv("PRICE_TIMEOUT", "15"))
+PRICE_SOURCE = settings.price_source.lower()
+_YFINANCE_TIMEOUT = settings.price_timeout
 
 
 _price_cache: dict[str, float] = {}
@@ -27,14 +27,10 @@ def _get_redis():
     if _redis_cache is not None:
         return _redis_cache
     try:
-        import os
-
         import redis
-        host = os.getenv("REDIS_HOST")
-        if host:
-            _redis_cache = redis.Redis(host=host, port=6379, decode_responses=True)
-            _redis_cache.ping()
-            return _redis_cache
+        _redis_cache = redis.Redis(host=settings.redis_host, port=6379, decode_responses=True)
+        _redis_cache.ping()
+        return _redis_cache
     except Exception:
         logger.debug("Redis price cache unavailable, using in-memory only")
     _redis_cache = False  # mark as unavailable

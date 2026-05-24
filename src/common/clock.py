@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 
 def utcnow() -> datetime:
-    """Timezone-aware UTC now. Use this instead of datetime.utcnow()."""
+    """Naive UTC now. Use this instead of datetime.utcnow()."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 

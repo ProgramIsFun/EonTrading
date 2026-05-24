@@ -30,7 +30,7 @@ async def main(start: str, end: str):
 
     print(f"\n{'═' * 60}")
     print("  Distributed Replay Controller")
-    print(f"  Redis: {redis_host}")
+    print(f"  Redis: {settings.redis_host}")
     print(f"  News events: {len(SAMPLE_NEWS)}")
     print("  ⚠️  Make sure BROKER=log in executor container!")
     print(f"{'═' * 60}\n")

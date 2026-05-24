@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_FILL, CHANNEL_TRADE, FillEvent, TradeEvent
+from src.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -319,9 +320,8 @@ class AlpacaBroker(Broker):
     """
 
     def __init__(self, api_key: str = "", secret_key: str = "", paper: bool = True):
-        import os
-        self.api_key = api_key or os.getenv("ALPACA_API_KEY", "")
-        self.secret_key = secret_key or os.getenv("ALPACA_SECRET_KEY", "")
+        self.api_key = api_key or settings.alpaca_api_key
+        self.secret_key = secret_key or settings.alpaca_secret_key
         self.base_url = "https://paper-api.alpaca.markets" if paper else "https://api.alpaca.markets"
         self._api = None
 

@@ -36,7 +36,7 @@ async def main():
     svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     await svc.start()
     logger.info("🟢 Started. Waiting for [news] events.")
-    asyncio.create_task(Heartbeat.create_background("analyzer", metadata={"analyzer": analyzer_name, "mode": "distributed"}))
+    Heartbeat.create_background("analyzer", metadata={"analyzer": analyzer_name, "mode": "distributed"})
     ping = PingResponder(bus, ["analyzer"], metadata={"analyzer": {"analyzer": analyzer_name, "mode": "distributed"}})
     await ping.start()
 
