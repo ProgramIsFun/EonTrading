@@ -1,12 +1,6 @@
 """Run AnalyzerService as its own process. Subscribes to [news], publishes to [sentiment]."""
 import asyncio
 import logging
-import os
-import signal
-
-from dotenv import load_dotenv
-
-load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,28 +10,23 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus
+from src.common.factories import build_analyzer
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
+from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
 from src.live.analyzer_service import AnalyzerService
-from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
 
 async def main():
-    if os.getenv("OPENAI_API_KEY") or os.getenv("OPENCODE_API_KEY"):
-        analyzer = LLMSentimentAnalyzer()
-        analyzer_name = f"LLM ({analyzer.model})"
-    else:
-        analyzer = KeywordSentimentAnalyzer()
-        analyzer_name = "Keyword (free)"
+    analyzer, analyzer_name = build_analyzer()
 
     banner("AnalyzerService", {
         "Subscribes to": "[news]",
         "Publishes to": "[sentiment]",
         "Analyzer": analyzer_name,
         "Positions from": "MongoDB",
-        "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
 
     bus = RedisStreamBus(group="analyzer")
@@ -47,15 +36,11 @@ async def main():
     svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     await svc.start()
     logger.info("🟢 Started. Waiting for [news] events.")
-    asyncio.create_task(Heartbeat("analyzer", metadata={"analyzer": analyzer_name, "mode": "distributed"}).run())
+    asyncio.create_task(Heartbeat.create_background("analyzer", metadata={"analyzer": analyzer_name, "mode": "distributed"}))
     ping = PingResponder(bus, ["analyzer"], metadata={"analyzer": {"analyzer": analyzer_name, "mode": "distributed"}})
     await ping.start()
 
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
-    await stop_event.wait()
+    await create_shutdown_event().wait()
     logger.info("Shutting down...")
     await bus.stop()
 

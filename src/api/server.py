@@ -4,7 +4,6 @@ import logging
 import os
 from datetime import datetime
 
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
@@ -13,18 +12,17 @@ from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.clock import utcnow
 from src.common.costs import US_STOCKS
 from src.data.utils.db_helper import get_mongo_client
+from src.settings import settings
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="EonTrading API")
 
-_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:8000").split(",")
-app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins.split(","), allow_methods=["*"], allow_headers=["*"])
 
 # --- API key auth (optional — set API_KEY env var to enable) ---
 _api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
-_API_KEY = os.getenv("API_KEY")
+_API_KEY = settings.api_key
 
 
 async def _check_api_key(key: str = Depends(_api_key_header)):
@@ -65,7 +63,7 @@ def queue_status():
     """Show message counts in all Redis Streams."""
     try:
         import redis
-        r = redis.Redis(host=os.getenv("REDIS_HOST", "localhost"), port=6379, decode_responses=True)
+        r = redis.Redis(host=settings.redis_host, port=6379, decode_responses=True)
         r.ping()
         streams = ["news", "sentiment", "trade", "fill"]
         result = {}
@@ -88,9 +86,8 @@ async def ping_components():
     try:
         from src.common.event_bus import LocalEventBus, RedisStreamBus
         from src.common.ping import collect_pongs
-        redis_host = os.getenv("REDIS_HOST")
-        if redis_host:
-            bus = RedisStreamBus(host=redis_host, group="api")
+        if "REDIS_HOST" in os.environ:
+            bus = RedisStreamBus(host=settings.redis_host, group="api")
         else:
             bus = LocalEventBus()
         await bus.start()
@@ -107,17 +104,8 @@ async def reconcile_positions():
     """Compare system positions vs broker. Requires BROKER env var."""
     import os
     try:
-        from src.common.reconcile import reconcile
-        from src.live.brokers.broker import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker
-        broker_name = os.getenv("BROKER", "log").lower()
-        if broker_name == "futu":
-            broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"))
-        elif broker_name == "ibkr":
-            broker = IBKRBroker()
-        elif broker_name == "alpaca":
-            broker = AlpacaBroker()
-        else:
-            broker = PaperBroker()
+        from src.common.factories import build_broker
+        broker = build_broker()
         return await reconcile(broker)
     except Exception as e:
         logger.error("Reconcile error: %s", e)
@@ -353,7 +341,7 @@ async def _run_live_backtest(job_id: str, params: dict):
         bus = LocalEventBus()
         await bus.start()
 
-        if params["analyzer"] == "llm" and (os.getenv("OPENAI_API_KEY") or os.getenv("OPENCODE_API_KEY")):
+        if params["analyzer"] == "llm" and (settings.openai_api_key or settings.opencode_api_key):
             anlzr = LLMSentimentAnalyzer()
         else:
             anlzr = KeywordSentimentAnalyzer()

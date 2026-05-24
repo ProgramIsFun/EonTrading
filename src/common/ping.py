@@ -24,6 +24,12 @@ class PingResponder:
     async def start(self):
         await self.bus.subscribe(CHANNEL_PING, self._on_ping)
 
+    @classmethod
+    async def create_and_start(cls, bus: EventBus, components: list[str], metadata: dict = None):
+        responder = cls(bus, components, metadata)
+        await responder.start()
+        return responder
+
     async def _on_ping(self, msg: dict):
         for name in self.components:
             await self.bus.publish(CHANNEL_PONG, {

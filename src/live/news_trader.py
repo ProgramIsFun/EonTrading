@@ -12,13 +12,8 @@ For distributed mode, run each runner in its own terminal:
 """
 import asyncio
 import logging
-import signal
 import sys
 from datetime import datetime
-
-from dotenv import load_dotenv
-
-load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,42 +59,30 @@ logging.getLogger().addHandler(MongoLogHandler())
 async def main_single():
     """All components in one process via LocalEventBus."""
     from src.common.event_bus import LocalEventBus
+    from src.common.factories import build_analyzer, build_broker
     from src.common.heartbeat import Heartbeat
     from src.common.ping import PingResponder
     from src.common.position_store import PositionStore
+    from src.common.shutdown import create_shutdown_event
     from src.common.startup import banner, env_status
     from src.common.trading_logic import TradingLogic
     from src.data.news.loader import build_news_sources
     from src.data.utils.db_helper import get_mongo_client
     from src.live.analyzer_service import AnalyzerService
-    from src.live.brokers.broker import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker, TradeExecutor
+    from src.live.brokers.broker import TradeExecutor
     from src.live.news_watcher import NewsWatcher
     from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
     from src.settings import settings
-    from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
     # --- Sources ---
     sources, source_names = build_news_sources()
 
     # --- Analyzer ---
-    if settings.openai_api_key or settings.opencode_api_key:
-        analyzer = LLMSentimentAnalyzer()
-        analyzer_name = f"LLM ({analyzer.model})"
-    else:
-        analyzer = KeywordSentimentAnalyzer()
-        analyzer_name = "Keyword (free)"
+    analyzer, analyzer_name = build_analyzer()
 
     # --- Broker ---
-    broker_name = settings.broker.lower()
-    if broker_name == "futu":
-        broker = FutuBroker(simulate=not settings.futu_real, confirm_mode=settings.futu_confirm)
-    elif broker_name == "ibkr":
-        broker = IBKRBroker()
-    elif broker_name == "alpaca":
-        broker = AlpacaBroker()
-    else:
-        broker = PaperBroker()
+    broker = build_broker()
 
     # --- Startup banner ---
     banner("EonTrading — Single Process Mode", {
@@ -138,15 +121,14 @@ async def main_single():
     monitor_task = asyncio.create_task(monitor.run(broker))
 
     for name in ["watcher", "analyzer", "trader", "executor", "monitor"]:
-        asyncio.create_task(Heartbeat(name, metadata={"mode": "single"}).run())
+        Heartbeat.create_background(name, metadata={"mode": "single"})
 
-    ping = PingResponder(bus, ["watcher", "analyzer", "trader", "executor"], metadata={
+    await PingResponder.create_and_start(bus, ["watcher", "analyzer", "trader", "executor"], metadata={
         "watcher": {"sources": ", ".join(source_names), "mode": "single"},
         "analyzer": {"analyzer": analyzer_name, "mode": "single"},
         "trader": {"mode": "single"},
         "executor": {"broker": broker.__class__.__name__, "mode": "single"},
     })
-    await ping.start()
 
     logger.info("🟢 All components started. Polling every 120s.")
 
@@ -155,14 +137,9 @@ async def main_single():
     await reconcile(broker, store)
 
     # Graceful shutdown
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
-
     watcher_task = asyncio.create_task(watcher.run())
 
-    await stop_event.wait()
+    await create_shutdown_event().wait()
     logger.info("Shutting down...")
     watcher_task.cancel()
     monitor_task.cancel()

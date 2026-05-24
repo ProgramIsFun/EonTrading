@@ -15,12 +15,6 @@ This runs the exact same pipeline as live mode, but:
 """
 import argparse
 import asyncio
-import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
 
 async def main(start: str, end: str):
     from src.common.clock import clock
@@ -32,11 +26,12 @@ async def main(start: str, end: str):
     from src.live.analyzer_service import AnalyzerService
     from src.live.brokers.broker import PaperBroker, TradeExecutor
     from src.live.sentiment_trader import SentimentTrader
+    from src.settings import settings
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
     banner("EonTrading — Replay Mode", {
         "Period": f"{start} → {end}",
-        "Analyzer": "LLM" if os.getenv("OPENAI_API_KEY") else "Keyword",
+        "Analyzer": "LLM" if settings.openai_api_key else "Keyword",
         "Broker": "PaperBroker (dry run)",
         "Clock": "simulated (follows news timestamps)",
     })
@@ -44,7 +39,7 @@ async def main(start: str, end: str):
     bus = LocalEventBus()
     await bus.start()
 
-    analyzer = LLMSentimentAnalyzer() if (os.getenv("OPENAI_API_KEY") or os.getenv("OPENCODE_API_KEY")) else KeywordSentimentAnalyzer()
+    analyzer = LLMSentimentAnalyzer() if (settings.openai_api_key or settings.opencode_api_key) else KeywordSentimentAnalyzer()
     broker = PaperBroker()
     store = PositionStore()
     db = get_mongo_client()["EonTradingDB"]

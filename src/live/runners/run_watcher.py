@@ -3,11 +3,6 @@ import asyncio
 import logging
 import signal
 
-from dotenv import load_dotenv
-
-load_dotenv()
-from src.settings import settings
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -18,16 +13,18 @@ logger = logging.getLogger(__name__)
 from src.common.event_bus import RedisStreamBus
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
+from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
 from src.data.news.loader import build_news_sources
 from src.live.news_watcher import NewsWatcher
+from src.settings import settings
 
 
 async def main():
     sources, source_names = build_news_sources()
-
     persist = settings.persist_news
     publish = settings.publish_pipeline
+
     mode_parts = []
     if publish:
         mode_parts.append("pipeline [news]")
@@ -37,27 +34,22 @@ async def main():
     banner("NewsWatcher", {
         "Publishes to": ", ".join(mode_parts) or "nowhere (dry run)",
         "Sources": ", ".join(source_names),
-        "Redis": settings.redis_host,
     })
 
     bus = RedisStreamBus(group="watcher")
     await bus.start()
 
-    logger.info("🟢 Started. Polling every 120s.")
-    asyncio.create_task(Heartbeat("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"}).run())
-    ping = PingResponder(bus, ["watcher"], metadata={"watcher": {"sources": ", ".join(source_names), "mode": "distributed"}})
-    await ping.start()
-
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
-
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
                           persist_news=persist,
                           publish=publish)
+    logger.info("🟢 Started. Polling every 120s.")
+    Heartbeat.create_background("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"})
+    await PingResponder.create_and_start(bus, ["watcher"], metadata={
+        "watcher": {"sources": ", ".join(source_names), "mode": "distributed"},
+    })
+
     watcher_task = asyncio.create_task(watcher.run())
-    await stop_event.wait()
+    await create_shutdown_event().wait()
     logger.info("Shutting down...")
     watcher_task.cancel()
     await bus.stop()

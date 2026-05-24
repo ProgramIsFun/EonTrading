@@ -1,12 +1,6 @@
 """Run PriceMonitor as its own process. Watches positions, triggers SL/TP via [trade]."""
 import asyncio
 import logging
-import os
-import signal
-
-from dotenv import load_dotenv
-
-load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,22 +13,23 @@ from src.common.event_bus import RedisStreamBus
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
+from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
 from src.common.trading_logic import TradingLogic
 from src.live.price_monitor import PriceMonitor
+from src.settings import settings
 
 
 async def main():
-    sl_pct = os.getenv("STOP_LOSS_PCT", "0.05")
-    tp_pct = os.getenv("TAKE_PROFIT_PCT", "0.10")
-    interval = os.getenv("SL_CHECK_INTERVAL", "60")
+    sl_str = f"{settings.stop_loss_pct * 100:.0f}%"
+    tp_str = f"{settings.take_profit_pct * 100:.0f}%"
+
     banner("PriceMonitor", {
         "Publishes to": "[trade]",
         "Reads from": "MongoDB positions",
-        "SL": f"{float(sl_pct)*100:.0f}%",
-        "TP": f"{float(tp_pct)*100:.0f}%",
-        "Interval": f"{interval}s",
-        "Redis": os.getenv("REDIS_HOST", "localhost"),
+        "SL": sl_str,
+        "TP": tp_str,
+        "Interval": f"{settings.sl_check_interval}s",
     })
 
     bus = RedisStreamBus(group="monitor")
@@ -42,24 +37,18 @@ async def main():
 
     store = PositionStore()
     logic = TradingLogic(
-        stop_loss_pct=float(os.getenv("STOP_LOSS_PCT", "0.05")),
-        take_profit_pct=float(os.getenv("TAKE_PROFIT_PCT", "0.10")),
+        stop_loss_pct=settings.stop_loss_pct,
+        take_profit_pct=settings.take_profit_pct,
     )
-    monitor = PriceMonitor(bus, store, logic, interval_sec=int(os.getenv("SL_CHECK_INTERVAL", "60")))
+    monitor = PriceMonitor(bus, store, logic, interval_sec=settings.sl_check_interval)
 
-    asyncio.create_task(Heartbeat("monitor", metadata={"mode": "distributed"}).run())
-    ping = PingResponder(bus, ["monitor"], metadata={"monitor": {"mode": "distributed"}})
-    await ping.start()
+    Heartbeat.create_background("monitor", metadata={"mode": "distributed"})
+    await PingResponder.create_and_start(bus, ["monitor"], metadata={"monitor": {"mode": "distributed"}})
 
-    logger.info("🟢 Started. Checking prices every 60s.")
-
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
+    logger.info("🟢 Started. Checking prices every %ds.", settings.sl_check_interval)
 
     monitor_task = asyncio.create_task(monitor.run())
-    await stop_event.wait()
+    await create_shutdown_event().wait()
     logger.info("Shutting down...")
     monitor_task.cancel()
     await bus.stop()

@@ -57,13 +57,14 @@ class TestDistributedWiring:
         assert "AnalyzerService(" in single_src and "AnalyzerService(" in analyzer_src
 
     def test_monitor_reads_env_vars(self):
-        """run_monitor must read SL/TP from env vars, not hardcode."""
+        """run_monitor must read SL/TP from settings, not hardcode."""
         src = _get_function_source("src/live/runners/run_monitor.py", "main")
-        assert "STOP_LOSS_PCT" in src, "run_monitor.py must read STOP_LOSS_PCT from env"
-        assert "TAKE_PROFIT_PCT" in src, "run_monitor.py must read TAKE_PROFIT_PCT from env"
+        assert "settings.stop_loss_pct" in src, "run_monitor.py must read stop_loss_pct from settings"
+        assert "settings.take_profit_pct" in src, "run_monitor.py must read take_profit_pct from settings"
+        assert "settings.sl_check_interval" in src, "run_monitor.py must read sl_check_interval from settings"
 
     def test_trader_reads_env_vars(self):
-        """run_trader must read trading params from env vars, not hardcode."""
+        """run_trader must read trading params from settings, not hardcode."""
         src = _get_function_source("src/live/runners/run_trader.py", "main")
-        assert "THRESHOLD" in src, "run_trader.py must read THRESHOLD from env"
-        assert "STOP_LOSS_PCT" in src, "run_trader.py must read STOP_LOSS_PCT from env"
+        assert "settings.threshold" in src, "run_trader.py must read threshold from settings"
+        assert "settings.stop_loss_pct" in src, "run_trader.py must read stop_loss_pct from settings"

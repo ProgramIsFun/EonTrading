@@ -1,12 +1,6 @@
 """Run TradeExecutor as its own process. Subscribes to [trade], broker publishes to [fill]."""
 import asyncio
 import logging
-import os
-import signal
-
-from dotenv import load_dotenv
-
-load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,37 +10,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus
+from src.common.factories import build_broker
 from src.common.heartbeat import Heartbeat
 from src.common.ping import PingResponder
+from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
-from src.live.brokers.broker import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker, TradeExecutor
+from src.live.brokers.broker import TradeExecutor
 
 
 async def main():
-    broker_name = os.getenv("BROKER", "log").lower()
-    if broker_name == "futu":
-        confirm = os.getenv("FUTU_CONFIRM", "poll")
-        broker = FutuBroker(simulate=not os.getenv("FUTU_REAL"), confirm_mode=confirm)
-    elif broker_name == "ibkr":
-        broker = IBKRBroker()
-    elif broker_name == "alpaca":
-        broker = AlpacaBroker()
-    else:
-        broker = PaperBroker()
-
-    required = {"futu": ["FUTU_LIVE"], "ibkr": [], "alpaca": ["ALPACA_API_KEY", "ALPACA_SECRET_KEY"]}
-    missing = [v for v in required.get(broker_name, []) if not os.getenv(v)]
+    broker = build_broker()
 
     banner("TradeExecutor", {
         "Subscribes to": "[trade]",
         "Publishes to": "[fill]",
         "Broker": broker.__class__.__name__,
-        "Missing env vars": ", ".join(missing) if missing else "none",
-        "Redis": os.getenv("REDIS_HOST", "localhost"),
     })
-
-    if missing:
-        logger.warning("Missing env vars: %s — broker may fail", ", ".join(missing))
 
     bus = RedisStreamBus(group="executor")
     await bus.start()
@@ -54,15 +33,12 @@ async def main():
     executor = TradeExecutor(bus, broker)
     await executor.start()
     logger.info("🟢 Started. Waiting for [trade] events.")
-    asyncio.create_task(Heartbeat("executor", metadata={"broker": broker.__class__.__name__, "mode": "distributed"}).run())
-    ping = PingResponder(bus, ["executor"], metadata={"executor": {"broker": broker.__class__.__name__, "mode": "distributed"}})
-    await ping.start()
+    Heartbeat.create_background("executor", metadata={"broker": broker.__class__.__name__, "mode": "distributed"})
+    await PingResponder.create_and_start(bus, ["executor"], metadata={
+        "executor": {"broker": broker.__class__.__name__, "mode": "distributed"},
+    })
 
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
-    await stop_event.wait()
+    await create_shutdown_event().wait()
     logger.info("Shutting down...")
     await bus.stop()
 

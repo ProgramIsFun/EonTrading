@@ -47,3 +47,7 @@ class Heartbeat:
         while True:
             await asyncio.to_thread(self.beat)
             await asyncio.sleep(self.interval)
+
+    @staticmethod
+    def create_background(component: str, interval_sec: int = 30, metadata: dict = None):
+        return asyncio.create_task(Heartbeat(component, interval_sec, metadata).run())

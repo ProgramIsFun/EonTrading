@@ -11,21 +11,16 @@ Each component uses the event's timestamp for price lookups.
 """
 import argparse
 import asyncio
-import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
 
 from src.common.sample_news import SAMPLE_NEWS
+from src.settings import settings
 
 
 async def main(start: str, end: str):
     from src.common.event_bus import RedisStreamBus
     from src.common.events import CHANNEL_NEWS, NewsEvent
 
-    redis_host = os.getenv("REDIS_HOST", "localhost")
-    bus = RedisStreamBus(host=redis_host, group="replay")
+    bus = RedisStreamBus(host=settings.redis_host, group="replay")
     await bus.start()
 
     fills = []
