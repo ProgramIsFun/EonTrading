@@ -67,9 +67,9 @@ class RedisStreamBus(EventBus):
     """
 
     def __init__(self, host: str = None, port: int = None, group: str = "default"):
-        from src.env import REDIS_HOST, REDIS_PORT
-        self._host = host or REDIS_HOST
-        self._port = port or REDIS_PORT
+        from src.settings import settings
+        self._host = host or settings.redis_host
+        self._port = port or settings.redis_port
         self._group = group
         self._consumer = f"{group}-{id(self)}"
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)

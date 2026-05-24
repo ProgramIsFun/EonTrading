@@ -3,16 +3,16 @@ from datetime import datetime
 import clickhouse_connect
 import pandas as pd
 
-from src.env import CLICKHOUSE_DB, CLICKHOUSE_HOST, CLICKHOUSE_PORT
+from src.settings import settings
 
 from .base_storage import StorageBackend
 
 
 class ClickHouseStorage(StorageBackend):
     def __init__(self, host: str = None, port: int = None, database: str = None):
-        host = host or CLICKHOUSE_HOST
-        port = port or CLICKHOUSE_PORT
-        database = database or CLICKHOUSE_DB
+        host = host or settings.clickhouse_host
+        port = port or settings.clickhouse_port
+        database = database or settings.clickhouse_db
         self.client = clickhouse_connect.get_client(host=host, port=port, database=database)
 
     def insert_ohlcv(self, df: pd.DataFrame, symbol: str, exchange: str, interval: str):

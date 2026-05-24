@@ -126,16 +126,16 @@ async def main_single():
     bus = LocalEventBus()
     await bus.start()
 
-    from src.env import env_bool
+    from src.settings import settings
     from src.live.price_monitor import PriceMonitor
 
     store = PositionStore()
     logic = TradingLogic(
-        threshold=float(os.getenv("THRESHOLD", "0.4")),
-        min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.15")),
-        max_allocation=float(os.getenv("MAX_ALLOCATION", "0.2")),
-        stop_loss_pct=float(os.getenv("STOP_LOSS_PCT", "0.05")),
-        take_profit_pct=float(os.getenv("TAKE_PROFIT_PCT", "0.10")),
+        threshold=settings.threshold,
+        min_confidence=settings.min_confidence,
+        max_allocation=settings.max_allocation,
+        stop_loss_pct=settings.stop_loss_pct,
+        take_profit_pct=settings.take_profit_pct,
     )
     monitor = PriceMonitor(bus, store, logic, interval_sec=60)
     trader = SentimentTrader(bus, logic=logic, position_store=store,
@@ -143,8 +143,8 @@ async def main_single():
                              broker=broker, price_monitor=monitor)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
-                          persist_news=env_bool("PERSIST_NEWS"),
-                          publish=env_bool("PUBLISH_PIPELINE", default=True))
+                          persist_news=settings.persist_news,
+                          publish=settings.publish_pipeline)
     executor = TradeExecutor(bus, broker)
 
     await analyzer_svc.start()

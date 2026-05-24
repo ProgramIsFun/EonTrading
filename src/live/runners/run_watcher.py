@@ -7,7 +7,7 @@ import signal
 from dotenv import load_dotenv
 
 load_dotenv()
-from src.env import env_bool
+from src.settings import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,8 +39,8 @@ async def main():
     sources.append(RSSSource())
     sources.append(RedditSource())
 
-    persist = env_bool("PERSIST_NEWS")
-    publish = env_bool("PUBLISH_PIPELINE", default=True)
+    persist = settings.persist_news
+    publish = settings.publish_pipeline
     mode_parts = []
     if publish:
         mode_parts.append("pipeline [news]")
@@ -50,7 +50,7 @@ async def main():
     banner("NewsWatcher", {
         "Publishes to": ", ".join(mode_parts) or "nowhere (dry run)",
         "Sources": ", ".join(source_names),
-        "Redis": os.getenv("REDIS_HOST", "localhost"),
+        "Redis": settings.redis_host,
     })
 
     bus = RedisStreamBus(group="watcher")
