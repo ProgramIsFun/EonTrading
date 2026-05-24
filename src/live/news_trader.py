@@ -12,7 +12,6 @@ For distributed mode, run each runner in its own terminal:
 """
 import asyncio
 import logging
-import os
 import signal
 import sys
 from datetime import datetime
@@ -70,7 +69,7 @@ async def main_single():
     from src.common.position_store import PositionStore
     from src.common.startup import banner, env_status
     from src.common.trading_logic import TradingLogic
-    from src.data.news import FinnhubSource, NewsAPISource, RedditSource, RSSSource, TwitterSource
+    from src.data.news.loader import build_news_sources
     from src.data.utils.db_helper import get_mongo_client
     from src.live.analyzer_service import AnalyzerService
     from src.live.brokers.broker import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker, TradeExecutor
@@ -81,19 +80,7 @@ async def main_single():
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
     # --- Sources ---
-    sources = []
-    source_names = ["RSS", "Reddit"]
-    if settings.newsapi_key:
-        sources.append(NewsAPISource())
-        source_names.append("NewsAPI")
-    if settings.finnhub_key:
-        sources.append(FinnhubSource())
-        source_names.append("Finnhub")
-    if settings.twitter_bearer_token:
-        sources.append(TwitterSource())
-        source_names.append("Twitter")
-    sources.append(RSSSource())
-    sources.append(RedditSource())
+    sources, source_names = build_news_sources()
 
     # --- Analyzer ---
     if settings.openai_api_key or settings.opencode_api_key:
