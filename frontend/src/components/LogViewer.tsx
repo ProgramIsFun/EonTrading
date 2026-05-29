@@ -20,8 +20,8 @@ const COMPONENTS = [
   { label: "All", prefix: "" },
   { label: "Watcher", prefix: "src.live.runners.run_watcher,src.live.news_watcher,src.data.news" },
   { label: "Trader", prefix: "src.live.runners.run_trader,src.live.sentiment_trader" },
-  { label: "Analyzer", prefix: "src.live.runners.run_analyzer" },
-  { label: "Executor", prefix: "src.live.runners.run_executor" },
+  { label: "Analyzer", prefix: "src.live.runners.run_analyzer,src.live.analyzer_service" },
+  { label: "Executor", prefix: "src.live.runners.run_executor,src.live.brokers" },
   { label: "Monitor", prefix: "src.live.runners.run_monitor,src.live.price_monitor" },
   { label: "Others", prefix: "src.common,httpx,__main__" },
 ];
