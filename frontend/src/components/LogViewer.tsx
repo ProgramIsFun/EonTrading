@@ -18,12 +18,11 @@ const LEVEL_COLORS: Record<string, string> = {
 
 const COMPONENTS = [
   { label: "All", prefix: "" },
-  { label: "Watcher", prefix: "src.live.runners.run_watcher,src.live.news_watcher" },
+  { label: "Watcher", prefix: "src.live.runners.run_watcher,src.live.news_watcher,src.data.news" },
   { label: "Trader", prefix: "src.live.runners.run_trader,src.live.sentiment_trader" },
   { label: "Analyzer", prefix: "src.live.runners.run_analyzer" },
   { label: "Executor", prefix: "src.live.runners.run_executor" },
   { label: "Monitor", prefix: "src.live.runners.run_monitor,src.live.price_monitor" },
-  { label: "News Sources", prefix: "src.data.news" },
   { label: "System", prefix: "src.common,httpx,__main__" },
 ];
 
