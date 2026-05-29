@@ -16,15 +16,27 @@ const LEVEL_COLORS: Record<string, string> = {
   CRITICAL: "#dc2626",
 };
 
+const COMPONENTS = [
+  { label: "All", prefix: "" },
+  { label: "Watcher", prefix: "src.live.runners.run_watcher,src.live.news_watcher" },
+  { label: "Trader", prefix: "src.live.runners.run_trader,src.live.sentiment_trader" },
+  { label: "Analyzer", prefix: "src.live.runners.run_analyzer" },
+  { label: "Executor", prefix: "src.live.runners.run_executor" },
+  { label: "Monitor", prefix: "src.live.runners.run_monitor,src.live.price_monitor" },
+  { label: "News Sources", prefix: "src.data.news" },
+  { label: "System", prefix: "src.common,httpx,__main__" },
+];
+
 export default function LogViewer() {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [allLogs, setAllLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [level, setLevel] = useState("");
+  const [component, setComponent] = useState("");
 
   const load = () => {
     setLoading(true);
-    fetchLogs(undefined, level || undefined, 100)
-      .then((r) => setLogs(r.logs || []))
+    fetchLogs(undefined, undefined, 500)
+      .then((r) => setAllLogs(r.logs || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   };
@@ -33,7 +45,16 @@ export default function LogViewer() {
     load();
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
-  }, [level]);
+  }, []);
+
+  const logs = allLogs.filter((l) => {
+    if (level && l.level !== level) return false;
+    if (component) {
+      const prefixes = component.split(",");
+      return prefixes.some((p) => l.logger.startsWith(p));
+    }
+    return true;
+  });
 
   const logLines = logs.map((l, i) => {
     const ts = l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : "";
@@ -54,9 +75,16 @@ export default function LogViewer() {
     );
   });
 
+  const btnStyle = (c: string) => ({
+    padding: "4px 10px",
+    background: component === c ? "#818cf8" : "#2a2a3e",
+    color: component === c ? "#fff" : "#888",
+    border: "none", borderRadius: 4, cursor: "pointer" as const, fontSize: 11, fontWeight: 600 as const,
+  });
+
   return (
     <div style={{ background: "#1e1e2e", borderRadius: 8, padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <div style={{ fontSize: 14, color: "#888" }}>
           Component Logs ({logs.length} entries)
         </div>
@@ -76,6 +104,13 @@ export default function LogViewer() {
             border: "none", borderRadius: 4, cursor: "pointer", fontSize: 12,
           }}>Refresh</button>
         </div>
+      </div>
+      <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+        {COMPONENTS.map((c) => (
+          <button key={c.label} style={btnStyle(c.prefix)} onClick={() => setComponent(c.prefix)}>
+            {c.label}
+          </button>
+        ))}
       </div>
       <div style={{ maxHeight: 600, overflowY: "auto" }}>
         {loading ? <div style={{ color: "#888" }}>Loading...</div> : logLines}
