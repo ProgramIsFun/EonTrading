@@ -1,6 +1,11 @@
 # EonTrading
 
-**Branch status:** `refactor/sync-to-async` — discarded (tried to refactor too much at once). The `requests` → `httpx` migration is complete on `main`; `pymongo` → `motor` remains pending.
+**HTTP client status:**
+- News sources (RSS, NewsAPI, Reddit, Finnhub) — **httpx.AsyncClient** ✅
+- OpenAI API calls in `sentiment.py` — **requests** (lazy import, sync only)
+- `scripts/data/backfill_news.py` — **requests** (lazy import, sync only)
+
+**Branch status:** `refactor/sync-to-async` — discarded (tried to refactor too much at once). `pymongo` → `motor` remains pending.
 
 News-driven trading system: data collection, backtesting, and live execution.
 
