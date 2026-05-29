@@ -630,6 +630,11 @@ class TestAlpacaBroker:
     async def test_timeout(self, event_bus):
         _install_alpaca_mock()
         try:
+            from unittest.mock import patch
+            # AlpacaBroker.execute polls 30× with await asyncio.sleep(2) to not spam Alpaca's API.
+            # In this test all calls are mocked, so the sleep is just 60s of dead time.
+            patcher = patch("asyncio.sleep", return_value=None)
+            patcher.start()
             from src.live.brokers.broker import AlpacaBroker
 
             mock_order = MagicMock()
@@ -654,6 +659,7 @@ class TestAlpacaBroker:
             assert fills[0]["success"] is False
             assert fills[0]["reason"] == "timeout"
         finally:
+            patcher.stop()
             _remove_alpaca_mock()
 
     @pytest.mark.asyncio

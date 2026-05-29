@@ -68,12 +68,21 @@ async def test_poll_timeout():
     sources = [SlowSource(delay=60)]  # way over timeout
     watcher = NewsWatcher(bus, sources=sources, persist_seen=False)
 
-    start = time.monotonic()
-    events = await watcher._poll_concurrent()
-    elapsed = time.monotonic() - start
+    from unittest.mock import patch
+    # _poll_concurrent uses asyncio.wait_for(timeout=30). The 30s wait is the
+    # production safety net; in this unit test we just verify the error path.
+    # Also patch asyncio.to_thread: its argument (source.fetch_latest) is
+    # evaluated before wait_for is called, so an orphaned time.sleep(60)
+    # thread would stall teardown for 60s.
+    async def noop(*a, **kw): return []
+    with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError), \
+         patch("asyncio.to_thread", noop):
+        start = time.monotonic()
+        events = await watcher._poll_concurrent()
+        elapsed = time.monotonic() - start
 
     assert events == []
-    assert elapsed < 35, f"Timeout didn't fire — took {elapsed:.2f}s"
+    assert elapsed < 1, f"Timeout didn't fire — took {elapsed:.2f}s"
 
 
 @pytest.mark.asyncio
