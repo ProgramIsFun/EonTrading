@@ -1,6 +1,6 @@
 # EonTrading
 
-**Branch status:** `refactor/sync-to-async` — on hold. Migrating `requests` → `httpx`, `pymongo` → `motor`, and sync methods to async caused severe pytest slowdown (~30–94s per test). Investigating before merging.
+**Branch status:** `refactor/sync-to-async` — discarded (tried to refactor too much at once). The `requests` → `httpx` migration is complete on `main`; `pymongo` → `motor` remains pending.
 
 News-driven trading system: data collection, backtesting, and live execution.
 
