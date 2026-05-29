@@ -22,9 +22,11 @@ async def main(start: str, end: str):
     from src.common.events import CHANNEL_NEWS, NewsEvent
     from src.common.position_store import PositionStore
     from src.common.startup import banner
+    from src.common.trading_logic import TradingLogic
     from src.data.utils.db_helper import get_mongo_client
     from src.live.analyzer_service import AnalyzerService
     from src.live.brokers.broker import PaperBroker, TradeExecutor
+    from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
     from src.settings import settings
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
@@ -42,14 +44,13 @@ async def main(start: str, end: str):
     analyzer = LLMSentimentAnalyzer() if (settings.openai_api_key or settings.opencode_api_key) else KeywordSentimentAnalyzer()
     broker = PaperBroker()
     store = PositionStore()
+    logic = TradingLogic(threshold=0.4, min_confidence=0.15)
     db = get_mongo_client()["EonTradingDB"]
+    price_monitor = PriceMonitor(bus, store, logic)
 
-    trader = SentimentTrader(bus, threshold=0.4, min_confidence=0.15,
-                             position_store=store,
-                             trade_log=db["replay_trades"],
-                             broker=broker)
+    trader = SentimentTrader(bus, logic=logic, position_store=store, broker=broker, price_monitor=price_monitor)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
-    executor = TradeExecutor(bus, broker)
+    executor = TradeExecutor(bus, broker, position_store=store, trade_log=db["replay_trades"], price_monitor=price_monitor)
 
     await analyzer_svc.start()
     await trader.start()
@@ -82,6 +83,11 @@ async def main(start: str, end: str):
         await bus.publish(CHANNEL_NEWS, event.to_dict())
         await asyncio.sleep(0.1)  # let the pipeline process
 
+        # Check SL/TP after each event — PriceMonitor uses TradingLogic
+        # and publishes sell trades through the same event bus
+        if price_monitor:
+            await price_monitor.check_once(broker, as_of=ts)
+
         if (i + 1) % 50 == 0:
             print(f"  ... {i + 1}/{len(news_docs)} events processed (clock: {clock.now().strftime('%Y-%m-%d %H:%M')})")
 
@@ -89,9 +95,10 @@ async def main(start: str, end: str):
     clock.reset()
 
     # Summary
+    holdings = store.get_positions() if store else {}
     print(f"\n{'═' * 50}")
     print(f"  Replay complete: {len(news_docs)} events")
-    print(f"  Final holdings: {list(trader.holdings.keys()) or 'none'}")
+    print(f"  Final holdings: {list(holdings.keys()) or 'none'}")
     print("  Trades logged to: EonTradingDB.replay_trades")
     print(f"{'═' * 50}\n")
 
