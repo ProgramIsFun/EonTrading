@@ -315,6 +315,11 @@ export default function ArchitectureDiagram() {
             <div style={{ fontSize: 8, color: "#555" }}>↑ pre-scored LLM sentiment, hourly SL/TP</div>
           </div>
 
+          <div style={{ fontSize: 9, color: "#666", marginTop: 6 }}>
+            All components emit structured logs via <code style={{ color: "#22c55e" }}>MongoBatchHandler</code> → <code style={{ color: "#f59e0b" }}>EonTradingDB.logs</code> → <code style={{ color: "#818cf8" }}>GET /api/logs</code> → Logs tab.
+            Disable with <code style={{ color: "#ef4444" }}>MONGODB_LOG=false</code>.
+          </div>
+
           {/* Live vs Replay differences */}
           <table style={{ fontSize: 9, color: "#888", borderCollapse: "collapse", width: "100%", marginTop: 8 }}>
             <thead>
@@ -451,6 +456,9 @@ export default function ArchitectureDiagram() {
         <div style={{ fontSize: 10, color: "#666", marginTop: 6 }}>
           FastAPI serves both the dashboard API and runs backtests — same server process.
         </div>
+        <div style={{ fontSize: 10, color: "#666", marginTop: 4 }}>
+          <strong style={{ color: "#ccc" }}>Log Viewer</strong> tab fetches from <code style={{ color: "#818cf8" }}>GET /api/logs</code> — reads <code style={{ color: "#f59e0b" }}>EonTradingDB.logs</code> written by <code style={{ color: "#22c55e" }}>MongoBatchHandler</code>.
+        </div>
       </div>
 
       {/* Shared: TradingLogic */}
@@ -506,6 +514,7 @@ export default function ArchitectureDiagram() {
             { name: "heartbeats", desc: "Component health (updated every 30s)", doc: `{ "component": "trader", "lastBeat": "2026-04-30T09:16:00Z", "host": "macbook.local", "pid": 12345, "mode": "distributed" }` },
             { name: "seen_urls", desc: "Dedup — survives restarts", doc: `{ "url": "https://finance.yahoo.com/news/..." }` },
             { name: "symbols", desc: "Tracked stock list", doc: `{ "symbol": "AAPL", "name": "Apple Inc.", "sector": "Technology" }` },
+            { name: "logs", desc: "Structured logs from all components (via MongoBatchHandler)", doc: `{ "timestamp": "2026-05-29T13:28:38", "level": "INFO", "logger": "src.data.utils.db_helper", "message": "Successfully connected to MongoDB", "module": "db_helper", "func": "get_mongo_client", "line": 30 }` },
           ].map((c) => (
             <div key={c.name}>
               <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginBottom: 2 }}>
@@ -562,6 +571,7 @@ export default function ArchitectureDiagram() {
             {envReq("MONGODB_USER")}
             {envReq("MONGODB_PASS")}
             {envReq("MONGODB_CLUSTERNAME")}
+            {envOpt("MONGODB_LOG")}
           </div>
           <div style={{ color: "#666", fontSize: 9, alignSelf: "center" }}>
             <div><span style={{ color: "#ef4444" }}>●</span> = required</div>
@@ -569,6 +579,7 @@ export default function ArchitectureDiagram() {
             <div style={{ marginTop: 4 }}>RSS + Reddit are always on, no key needed.</div>
             <div>Default broker: PaperBroker (dry run).</div>
             <div>Default analyzer: Keyword (free).</div>
+            <div><span style={{ color: "#22c55e" }}>○</span> MONGODB_LOG — default on; set to false to skip DB logging</div>
           </div>
         </div>
       </div>
