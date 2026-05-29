@@ -23,7 +23,7 @@ const COMPONENTS = [
   { label: "Analyzer", prefix: "src.live.runners.run_analyzer" },
   { label: "Executor", prefix: "src.live.runners.run_executor" },
   { label: "Monitor", prefix: "src.live.runners.run_monitor,src.live.price_monitor" },
-  { label: "System", prefix: "src.common,httpx,__main__" },
+  { label: "Others", prefix: "src.common,httpx,__main__" },
 ];
 
 export default function LogViewer() {
