@@ -45,6 +45,18 @@ export async function getNewsCount(): Promise<number> {
   return data.count;
 }
 
+export async function fetchLogs(
+  loggerName?: string, level?: string, limit = 100
+): Promise<{logs: any[]}> {
+  const params = new URLSearchParams();
+  if (loggerName) params.set("logger_name", loggerName);
+  if (level) params.set("level", level);
+  params.set("limit", String(limit));
+  const res = await fetch(`${API_BASE}/api/logs?${params}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 export async function getCollectorStatus(): Promise<boolean> {
   const res = await fetch(`${API_BASE}/api/collector/status`);
   const data = await res.json();

@@ -11,6 +11,7 @@ import SystemStatus from "./components/SystemStatus";
 import NewsFeed from "./components/NewsFeed";
 import LivePipelineBacktest from "./components/LivePipelineBacktest";
 import PriceBacktest from "./components/PriceBacktest";
+import LogViewer from "./components/LogViewer";
 
 const DEFAULT_PARAMS: BacktestParams = {
   capital: 70000,
@@ -22,7 +23,7 @@ const DEFAULT_PARAMS: BacktestParams = {
   trailing_sl: false,
 };
 
-type Tab = "backtest" | "live" | "price" | "news" | "about";
+type Tab = "backtest" | "live" | "price" | "news" | "logs" | "about";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("backtest");
@@ -90,6 +91,7 @@ export default function App() {
               }}>{newsBadge}</span>
             )}
           </button>
+          <button style={tabStyle("logs")} onClick={() => setTab("logs")}>Logs</button>
           <button style={tabStyle("about")} onClick={() => setTab("about")}>About</button>
         </div>
       </div>
@@ -100,6 +102,8 @@ export default function App() {
         {tab === "price" && <PriceBacktest />}
 
         {tab === "news" && <NewsFeed />}
+
+        {tab === "logs" && <LogViewer />}
 
         {tab === "about" && <><SystemStatus /><ArchitectureDiagram /></>}
 
