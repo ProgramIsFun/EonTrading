@@ -31,6 +31,7 @@ asyncio_mode = "strict"
 markers = [
     "redis: tests requiring a running Redis instance (deselect with '-m not redis')",
     "futu: tests requiring a running Futu OpenD daemon on 127.0.0.1:11111",
+    "network: tests making real HTTP requests to external APIs/RSS feeds",
 ]
 
 [tool.ruff]

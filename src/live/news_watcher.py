@@ -66,18 +66,31 @@ class NewsWatcher:
         Uses to_thread because news sources use synchronous requests.get() —
         calling them directly would block the async event loop.
         """
-        try:
-            results = await asyncio.wait_for(asyncio.gather(*[
-                asyncio.to_thread(source.fetch_latest) for source in self.poller.sources
-            ], return_exceptions=True), timeout=30)
-        except asyncio.TimeoutError:
+        async def _fetch(source, timeout=30):
+            return await asyncio.wait_for(
+                asyncio.to_thread(source.fetch_latest), timeout=timeout,
+            )
+
+        tasks = {asyncio.create_task(_fetch(s)): s for s in self.poller.sources}
+        done, pending = await asyncio.wait(tasks, timeout=30)
+
+        for task in pending:
+            task.cancel()
+
+        if not done:
             logger.warning("Poll cycle timed out after 30s")
             return []
+
         events = []
-        for i, result in enumerate(results):
-            source_name = self.poller.sources[i].__class__.__name__
-            if isinstance(result, Exception):
-                logger.error("Source %s failed: %s", source_name, result)
+        for task in done:
+            source = tasks[task]
+            try:
+                result = task.result()
+            except asyncio.TimeoutError:
+                logger.warning("Source %s timed out after 30s", source.__class__.__name__)
+                continue
+            except Exception as e:
+                logger.error("Source %s failed: %s", source.__class__.__name__, e)
                 continue
             count = 0
             for event in result:
@@ -88,5 +101,5 @@ class NewsWatcher:
                 events.append(event)
                 count += 1
             if count:
-                logger.info("  %s: %d articles", source_name, count)
+                logger.info("  %s: %d articles", source.__class__.__name__, count)
         return events
