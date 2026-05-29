@@ -9,12 +9,15 @@ To add a new broker:
      - IBKRBroker: callback via ib_insync
      - AlpacaBroker: REST polling or websocket
 """
+import asyncio
 import logging
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_FILL, CHANNEL_TRADE, FillEvent, TradeEvent
+from src.common.trade_store import trade_to_doc
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -375,21 +378,28 @@ class AlpacaBroker(Broker):
 # TradeExecutor — routes [trade] events to the configured broker
 # ---------------------------------------------------------------------------
 class TradeExecutor:
-    """Listens to trade events and forwards to broker. Broker publishes fill results.
+    """Listens to trade events and forwards to broker. Writes fill results to DB.
 
     Safety: in replay mode (clock.is_replay), real brokers are blocked.
     Only PaperBroker is allowed during backtest replay.
     Dedup: tracks recent trade keys to prevent duplicate execution (at-least-once delivery).
+    PositionStore writes are done on fill confirmation, not on trade intent —
+    SentimentTrader reads from PositionStore each cycle and never subscribes to [fill].
     """
 
-    def __init__(self, bus: EventBus, broker: Broker):
+    def __init__(self, bus: EventBus, broker: Broker, position_store=None, trade_log=None, price_monitor=None):
         self.bus = bus
         self.broker = broker
         self.broker.set_bus(bus)
         self._seen: set[str] = set()
+        self._pending_trades: dict[str, dict] = {}
+        self.position_store = position_store
+        self._trades_col = trade_log
+        self.price_monitor = price_monitor
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_TRADE, self._on_trade)
+        await self.bus.subscribe(CHANNEL_FILL, self._on_fill)
 
     async def _on_trade(self, msg: dict):
         trade = TradeEvent.from_dict(msg)
@@ -401,4 +411,36 @@ class TradeExecutor:
         # Cap dedup set size
         if len(self._seen) > 10000:
             self._seen = set(list(self._seen)[-5000:])
+
+        # Store trade details for fill handler
+        self._pending_trades[trade.symbol] = {
+            "action": trade.action,
+            "price": trade.price or 0.0,
+            "size": trade.size or 1,
+            "timestamp": trade.timestamp,
+        }
         await self.broker.execute(trade)
+
+    async def _on_fill(self, msg: dict):
+        event = FillEvent.from_dict(msg)
+        symbol = event.symbol
+        pending = self._pending_trades.pop(symbol, None)
+        if not pending:
+            logger.debug("Fill for untracked trade: %s %s (already processed or from another source)", event.action.upper(), symbol)
+            return
+
+        if event.success:
+            logger.info("Fill confirmed: %s %s", event.action.upper(), symbol)
+            if self._trades_col is not None:
+                doc = trade_to_doc(symbol, event.action, pending["price"], pending["size"], event.reason, event.timestamp)
+                await asyncio.to_thread(self._trades_col.insert_one, doc)
+            if self.position_store:
+                if event.action == "buy":
+                    entry_time = datetime.fromisoformat(pending["timestamp"].rstrip("Z")) if pending["timestamp"] else utcnow()
+                    await asyncio.to_thread(self.position_store.open_position, symbol, entry_time, pending["price"])
+                elif event.action == "sell":
+                    await asyncio.to_thread(self.position_store.close_position, symbol)
+            if self.price_monitor and event.action == "buy":
+                self.price_monitor.register_entry(symbol, pending["price"], pending["size"])
+        else:
+            logger.warning("Trade rejected: %s %s — %s", event.action.upper(), symbol, event.reason)

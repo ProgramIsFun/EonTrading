@@ -32,11 +32,16 @@ class TestDistributedWiring:
         src = _get_function_source("src/live/runners/run_trader.py", "main")
         assert "TradingLogic(" in src, "run_trader.py must create TradingLogic explicitly"
 
-    def test_trader_passes_broker_args(self):
-        """run_trader must pass position_store and trade_log like single-process does."""
+    def test_trader_passes_position_store(self):
+        """run_trader must pass position_store to SentimentTrader (read-only)."""
         src = _get_function_source("src/live/runners/run_trader.py", "main")
         assert "position_store=" in src, "run_trader.py must pass position_store to SentimentTrader"
-        assert "trade_log=" in src, "run_trader.py must pass trade_log to SentimentTrader"
+
+    def test_executor_passes_db_args(self):
+        """run_executor must pass position_store and trade_log to TradeExecutor."""
+        src = _get_function_source("src/live/runners/run_executor.py", "main")
+        assert "position_store=" in src, "run_executor.py must pass position_store to TradeExecutor"
+        assert "trade_log=" in src, "run_executor.py must pass trade_log to TradeExecutor"
 
     def test_executor_has_dedup(self):
         """TradeExecutor must deduplicate trades (at-least-once delivery protection)."""

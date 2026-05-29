@@ -5,7 +5,7 @@ Tests verify that components wire together correctly through the event bus.
 """
 import asyncio
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -46,11 +46,24 @@ BEARISH_TESLA = make_news("Tesla stock crashes after tariff ban and recession fe
 BULLISH_NVIDIA = make_news("Nvidia rallies on strong AI chip demand and record revenue", "2026-04-22T10:02:00Z")
 
 
+class FakePositionStore:
+    """In-memory PositionStore — tracks state for integration tests."""
+    def __init__(self):
+        self._positions: dict[str, datetime] = {}
+    def get_positions(self):
+        return dict(self._positions)
+    def get_positions_with_prices(self):
+        return {s: {"entryTime": t, "entryPrice": 0.0} for s, t in self._positions.items()}
+    def open_position(self, symbol, entry_time, entry_price=0.0):
+        self._positions[symbol] = entry_time
+    def close_position(self, symbol):
+        self._positions.pop(symbol, None)
+    def set_positions(self, holdings, entry_prices=None):
+        self._positions = dict(holdings)
+
+
 def mock_position_store():
-    store = MagicMock()
-    store.get_positions.return_value = {}
-    store.get_positions_with_prices.return_value = {}
-    return store
+    return FakePositionStore()
 
 
 def collector(lst):
@@ -111,7 +124,8 @@ class TestFullPipelineIntegration:
         assert fills[0].symbol == "AAPL"
         assert fills[0].action == "buy"
         assert fills[0].success is True
-        assert "AAPL" in trader.holdings
+        broker_pos = await broker.get_positions()
+        assert "AAPL" in broker_pos
 
     @pytest.mark.asyncio
     async def test_buy_then_sell_on_sentiment_reversal(self):
@@ -127,7 +141,7 @@ class TestFullPipelineIntegration:
 
         analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer(), max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker)
+        executor = TradeExecutor(bus, broker, position_store=store)
 
         await analyzer_svc.start()
         await trader.start()
@@ -138,14 +152,16 @@ class TestFullPipelineIntegration:
             await bus.publish(CHANNEL_NEWS, make_news("Tesla surges on record deliveries and strong growth").to_dict())
             await asyncio.sleep(0.3)
 
-            assert "TSLA" in trader.holdings
+            broker_pos = await broker.get_positions()
+            assert "TSLA" in broker_pos
             assert fills[-1].action == "buy"
 
             # Sell on bearish news
             await bus.publish(CHANNEL_NEWS, BEARISH_TESLA.to_dict())
             await asyncio.sleep(0.3)
 
-        assert "TSLA" not in trader.holdings
+        broker_pos = await broker.get_positions()
+        assert "TSLA" not in broker_pos
         assert fills[-1].action == "sell"
         assert len(fills) == 2
 
@@ -175,8 +191,9 @@ class TestFullPipelineIntegration:
             await bus.publish(CHANNEL_NEWS, BULLISH_NVIDIA.to_dict())
             await asyncio.sleep(0.2)
 
-        assert "AAPL" in trader.holdings
-        assert "NVDA" in trader.holdings
+        broker_pos = await broker.get_positions()
+        assert "AAPL" in broker_pos
+        assert "NVDA" in broker_pos
         assert len(fills) == 2
         symbols_filled = {f.symbol for f in fills}
         assert symbols_filled == {"AAPL", "NVDA"}
@@ -230,7 +247,7 @@ class TestBrokerCashIntegration:
         store = mock_position_store()
 
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker)
+        executor = TradeExecutor(bus, broker, position_store=store)
         await trader.start()
         await executor.start()
 
@@ -369,7 +386,7 @@ class TestSLTPFullCycle:
         monitor = PriceMonitor(bus, store, logic)
         trader = SentimentTrader(bus, logic=logic, broker=broker,
                                  position_store=store, price_monitor=monitor)
-        executor = TradeExecutor(bus, broker)
+        executor = TradeExecutor(bus, broker, price_monitor=monitor)
 
         await trader.start()
         await executor.start()
@@ -384,7 +401,6 @@ class TestSLTPFullCycle:
             ).to_dict())
             await asyncio.sleep(0.3)
 
-        assert "AAPL" in trader.holdings
         broker_pos = await broker.get_positions()
         assert "AAPL" in broker_pos
 
@@ -457,7 +473,8 @@ class TestNeutralNewsNoTrades:
         await asyncio.sleep(0.3)
 
         assert len(fills) == 0
-        assert len(trader.holdings) == 0
+        broker_pos = await broker.get_positions()
+        assert len(broker_pos) == 0
 
 
 # ---------------------------------------------------------------------------

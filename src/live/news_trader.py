@@ -75,13 +75,15 @@ async def main_single():
     )
     monitor = PriceMonitor(bus, store, logic, interval_sec=60)
     trader = SentimentTrader(bus, logic=logic, position_store=store,
-                             trade_log=get_mongo_client()["EonTradingDB"]["trades"],
                              broker=broker, price_monitor=monitor)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
                           persist_news=settings.persist_news,
                           publish=settings.publish_pipeline)
-    executor = TradeExecutor(bus, broker)
+    executor = TradeExecutor(bus, broker,
+                             position_store=store,
+                             trade_log=get_mongo_client()["EonTradingDB"]["trades"],
+                             price_monitor=monitor)
 
     await analyzer_svc.start()
     await trader.start()

@@ -1,13 +1,12 @@
 """SentimentTrader: listens to sentiment events, decides trades, publishes trade events."""
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
-from src.common.events import CHANNEL_FILL, CHANNEL_SENTIMENT, CHANNEL_TRADE, FillEvent, SentimentEvent, TradeEvent
+from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, SentimentEvent, TradeEvent
 from src.common.price import get_price
-from src.common.trade_store import trade_to_doc
 from src.common.trading_logic import TradingLogic
 
 logger = logging.getLogger(__name__)
@@ -16,82 +15,50 @@ logger = logging.getLogger(__name__)
 class SentimentTrader:
     """Listens to sentiment events and decides trades.
 
-    Flow: decide → mark pending → publish trade → wait for fill → confirm or rollback.
-    Timestamps flow with events — no global clock needed.
+    Reads current positions from PositionStore (MongoDB) on each decision cycle.
+    Publishes [trade] events for the executor — no fill subscription (no circular dep).
+    Local TTL dedup prevents duplicate sends; PositionStore is the source of truth.
     """
 
     def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0,
-                 position_store=None, trade_log=None, broker=None, price_monitor=None, **kwargs):
+                 position_store=None, broker=None, price_monitor=None, **kwargs):
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
-        self.holdings: dict[str, datetime] = {}
-        self.pending: dict[str, dict] = {}  # symbol → {"action", "price", "shares"}
         self.max_hold_days = max_hold_days
         self.position_store = position_store
-        self._trades_col = trade_log
         self.broker = broker
         self.price_monitor = price_monitor
-        if self.position_store:
-            self.holdings = self.position_store.get_positions()
-            if self.holdings:
-                logger.info("Restored %d position(s) from store: %s", len(self.holdings), list(self.holdings.keys()))
+        self._last_trade_at: dict[str, dict[str, datetime]] = {}
+        self._dedup_seconds = 60
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_SENTIMENT, self._on_sentiment)
-        await self.bus.subscribe(CHANNEL_FILL, self._on_fill)
         if self.max_hold_days > 0:
             self._hold_task = asyncio.create_task(self._hold_checker())
 
-    async def _on_fill(self, msg: dict):
-        event = FillEvent.from_dict(msg)
-        symbol = event.symbol
-        pending = self.pending.pop(symbol, None)
-        if not pending:
-            return
-
-        action = pending["action"]
-        entry_price = pending.get("price", 0.0)
-        shares = pending.get("shares", 1)
-
-        if event.success:
-            logger.info("✅ %s %s confirmed by broker", action.upper(), symbol)
-            if self._trades_col is not None:
-                doc = trade_to_doc(symbol, action, entry_price, shares, event.reason, event.timestamp)
-                await asyncio.to_thread(self._trades_col.insert_one, doc)
-            if self.position_store:
-                if action == "buy":
-                    await asyncio.to_thread(
-                        self.position_store.open_position, symbol, self.holdings[symbol], entry_price)
-                    if self.price_monitor:
-                        self.price_monitor.register_entry(symbol, entry_price, shares)
-                elif action == "sell":
-                    await asyncio.to_thread(self.position_store.close_position, symbol)
-        else:
-            logger.warning("⚠️ %s %s rejected by broker: %s", action.upper(), symbol, event.reason)
-            if action == "buy":
-                self.holdings.pop(symbol, None)
-            elif action == "sell":
-                self.holdings[symbol] = utcnow()
-
     async def _hold_checker(self):
         while True:
+            await asyncio.sleep(3600)
+            if not self.position_store:
+                continue
+            holdings = await asyncio.to_thread(self.position_store.get_positions)
+            if not holdings:
+                continue
             now = utcnow()
-            for symbol in list(self.holdings.keys()):
-                if symbol in self.pending:
-                    continue
-                entry_time = self.holdings[symbol]
+            for symbol, entry_time in holdings.items():
                 held_days = (now - entry_time).total_seconds() / 86400
                 if held_days >= self.max_hold_days:
-                    del self.holdings[symbol]
-                    self.pending[symbol] = {"action": "sell", "price": 0, "shares": 0}
+                    last = self._last_trade_at.get(symbol, {}).get("sell")
+                    if last and (now - last).total_seconds() < self._dedup_seconds:
+                        continue
+                    self._last_trade_at.setdefault(symbol, {})["sell"] = now
                     trade = TradeEvent(
                         symbol=symbol, action="sell",
                         reason=f"max hold {self.max_hold_days}d reached",
                         timestamp=now.isoformat() + "Z",
                     )
-                    logger.info("SELL %s (max hold %dd reached) — pending broker confirmation", symbol, self.max_hold_days)
+                    logger.info("SELL %s (max hold %dd reached)", symbol, self.max_hold_days)
                     await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
-            await asyncio.sleep(3600)
 
     async def _on_sentiment(self, msg: dict):
         event = SentimentEvent.from_dict(msg)
@@ -100,28 +67,29 @@ class SentimentTrader:
 
         event_ts = event.timestamp
 
+        if self.position_store:
+            holdings = await asyncio.to_thread(self.position_store.get_positions)
+        else:
+            holdings = {}
+
+        now = utcnow()
+
         for symbol in event.symbols:
-            if symbol in self.pending:
-                continue
-
             action = None
-            shares = 0
-            price = 0.0
-
-            if self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, self.holdings):
+            if symbol in holdings:
+                if not self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, holdings):
+                    continue
                 action = "sell"
                 if self.broker:
                     broker_positions = await self.broker.get_positions()
                     shares = broker_positions.get(symbol, 1)
                 else:
                     shares = 1
-                # to_thread: get_price uses synchronous requests (yfinance), would block the event loop
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
-                self.holdings.pop(symbol, None)
-            elif symbol not in self.holdings:
+                holdings.pop(symbol, None)
+            else:
                 if event.confidence < self.logic.min_confidence or event.sentiment < self.logic.threshold:
                     continue
-                # to_thread: get_price uses synchronous requests (yfinance), would block the event loop
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
                 if price <= 0:
                     continue
@@ -129,24 +97,26 @@ class SentimentTrader:
                 if cash > 0:
                     shares = self.logic.should_buy(
                         event.sentiment, event.confidence, symbol,
-                        self.holdings, cash, price,
+                        holdings, cash, price,
                     )
                 else:
-                    # No broker or no cash info — buy 1 share as fallback
                     shares = 1
-                if shares > 0:
-                    action = "buy"
-                    self.holdings[symbol] = utcnow()
+                if shares <= 0:
+                    continue
+                action = "buy"
 
-            if action:
-                self.pending[symbol] = {"action": action, "price": price, "shares": shares}
-                trade = TradeEvent(
-                    symbol=symbol, action=action,
-                    reason=f"sentiment:{event.sentiment:.2f} on {event.headline[:60]}",
-                    timestamp=event_ts,
-                    price=price,
-                    size=float(shares) if shares else 1.0,
-                )
-                logger.info("%s %s qty=%d @ $%.2f (sentiment: %.2f) — pending broker confirmation",
-                            action.upper(), symbol, shares, price, event.sentiment)
-                await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
+            last = self._last_trade_at.get(symbol, {}).get(action)
+            if last and (now - last).total_seconds() < self._dedup_seconds:
+                continue
+
+            self._last_trade_at.setdefault(symbol, {})[action] = now
+            trade = TradeEvent(
+                symbol=symbol, action=action,
+                reason=f"sentiment:{event.sentiment:.2f} on {event.headline[:60]}",
+                timestamp=event_ts,
+                price=price,
+                size=float(shares) if shares else 1.0,
+            )
+            logger.info("%s %s qty=%d @ $%.2f (sentiment: %.2f)",
+                        action.upper(), symbol, shares, price, event.sentiment)
+            await self.bus.publish(CHANNEL_TRADE, trade.to_dict())

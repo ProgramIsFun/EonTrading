@@ -18,7 +18,6 @@ from src.common.position_store import PositionStore
 from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
 from src.common.trading_logic import TradingLogic
-from src.data.utils.db_helper import get_mongo_client
 from src.live.price_monitor import PriceMonitor
 from src.live.sentiment_trader import SentimentTrader
 from src.settings import settings
@@ -26,10 +25,10 @@ from src.settings import settings
 
 async def main():
     banner("SentimentTrader", {
-        "Subscribes to": "[sentiment], [fill]",
+        "Subscribes to": "[sentiment]",
         "Publishes to": "[trade]",
-        "Positions": "MongoDB (read/write)",
-        "Trade log": "MongoDB trades collection",
+        "Positions": "MongoDB (read-only)",
+        "Trade log": "n/a — handled by executor",
     })
 
     bus = RedisStreamBus(group="trader")
@@ -45,7 +44,6 @@ async def main():
     )
     monitor = PriceMonitor(bus, store, logic, interval_sec=0)
     trader = SentimentTrader(bus, logic=logic, position_store=store,
-                             trade_log=get_mongo_client()["EonTradingDB"]["trades"],
                              price_monitor=monitor)
     await trader.start()
     logger.info("🟢 Started. Waiting for [sentiment] events.")
