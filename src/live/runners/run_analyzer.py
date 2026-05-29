@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 from src.common.event_bus import RedisStreamBus
 from src.common.factories import build_analyzer
 from src.common.heartbeat import Heartbeat
-from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
 from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
@@ -37,9 +36,6 @@ async def main():
     await svc.start()
     logger.info("🟢 Started. Waiting for [news] events.")
     Heartbeat.create_background("analyzer", metadata={"analyzer": analyzer_name, "mode": "distributed"})
-    ping = PingResponder(bus, ["analyzer"], metadata={"analyzer": {"analyzer": analyzer_name, "mode": "distributed"}})
-    await ping.start()
-
     await create_shutdown_event().wait()
     logger.info("Shutting down...")
     await bus.stop()

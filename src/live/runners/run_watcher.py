@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus
 from src.common.heartbeat import Heartbeat
-from src.common.ping import PingResponder
 from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
 from src.data.news.loader import build_news_sources
@@ -44,9 +43,6 @@ async def main():
                           publish=publish)
     logger.info("🟢 Started. Polling every 120s.")
     Heartbeat.create_background("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"})
-    await PingResponder.create_and_start(bus, ["watcher"], metadata={
-        "watcher": {"sources": ", ".join(source_names), "mode": "distributed"},
-    })
 
     watcher_task = asyncio.create_task(watcher.run())
     await create_shutdown_event().wait()

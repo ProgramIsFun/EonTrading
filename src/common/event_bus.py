@@ -2,7 +2,7 @@
 
 Implementations:
   - LocalEventBus: in-memory, single process
-  - RedisStreamBus: Redis Streams (persistent message queue) + Pub/Sub for broadcast
+  - RedisStreamBus: Redis Streams (persistent message queue)
 """
 import asyncio
 import json
@@ -54,13 +54,8 @@ class LocalEventBus(EventBus):
         self._subscribers.clear()
 
 
-# Channels that use pub/sub (broadcast) instead of streams (queue)
-_PUBSUB_CHANNELS = {"ping", "pong"}
-
-
 class RedisStreamBus(EventBus):
-    """Redis Streams for pipeline channels (persistent message queue).
-    Redis Pub/Sub for ephemeral broadcast channels (ping/pong).
+    """Redis Streams for persistent message queues.
 
     Each subscriber group gets its own consumer group on the stream.
     Messages survive container restarts — consumers pick up where they left off.
@@ -74,7 +69,6 @@ class RedisStreamBus(EventBus):
         self._consumer = f"{group}-{id(self)}"
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
         self._redis = None
-        self._pubsub = None
         self._tasks: list[asyncio.Task] = []
 
     async def start(self):
@@ -86,36 +80,24 @@ class RedisStreamBus(EventBus):
         except Exception as e:
             raise ConnectionError(f"Redis not reachable at {self._host}:{self._port} — {e}") from e
 
-        # Create consumer groups for any pre-registered stream channels
         for channel in self._subscribers:
-            if channel not in _PUBSUB_CHANNELS:
-                await self._ensure_group(channel)
+            await self._ensure_group(channel)
 
-        # Start single listener that handles both streams and pub/sub dynamically
         self._tasks.append(asyncio.create_task(self._listen_streams()))
-        self._tasks.append(asyncio.create_task(self._listen_pubsub()))
 
     async def stop(self):
         for task in self._tasks:
             task.cancel()
-        if self._pubsub:
-            await self._pubsub.unsubscribe()
-            await self._pubsub.aclose()
         if self._redis:
             await self._redis.aclose()
 
     async def publish(self, channel: str, message: dict):
-        if channel in _PUBSUB_CHANNELS:
-            await self._redis.publish(channel, json.dumps(message))
-        else:
-            await self._redis.xadd(f"stream:{channel}", {"data": json.dumps(message)})
+        await self._redis.xadd(f"stream:{channel}", {"data": json.dumps(message)})
 
     async def subscribe(self, channel: str, handler: Callable):
         self._subscribers[channel].append(handler)
-        if self._redis and channel not in _PUBSUB_CHANNELS:
+        if self._redis:
             await self._ensure_group(channel)
-        if self._redis and channel in _PUBSUB_CHANNELS and self._pubsub:
-            await self._pubsub.subscribe(channel)
 
     async def _ensure_group(self, channel: str):
         """Create consumer group if it doesn't exist."""
@@ -128,11 +110,7 @@ class RedisStreamBus(EventBus):
         """Read from Redis Streams with consumer groups — persistent, at-least-once."""
         try:
             while True:
-                # Dynamically build stream list from current subscribers
-                streams = {}
-                for ch in self._subscribers:
-                    if ch not in _PUBSUB_CHANNELS:
-                        streams[f"stream:{ch}"] = ">"
+                streams = {f"stream:{ch}": ">" for ch in self._subscribers}
                 if not streams:
                     await asyncio.sleep(0.5)
                     continue
@@ -150,24 +128,6 @@ class RedisStreamBus(EventBus):
                             except Exception:
                                 logger.error("Handler error on %s", channel, exc_info=True)
                         await self._redis.xack(f"stream:{channel}", self._group, msg_id)
-        except asyncio.CancelledError:
-            pass
-
-    async def _listen_pubsub(self):
-        """Read from Redis Pub/Sub — ephemeral broadcast (ping/pong)."""
-        self._pubsub = self._redis.pubsub()
-        # Subscribe to any pre-registered pubsub channels
-        for ch in self._subscribers:
-            if ch in _PUBSUB_CHANNELS:
-                await self._pubsub.subscribe(ch)
-        try:
-            async for msg in self._pubsub.listen():
-                if msg["type"] == "message":
-                    channel = msg["channel"]
-                    data = json.loads(msg["data"])
-                    for handler in self._subscribers.get(channel, []):
-                        task = asyncio.create_task(handler(data))
-                        task.add_done_callback(_log_task_exception)
         except asyncio.CancelledError:
             pass
 

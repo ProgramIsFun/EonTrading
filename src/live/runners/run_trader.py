@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus
 from src.common.heartbeat import Heartbeat
-from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
 from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
@@ -48,7 +47,6 @@ async def main():
     await trader.start()
     logger.info("🟢 Started. Waiting for [sentiment] events.")
     Heartbeat.create_background("trader", metadata={"mode": "distributed"})
-    await PingResponder.create_and_start(bus, ["trader"], metadata={"trader": {"mode": "distributed"}})
 
     await create_shutdown_event().wait()
     logger.info("Shutting down...")

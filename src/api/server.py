@@ -79,26 +79,6 @@ def queue_status():
         return {"queues": {}, "error": str(e)}
 
 
-@app.get("/api/ping")
-async def ping_components():
-    """Real-time ping — asks all components to respond via event bus."""
-    import os
-    try:
-        from src.common.event_bus import LocalEventBus, RedisStreamBus
-        from src.common.ping import collect_pongs
-        if "REDIS_HOST" in os.environ:
-            bus = RedisStreamBus(host=settings.redis_host, group="api")
-        else:
-            bus = LocalEventBus()
-        await bus.start()
-        responses = await collect_pongs(bus, timeout=1.5)
-        await bus.stop()
-        return {"components": responses, "count": len(responses)}
-    except Exception as e:
-        logger.warning("Ping error: %s", e)
-        return {"components": [], "count": 0, "error": str(e)}
-
-
 @app.get("/api/reconcile")
 async def reconcile_positions():
     """Compare system positions vs broker. Requires BROKER env var."""

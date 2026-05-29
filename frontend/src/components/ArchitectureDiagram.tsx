@@ -123,7 +123,7 @@ export default function ArchitectureDiagram() {
               {processTag("uvicorn")}
               {pathTag("src/api/server.py")}
               {envReq("REDIS_HOST=localhost")}
-              <div style={{ fontSize: 8, color: "#555" }}>ping/pong + price cache via Redis</div>
+              <div style={{ fontSize: 8, color: "#555" }}>price cache via Redis</div>
             </div>
             <div style={boxStyle(INTERNAL)}>
               <div style={{ fontWeight: 600 }}>Reconciliation</div>
@@ -132,7 +132,7 @@ export default function ArchitectureDiagram() {
               {pathTag("src/common/reconcile.py")}
               <div style={{ fontSize: 8, color: "#ef4444", marginTop: 2 }}>live only — not used in replay</div>
             </div>
-            <span style={{ fontSize: 10, color: "#666" }}>→ manages containers, pings via Redis →</span>
+            <span style={{ fontSize: 10, color: "#666" }}>→ manages containers via Redis →</span>
           </div>
         </div>
 
@@ -163,14 +163,14 @@ export default function ArchitectureDiagram() {
               <div style={{ fontWeight: 600 }}>
                 {redisUp === true ? "🟢" : redisUp === false ? "🔴" : "⚫"} Redis
               </div>
-              <div style={{ fontSize: 10, color: "#888" }}>streams (pipeline) + pub/sub (ping/pong) + price cache</div>
+              <div style={{ fontSize: 10, color: "#888" }}>streams (pipeline) + price cache</div>
               {serviceTag()}
               <div style={{ fontSize: 8, color: "#555", marginTop: 2 }}>port 6379 → host</div>
               <div style={{ fontSize: 8, color: redisUp ? "#22c55e" : "#555", marginTop: 2, fontWeight: redisUp ? 600 : 400 }}>
                 {redisUp === true ? "● running" : redisUp === false ? "● stopped" : "● unknown"}
               </div>
             </div>
-            <span style={{ fontSize: 9, color: "#555" }}>streams: [news] [sentiment] [trade] [fill] · pub/sub: [ping] [pong]</span>
+            <span style={{ fontSize: 9, color: "#555" }}>streams: [news] [sentiment] [trade] [fill]</span>
           </div>
 
           {/* Row 1: Sources → Watcher → [news] → Analyzer → [sentiment] */}

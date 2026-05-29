@@ -276,7 +276,6 @@ src/
 │   ├── costs.py                     # Transaction cost models
 │   ├── price.py                     # Price lookup (yfinance/ClickHouse + cache)
 │   ├── heartbeat.py                 # Component heartbeat to MongoDB
-│   ├── ping.py                      # Real-time ping/pong via pub/sub
 │   ├── reconcile.py                 # System vs broker position check
 │   ├── startup.py                   # Startup banner + env var status
 │   ├── docker_ctl.py                # Docker Compose management via subprocess

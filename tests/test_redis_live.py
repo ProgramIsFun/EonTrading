@@ -125,26 +125,6 @@ class TestRedisStreamsLive:
         assert len(received_b) == 1
 
     @pytest.mark.asyncio
-    async def test_ping_pong_broadcast(self):
-        """Ping/pong uses pub/sub — all subscribers receive the message."""
-        from src.common.event_bus import RedisStreamBus
-
-        received = []
-
-        bus = RedisStreamBus(host="localhost", group="test-ping")
-        await bus.subscribe("pong", lambda msg: _async_append(received, msg))
-        await bus.start()
-        await asyncio.sleep(0.2)  # let pubsub subscription register
-
-        await bus.publish("pong", {"component": "watcher"})
-        await asyncio.sleep(0.3)
-
-        await bus.stop()
-
-        assert len(received) == 1
-        assert received[0]["component"] == "watcher"
-
-    @pytest.mark.asyncio
     async def test_message_acked_after_processing(self):
         """After processing, message should not be re-delivered."""
         from src.common.event_bus import RedisStreamBus

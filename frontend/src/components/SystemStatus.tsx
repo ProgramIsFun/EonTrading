@@ -1,19 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 
-interface Component {
-  component: string;
-  timestamp?: string;
-  mode?: string;
-  [key: string]: unknown;
-}
-
 interface HealthData {
   open_positions: number;
-}
-
-interface PingData {
-  components: Component[];
-  count: number;
 }
 
 interface DockerContainer {
@@ -27,9 +15,6 @@ const ALL = ["watcher", "analyzer", "trader", "executor"];
 
 export default function SystemStatus() {
   const [health, setHealth] = useState<HealthData | null>(null);
-  const [ping, setPing] = useState<PingData | null>(null);
-  const [pinging, setPinging] = useState(false);
-  const [lastPing, setLastPing] = useState<Date | null>(null);
   const [docker, setDocker] = useState<DockerContainer[]>([]);
   const [actionMsg, setActionMsg] = useState("");
   const [watcherPersist, setWatcherPersist] = useState(false);
@@ -57,11 +42,6 @@ export default function SystemStatus() {
     const id = setInterval(refreshStatus, 10000);
     return () => clearInterval(id);
   }, [refreshStatus]);
-
-  const doPing = useCallback(() => {
-    setPinging(true);
-    fetch("/api/ping").then((r) => r.json()).then((d) => { setPing(d); setPinging(false); setLastPing(new Date()); }).catch(() => setPinging(false));
-  }, []);
 
   const fetchLogs = useCallback((name: string) => {
     if (logs?.name === name) { setLogs(null); return; }
@@ -91,43 +71,16 @@ export default function SystemStatus() {
   const getStatus = (name: string) => {
     const dc = getDocker(name);
     if (dc && dc.state === "exited") return "⚫ stopped";
-    if (dc && dc.state === "running") {
-      if (ping) {
-        const found = ping.components.find((c) => c.component === name);
-        return found ? "🟢 alive" : "🟡 running (no ping response)";
-      }
-      return "🟢 running";
-    }
+    if (dc && dc.state === "running") return "🟢 running";
     if (dc && dc.state === "restarting") return "🔄 restarting";
-    if (ping) {
-      const found = ping.components.find((c) => c.component === name);
-      return found ? "🟢 alive" : "⚫ no response";
-    }
     return "⚫ not started";
-  };
-
-  const getMode = (name: string): string | null => {
-    if (ping) {
-      const found = ping.components.find((c) => c.component === name);
-      return found?.mode as string || null;
-    }
-    return null;
-  };
-
-  const getMeta = (name: string) => {
-    if (ping) {
-      const found = ping.components.find((c) => c.component === name);
-      if (found) return Object.entries(found).filter(([k]) => !["component", "timestamp", "mode"].includes(k));
-    }
-    return [];
   };
 
   const getDocker = (name: string) => docker.find((c) => c.name === name);
 
   const statusColor = (name: string) => {
     const s = getStatus(name);
-    if (s.includes("alive") || s.includes("running")) return "#22c55e33";
-    if (s.includes("stale")) return "#f59e0b33";
+    if (s.includes("running")) return "#22c55e33";
     return "#33333333";
   };
 
@@ -142,18 +95,13 @@ export default function SystemStatus() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <span style={{ fontSize: 13, color: "#888", fontWeight: 600 }}>Live Pipeline Status</span>
         <span style={{ fontSize: 9, color: "#555" }}>(distributed mode — Docker containers. For single process: <code style={{ color: "#818cf8" }}>python -m src.live.news_trader</code> in terminal)</span>
-        <button onClick={doPing} disabled={pinging}
-          style={{ fontSize: 10, padding: "3px 10px", borderRadius: 4, cursor: "pointer",
-            background: "#818cf822", color: "#818cf8", border: "1px solid #818cf844" }}>
-          {pinging ? "pinging..." : "🏓 Ping"}
-        </button>
         <button onClick={() => doAction("start", "all")}
           style={{ ...btnStyle, color: "#22c55e", borderColor: "#22c55e44" }}>▶ Start All</button>
         <button onClick={() => doAction("stop", "all")}
           style={{ ...btnStyle, color: "#ef4444", borderColor: "#ef444444" }}>⏹ Stop All</button>
         {actionMsg && <span style={{ fontSize: 10, color: "#f59e0b" }}>{actionMsg}</span>}
       </div>
-      {!health && !ping ? (
+      {!health ? (
         <div style={{ fontSize: 12, color: "#555" }}>API not reachable</div>
       ) : (
         <>
@@ -167,26 +115,15 @@ export default function SystemStatus() {
                 }}>
                   <div style={{ fontSize: 12, color: "#ccc", fontWeight: 600 }}>
                     {name}
-                    {getMode(name) && (
-                      <span style={{
-                        fontSize: 8, marginLeft: 6, padding: "1px 5px", borderRadius: 3,
-                        background: getMode(name) === "distributed" ? "#818cf822" : "#22c55e22",
-                        color: getMode(name) === "distributed" ? "#818cf8" : "#22c55e",
-                      }}>{getMode(name)}</span>
-                    )}
                   </div>
                   <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
                     {getStatus(name)}
-                    {lastPing && <span style={{ fontSize: 8, color: "#555", marginLeft: 6 }}>pinged {lastPing.toLocaleTimeString()}</span>}
                   </div>
                   {dc && (
                     <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>
                       container: {dc.state} {dc.status && `(${dc.status})`}
                     </div>
                   )}
-                  {getMeta(name).map(([k, v]) => (
-                    <div key={k} style={{ fontSize: 9, color: "#666", marginTop: 1 }}>{k}: {String(v)}</div>
-                  ))}
                   <div style={{ marginTop: 4, display: "flex", gap: 2 }}>
                     <button onClick={() => doAction("start", name)} style={{ ...btnStyle, color: "#22c55e" }}>▶ Start</button>
                     <button onClick={() => doAction("stop", name)} style={{ ...btnStyle, color: "#ef4444" }}>⏹ Stop</button>

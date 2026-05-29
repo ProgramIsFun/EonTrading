@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus
 from src.common.heartbeat import Heartbeat
-from src.common.ping import PingResponder
 from src.common.position_store import PositionStore
 from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
@@ -43,7 +42,6 @@ async def main():
     monitor = PriceMonitor(bus, store, logic, interval_sec=settings.sl_check_interval)
 
     Heartbeat.create_background("monitor", metadata={"mode": "distributed"})
-    await PingResponder.create_and_start(bus, ["monitor"], metadata={"monitor": {"mode": "distributed"}})
 
     logger.info("🟢 Started. Checking prices every %ds.", settings.sl_check_interval)
 

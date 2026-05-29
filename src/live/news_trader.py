@@ -61,7 +61,6 @@ async def main_single():
     from src.common.event_bus import LocalEventBus
     from src.common.factories import build_analyzer, build_broker
     from src.common.heartbeat import Heartbeat
-    from src.common.ping import PingResponder
     from src.common.position_store import PositionStore
     from src.common.shutdown import create_shutdown_event
     from src.common.startup import banner, env_status
@@ -122,13 +121,6 @@ async def main_single():
 
     for name in ["watcher", "analyzer", "trader", "executor", "monitor"]:
         Heartbeat.create_background(name, metadata={"mode": "single"})
-
-    await PingResponder.create_and_start(bus, ["watcher", "analyzer", "trader", "executor"], metadata={
-        "watcher": {"sources": ", ".join(source_names), "mode": "single"},
-        "analyzer": {"analyzer": analyzer_name, "mode": "single"},
-        "trader": {"mode": "single"},
-        "executor": {"broker": broker.__class__.__name__, "mode": "single"},
-    })
 
     logger.info("🟢 All components started. Polling every 120s.")
 
