@@ -500,3 +500,25 @@ def news_count():
     except Exception:
         logger.warning("Failed to count news", exc_info=True)
         return {"count": 0}
+
+
+@app.get("/api/logs")
+def get_logs(
+    logger_name: str = Query(default="", description="Filter by logger name (prefix match)"),
+    level: str = Query(default="", description="Filter by level: DEBUG, INFO, WARNING, ERROR"),
+    limit: int = Query(default=100, ge=1, le=1000),
+):
+    """Fetch recent logs from MongoDB. All components write here via MongoBatchHandler."""
+    try:
+        client = get_mongo_client()
+        col = client["EonTradingDB"]["logs"]
+        q = {}
+        if logger_name:
+            q["logger"] = {"$regex": f"^{logger_name}"}
+        if level:
+            q["level"] = level.upper()
+        docs = list(col.find(q, {"_id": 0}).sort("timestamp", -1).limit(limit))
+        return {"logs": docs}
+    except Exception as e:
+        logger.warning("Failed to fetch logs: %s", e)
+        return {"logs": [], "error": str(e)}

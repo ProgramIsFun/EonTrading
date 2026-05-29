@@ -13,7 +13,6 @@ For distributed mode, run each runner in its own terminal:
 import asyncio
 import logging
 import sys
-from datetime import datetime
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,38 +21,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-class MongoLogHandler(logging.Handler):
-    def __init__(self, level=logging.INFO):
-        super().__init__(level)
-        self._col = None
-
-    @property
-    def col(self):
-        if self._col is None:
-            from src.data.utils.db_helper import get_mongo_client
-            self._col = get_mongo_client()["EonTradingDB"]["logs"]
-        return self._col
-
-    def emit(self, record):
-        try:
-            self.col.insert_one({
-                "timestamp": datetime.utcnow(),
-                "level": record.levelname,
-                "logger": record.name,
-                "message": record.getMessage(),
-                "module": record.module,
-                "func": record.funcName,
-                "line": record.lineno,
-            })
-        except Exception:
-            pass
-
-
-# warm the MongoClient cache so MongoLogHandler.emit() doesn't trigger recursive logging
+from src.common.log_handler import MongoBatchHandler
 from src.data.utils.db_helper import get_mongo_client
-get_mongo_client()
-logging.getLogger().addHandler(MongoLogHandler())
+get_mongo_client()  # warm cache so handler doesn't trigger recursive logging
+handler = MongoBatchHandler()
+handler.start()
+logging.getLogger().addHandler(handler)
 
 
 async def main_single():

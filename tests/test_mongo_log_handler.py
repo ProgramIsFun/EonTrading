@@ -10,7 +10,8 @@ mock_client = MagicMock()
 mock_db = MagicMock()
 mock_client.__getitem__.return_value = mock_db
 with patch("src.data.utils.db_helper.get_mongo_client", return_value=mock_client):
-    from src.live.news_trader import MongoLogHandler
+    from src.common.log_handler import MongoBatchHandler as MongoLogHandler
+    import src.live.news_trader  # triggers handler registration on root logger
 
 from src.strategies.sentiment import LLMSentimentAnalyzer
 
@@ -31,11 +32,9 @@ class TestMongoLogHandler:
         )
         handler.emit(record)
 
-    def test_emit_calls_insert_one(self):
-        """Handler calls insert_one on the logs collection."""
-        mock_col = MagicMock()
+    def test_emit_queues_record(self):
+        """Handler queues the record for batch flush."""
         handler = MongoLogHandler()
-        handler._col = mock_col  # bypass property to avoid DB dependency
 
         record = logging.LogRecord(
             name="test", level=logging.WARNING,
@@ -43,10 +42,9 @@ class TestMongoLogHandler:
         )
         handler.emit(record)
 
-        mock_col.insert_one.assert_called_once()
-        doc = mock_col.insert_one.call_args[0][0]
-        assert doc["level"] == "WARNING"
-        assert doc["message"] == "test warning"
+        # Record should be in the queue (_not_ flushed yet)
+        queued = handler._queue.get_nowait()
+        assert queued.getMessage() == "test warning"
 
 
 class TestLLMSentimentAnalyzerOpencode:

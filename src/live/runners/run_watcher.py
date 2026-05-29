@@ -10,6 +10,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+from src.common.log_handler import MongoBatchHandler
+from src.data.utils.db_helper import get_mongo_client
+get_mongo_client()  # warm cache
+handler = MongoBatchHandler()
+handler.start()
+logging.getLogger().addHandler(handler)
+
 from src.common.event_bus import RedisStreamBus
 from src.common.heartbeat import Heartbeat
 from src.common.shutdown import create_shutdown_event
