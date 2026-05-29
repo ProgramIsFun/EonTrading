@@ -61,35 +61,63 @@ async def main(start: str, end: str):
         "timestamp": {"$gte": start, "$lte": end},
     }).sort("timestamp", 1))
 
+    # Group news by date for daily interleaving
+    from datetime import datetime, timedelta
+    news_by_date: dict[str, list] = {}
+    for doc in news_docs:
+        day = doc.get("timestamp", "")[:10]
+        if day:
+            news_by_date.setdefault(day, []).append(doc)
+
     print(f"\n  📰 Replaying {len(news_docs)} news events from {start} to {end}\n")
 
-    for i, doc in enumerate(news_docs):
-        # Set simulated clock to news timestamp
-        ts = doc.get("timestamp", "")
-        if ts:
-            try:
-                clock.set_time(ts)
-            except Exception:
-                pass
+    start_dt = datetime.strptime(start, "%Y-%m-%d")
+    end_dt = datetime.strptime(end, "%Y-%m-%d")
+    current = start_dt
+    event_count = 0
+    day_count = 0
 
-        event = NewsEvent(
-            source=doc.get("source", "replay"),
-            headline=doc.get("headline", ""),
-            timestamp=ts,
-            url=doc.get("url", ""),
-            body=doc.get("body", ""),
-        )
+    while current <= end_dt:
+        if current.weekday() >= 5:  # skip weekends
+            current += timedelta(days=1)
+            continue
 
-        await bus.publish(CHANNEL_NEWS, event.to_dict())
-        await asyncio.sleep(0.1)  # let the pipeline process
+        day_str = current.strftime("%Y-%m-%d")
+        close_ts = f"{day_str}T16:00:00Z"
+        day_count += 1
 
-        # Check SL/TP after each event — PriceMonitor uses TradingLogic
-        # and publishes sell trades through the same event bus
+        # Process any news events on this day (at their actual timestamp)
+        for doc in news_by_date.get(day_str, []):
+            ts = doc.get("timestamp", "")
+            if ts:
+                try:
+                    clock.set_time(ts)
+                except Exception:
+                    pass
+            event = NewsEvent(
+                source=doc.get("source", "replay"),
+                headline=doc.get("headline", ""),
+                timestamp=ts,
+                url=doc.get("url", ""),
+                body=doc.get("body", ""),
+            )
+            await bus.publish(CHANNEL_NEWS, event.to_dict())
+            await asyncio.sleep(0.05)
+            event_count += 1
+
+        # Check SL/TP at market close every trading day
+        try:
+            clock.set_time(close_ts)
+        except Exception:
+            pass
         if price_monitor:
-            await price_monitor.check_once(broker, as_of=ts)
+            await price_monitor.check_once(broker, as_of=close_ts)
 
-        if (i + 1) % 50 == 0:
-            print(f"  ... {i + 1}/{len(news_docs)} events processed (clock: {clock.now().strftime('%Y-%m-%d %H:%M')})")
+        if day_count % 20 == 0:
+            pct = (current - start_dt).total_seconds() / max((end_dt - start_dt).total_seconds(), 1) * 100
+            print(f"  ... day {day_count} ({pct:.0f}%) — {(current - start_dt).days}d elapsed, {event_count} news events")
+
+        current += timedelta(days=1)
 
     await asyncio.sleep(0.5)  # let final fills settle
     clock.reset()
@@ -97,7 +125,7 @@ async def main(start: str, end: str):
     # Summary
     holdings = store.get_positions() if store else {}
     print(f"\n{'═' * 50}")
-    print(f"  Replay complete: {len(news_docs)} events")
+    print(f"  Replay complete — {day_count} trading days, {event_count} news events")
     print(f"  Final holdings: {list(holdings.keys()) or 'none'}")
     print("  Trades logged to: EonTradingDB.replay_trades")
     print(f"{'═' * 50}\n")
