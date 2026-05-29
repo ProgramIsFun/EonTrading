@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     take_profit_pct: float = 0.10
     sl_check_interval: int = 60
 
+    # Logging
+    mongodb_log: bool = True
+
     # API
     cors_origins: str = "http://localhost:5173,http://localhost:8000"
     api_key: str = ""

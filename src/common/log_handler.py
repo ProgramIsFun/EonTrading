@@ -8,6 +8,21 @@ from datetime import datetime
 from typing import Any
 
 
+def maybe_enable_mongo_logging():
+    """Add MongoBatchHandler to root logger if MONGODB_LOG is enabled.
+
+    Call once at startup in each process entry point.
+    """
+    from src.settings import settings
+    if not settings.mongodb_log:
+        return
+    from src.data.utils.db_helper import get_mongo_client
+    get_mongo_client()  # warm cache so handler doesn't trigger recursive logging
+    handler = MongoBatchHandler()
+    handler.start()
+    logging.getLogger().addHandler(handler)
+
+
 class MongoBatchHandler(logging.Handler):
     """Log handler that batches records and flushes to MongoDB with insert_many.
 

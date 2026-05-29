@@ -21,12 +21,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from src.common.log_handler import MongoBatchHandler
-from src.data.utils.db_helper import get_mongo_client
-get_mongo_client()  # warm cache so handler doesn't trigger recursive logging
-handler = MongoBatchHandler()
-handler.start()
-logging.getLogger().addHandler(handler)
+from src.common.log_handler import maybe_enable_mongo_logging
+maybe_enable_mongo_logging()
 
 
 async def main_single():

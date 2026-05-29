@@ -9,12 +9,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from src.common.log_handler import MongoBatchHandler
-from src.data.utils.db_helper import get_mongo_client
-get_mongo_client()  # warm cache
-handler = MongoBatchHandler()
-handler.start()
-logging.getLogger().addHandler(handler)
+from src.common.log_handler import maybe_enable_mongo_logging
+maybe_enable_mongo_logging()
 
 from src.common.event_bus import RedisStreamBus
 from src.common.factories import build_analyzer
