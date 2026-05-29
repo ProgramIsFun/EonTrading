@@ -8,7 +8,7 @@ Good free feeds:
 import logging
 import re
 
-import requests
+import httpx
 
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
@@ -28,8 +28,9 @@ class RSSSource(NewsSource):
             "https://feeds.finance.yahoo.com/rss/2.0/headline?region=US&lang=en-US",
             "https://www.cnbc.com/id/100003114/device/rss/rss.html",
         ]
+        self._client = httpx.AsyncClient(timeout=10, headers={"User-Agent": "EonTrading/1.0"})
 
-    def fetch_latest(self) -> list[NewsEvent]:
+    async def fetch_latest(self) -> list[NewsEvent]:
         """Fetch from RSS/Atom feeds.
 
         RSS: <item><title/><link/><pubDate/><description/></item>
@@ -38,15 +39,15 @@ class RSSSource(NewsSource):
         events = []
         for feed_url in self.feeds:
             try:
-                resp = self._fetch_feed(feed_url)
+                resp = await self._fetch_feed(feed_url)
                 events.extend(self._parse_feed(resp.text, feed_url))
             except Exception as e:
                 logger.error("RSS error (%s): %s", feed_url[:50], e)
         return events
 
-    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
-    def _fetch_feed(self, feed_url: str):
-        resp = requests.get(feed_url, timeout=10, headers={"User-Agent": "EonTrading/1.0"})
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError, httpx.HTTPStatusError))
+    async def _fetch_feed(self, feed_url: str):
+        resp = await self._client.get(feed_url)
         resp.raise_for_status()
         return resp
 

@@ -34,11 +34,11 @@ class NewsPoller:
             except Exception:
                 pass  # duplicate key — already seen
 
-    def poll_once(self) -> list[NewsEvent]:
+    async def poll_once(self) -> list[NewsEvent]:
         """Fetch new articles from all sources. Dedup handled by each source's _seen set + optional MongoDB."""
         events = []
         for source in self.sources:
-            for event in source.fetch_latest():
+            for event in await source.fetch_latest():
                 if self._seen_col is not None:
                     if self._is_seen(event.url):
                         continue

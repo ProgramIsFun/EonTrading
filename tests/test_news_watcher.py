@@ -11,7 +11,7 @@ from src.live.news_watcher import NewsWatcher
 
 
 class FastSource(NewsSource):
-    def fetch_latest(self):
+    async def fetch_latest(self):
         return [NewsEvent(source="fast", headline="Fast news", timestamp="2026-01-01T00:00:00Z", url="http://fast/1", body="")]
 
 
@@ -20,13 +20,13 @@ class SlowSource(NewsSource):
         super().__init__()
         self.delay = delay
 
-    def fetch_latest(self):
-        time.sleep(self.delay)
+    async def fetch_latest(self):
+        await asyncio.sleep(self.delay)
         return [NewsEvent(source="slow", headline="Slow news", timestamp="2026-01-01T00:00:00Z", url="http://slow/1", body="")]
 
 
 class FailingSource(NewsSource):
-    def fetch_latest(self):
+    async def fetch_latest(self):
         raise ConnectionError("source down")
 
 
@@ -69,14 +69,9 @@ async def test_poll_timeout():
     watcher = NewsWatcher(bus, sources=sources, persist_seen=False)
 
     from unittest.mock import patch
-    # _poll_concurrent uses asyncio.wait_for(timeout=30). The 30s wait is the
-    # production safety net; in this unit test we just verify the error path.
-    # Also patch asyncio.to_thread: its argument (source.fetch_latest) is
-    # evaluated before wait_for is called, so an orphaned time.sleep(60)
-    # thread would stall teardown for 60s.
-    async def noop(*a, **kw): return []
-    with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError), \
-         patch("asyncio.to_thread", noop):
+    # _poll_concurrent uses asyncio.wait_for(timeout=30). Patch it to raise
+    # immediately so we don't actually wait 30s for the slow source.
+    with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
         start = time.monotonic()
         events = await watcher._poll_concurrent()
         elapsed = time.monotonic() - start

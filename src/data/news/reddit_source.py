@@ -6,7 +6,7 @@ Rate limit: ~10 req/min without auth.
 import logging
 from datetime import datetime, timezone
 
-import requests
+import httpx
 
 from src.common.events import NewsEvent
 from src.common.retry import retry
@@ -23,8 +23,9 @@ class RedditSource(NewsSource):
         super().__init__()
         self.subreddits = subreddits or ["wallstreetbets", "stocks", "investing"]
         self.limit = limit
+        self._client = httpx.AsyncClient(timeout=10, headers={"User-Agent": "EonTrading/1.0"})
 
-    def fetch_latest(self) -> list[NewsEvent]:
+    async def fetch_latest(self) -> list[NewsEvent]:
         """Fetch from Reddit /r/{sub}/new.json.
 
         Response: { "data": { "children": [{ "data": { "id", "title", "selftext", "created_utc", "permalink" } }] } }
@@ -32,7 +33,7 @@ class RedditSource(NewsSource):
         events = []
         for sub in self.subreddits:
             try:
-                resp = self._fetch_sub(sub)
+                resp = await self._fetch_sub(sub)
                 for post in resp.json().get("data", {}).get("children", []):
                     d = post["data"]
                     pid = d.get("id", "")
@@ -49,12 +50,10 @@ class RedditSource(NewsSource):
                 logger.error("Reddit error (r/%s): %s", sub, e)
         return events
 
-    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
-    def _fetch_sub(self, sub: str):
-        resp = requests.get(
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError, httpx.HTTPStatusError))
+    async def _fetch_sub(self, sub: str):
+        resp = await self._client.get(
             f"https://www.reddit.com/r/{sub}/new.json?limit={self.limit}",
-            headers={"User-Agent": "EonTrading/1.0"},
-            timeout=10,
         )
         resp.raise_for_status()
         return resp

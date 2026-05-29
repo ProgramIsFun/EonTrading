@@ -9,6 +9,7 @@ Official API setup:
 Usage:
   source = TwitterSource(accounts=["elonmusk", "realDonaldTrump"])
 """
+import asyncio
 import logging
 import os
 
@@ -29,11 +30,11 @@ class TwitterSource(NewsSource):
         self.bearer_token = bearer_token or os.getenv("TWITTER_BEARER_TOKEN")
         self.use_official = use_official
 
-    def fetch_latest(self) -> list[NewsEvent]:
+    async def fetch_latest(self) -> list[NewsEvent]:
         if self.use_official:
-            return self._fetch_official()
+            return await asyncio.to_thread(self._fetch_official)
         else:
-            return self._fetch_alternative()
+            return await asyncio.to_thread(self._fetch_alternative)
 
     def _fetch_official(self) -> list[NewsEvent]:
         """Fetch via official X API using tweepy.

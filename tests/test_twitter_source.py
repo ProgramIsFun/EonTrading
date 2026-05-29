@@ -1,6 +1,8 @@
 """Tests for TwitterSource — mocked, no real API calls."""
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.data.news.twitter_source import TwitterSource
 
 
@@ -13,40 +15,44 @@ class TestTwitterSourceOfficial:
         return tweet
 
     @patch("src.data.news.twitter_source.TwitterSource._fetch_official")
-    def test_official_returns_news_events(self, mock_fetch):
+    @pytest.mark.asyncio
+    async def test_official_returns_news_events(self, mock_fetch):
         from src.common.events import NewsEvent
         mock_fetch.return_value = [
             NewsEvent(source="twitter/elonmusk", headline="Tesla is doing great",
                       timestamp="2025-04-23T10:00:00Z", url="https://x.com/elonmusk/status/123", body="Tesla is doing great"),
         ]
         source = TwitterSource(use_official=True)
-        events = source.fetch_latest()
+        events = await source.fetch_latest()
         assert len(events) == 1
         assert events[0].source == "twitter/elonmusk"
         assert "Tesla" in events[0].headline
 
     @patch("src.data.news.twitter_source.TwitterSource._fetch_official")
-    def test_official_dedup(self, mock_fetch):
+    @pytest.mark.asyncio
+    async def test_official_dedup(self, mock_fetch):
         from src.common.events import NewsEvent
         ev = NewsEvent(source="twitter/elonmusk", headline="Same tweet",
                        timestamp="2025-04-23T10:00:00Z", url="https://x.com/elonmusk/status/123", body="Same tweet")
         mock_fetch.return_value = [ev]
         source = TwitterSource(use_official=True)
-        first = source.fetch_latest()
+        first = await source.fetch_latest()
         mock_fetch.return_value = [ev]
-        source.fetch_latest()
+        await source.fetch_latest()
         # Both calls return events since dedup is inside _fetch_official
         assert len(first) == 1
 
     @patch("src.data.news.twitter_source.TwitterSource._fetch_official")
-    def test_official_no_token_returns_empty(self, mock_fetch):
+    @pytest.mark.asyncio
+    async def test_official_no_token_returns_empty(self, mock_fetch):
         mock_fetch.return_value = []
         source = TwitterSource(bearer_token=None, use_official=True)
-        events = source.fetch_latest()
+        events = await source.fetch_latest()
         assert events == []
 
     @patch("src.data.news.twitter_source.TwitterSource._fetch_official")
-    def test_official_multiple_accounts(self, mock_fetch):
+    @pytest.mark.asyncio
+    async def test_official_multiple_accounts(self, mock_fetch):
         from src.common.events import NewsEvent
         mock_fetch.return_value = [
             NewsEvent(source="twitter/elonmusk", headline="Musk tweet",
@@ -55,7 +61,7 @@ class TestTwitterSourceOfficial:
                       timestamp="2025-04-23T10:01:00Z", url="https://x.com/realDonaldTrump/status/2", body="Trump tweet"),
         ]
         source = TwitterSource(accounts=["elonmusk", "realDonaldTrump"], use_official=True)
-        events = source.fetch_latest()
+        events = await source.fetch_latest()
         assert len(events) == 2
         sources = {e.source for e in events}
         assert "twitter/elonmusk" in sources
@@ -63,20 +69,22 @@ class TestTwitterSourceOfficial:
 
 
 class TestTwitterSourceAlternative:
-    def test_alternative_returns_empty_by_default(self):
+    @pytest.mark.asyncio
+    async def test_alternative_returns_empty_by_default(self):
         source = TwitterSource(use_official=False)
-        events = source.fetch_latest()
+        events = await source.fetch_latest()
         assert events == []
 
     @patch("src.data.news.twitter_source.TwitterSource._fetch_alternative")
-    def test_alternative_returns_events_when_implemented(self, mock_fetch):
+    @pytest.mark.asyncio
+    async def test_alternative_returns_events_when_implemented(self, mock_fetch):
         from src.common.events import NewsEvent
         mock_fetch.return_value = [
             NewsEvent(source="twitter/elonmusk", headline="Alt client tweet",
                       timestamp="2025-04-23T10:00:00Z", url="https://x.com/elonmusk/status/999", body="Alt client tweet"),
         ]
         source = TwitterSource(use_official=False)
-        events = source.fetch_latest()
+        events = await source.fetch_latest()
         assert len(events) == 1
         assert events[0].source == "twitter/elonmusk"
 

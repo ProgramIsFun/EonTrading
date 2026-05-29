@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-import requests
+import httpx
 
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
@@ -33,7 +33,7 @@ class NewsSource:
         self._seen[key] = self._seen_counter
         return False
 
-    def fetch_latest(self) -> list[NewsEvent]:
+    async def fetch_latest(self) -> list[NewsEvent]:
         raise NotImplementedError
 
 
@@ -45,15 +45,16 @@ class NewsAPISource(NewsSource):
         self.api_key = api_key or os.getenv("NEWSAPI_KEY")
         self.base_url = "https://newsapi.org/v2"
         self.categories = categories or ["business"]
+        self._client = httpx.AsyncClient(timeout=10)
 
-    def fetch_latest(self, query: str = "stock market OR trading OR tariff OR earnings") -> list[NewsEvent]:
+    async def fetch_latest(self, query: str = "stock market OR trading OR tariff OR earnings") -> list[NewsEvent]:
         """Fetch from NewsAPI /v2/everything.
 
         Response: { "articles": [{ "title", "url", "publishedAt", "description", "source": {"name"} }] }
         """
         events = []
         try:
-            resp = self._fetch_with_retry(query)
+            resp = await self._fetch_with_retry(query)
             data = resp.json()
             for article in data.get("articles", []):
                 url = article.get("url", "")
@@ -70,15 +71,15 @@ class NewsAPISource(NewsSource):
             logger.error("NewsAPI error: %s", e)
         return events
 
-    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
-    def _fetch_with_retry(self, query: str):
-        resp = requests.get(f"{self.base_url}/everything", params={
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError, httpx.HTTPStatusError))
+    async def _fetch_with_retry(self, query: str):
+        resp = await self._client.get(f"{self.base_url}/everything", params={
             "apiKey": self.api_key,
             "q": query,
             "language": "en",
             "sortBy": "publishedAt",
             "pageSize": 20,
             "from": (utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }, timeout=10)
+        })
         resp.raise_for_status()
         return resp

@@ -63,12 +63,11 @@ class NewsWatcher:
     async def _poll_concurrent(self):
         """Poll all sources concurrently, then dedup.
 
-        Uses to_thread because news sources use synchronous requests.get() —
-        calling them directly would block the async event loop.
+        Sources use httpx.AsyncClient — coroutines run directly on the event loop.
         """
         async def _fetch(source, timeout=30):
             return await asyncio.wait_for(
-                asyncio.to_thread(source.fetch_latest), timeout=timeout,
+                source.fetch_latest(), timeout=timeout,
             )
 
         tasks = {asyncio.create_task(_fetch(s)): s for s in self.poller.sources}

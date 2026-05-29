@@ -6,7 +6,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-import requests
+import httpx
 
 from src.common.events import NewsEvent
 from src.common.retry import retry
@@ -23,8 +23,9 @@ class FinnhubSource(NewsSource):
         super().__init__()
         self.api_key = api_key or os.getenv("FINNHUB_KEY")
         self.category = category  # general, forex, crypto, merger
+        self._client = httpx.AsyncClient(timeout=10)
 
-    def fetch_latest(self) -> list[NewsEvent]:
+    async def fetch_latest(self) -> list[NewsEvent]:
         """Fetch from Finnhub /api/v1/news.
 
         Response: [{ "id", "headline", "url", "summary", "datetime" (epoch), "source", "category" }]
@@ -33,7 +34,7 @@ class FinnhubSource(NewsSource):
             return []
         events = []
         try:
-            resp = self._fetch_with_retry()
+            resp = await self._fetch_with_retry()
             for article in resp.json():
                 uid = article.get("id", article.get("url", ""))
                 if self._check_seen(uid):
@@ -49,11 +50,11 @@ class FinnhubSource(NewsSource):
             logger.error("Finnhub error: %s", e)
         return events
 
-    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
-    def _fetch_with_retry(self):
-        resp = requests.get("https://finnhub.io/api/v1/news", params={
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError, httpx.HTTPStatusError))
+    async def _fetch_with_retry(self):
+        resp = await self._client.get("https://finnhub.io/api/v1/news", params={
             "token": self.api_key,
             "category": self.category,
-        }, timeout=10)
+        })
         resp.raise_for_status()
         return resp
