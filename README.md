@@ -98,7 +98,7 @@ PYTHONPATH=. python3 -m src.live.replay --start 2025-01-01 --end 2025-06-01
 ## Testing
 
 ```bash
-PYTHONPATH=. python -m pytest tests/ -m "not redis"   # 96 tests, no Redis
+PYTHONPATH=. python -m pytest tests/ -m "not redis"   # 141 tests, no Redis
 PYTHONPATH=. python -m pytest tests/                   # full suite (needs Redis)
 ```
 
@@ -130,7 +130,7 @@ src/
 └── strategies/                # SMA, RSI, sentiment (keyword + LLM)
 frontend/                      # React + Vite dashboard
 scripts/                       # Data collection, backfill, backtest
-tests/                         # 101 tests
+tests/                         # 141 tests
 ```
 
 ## Sentiment Analyzers
@@ -144,6 +144,6 @@ Supports OpenAI, Azure OpenAI, and local Ollama.
 
 ## Roadmap
 
-**Done:** Live pipeline (4 channels), 5 news sources, 4 brokers, fill confirmation with rollback, pending order tracking, MongoDB persistence, dedup, 2 analyzers (keyword + LLM), SL/TP (trailing), backtesting (sentiment + price), React dashboard, single/distributed modes, Redis Streams, PriceMonitor, replay mode, ClickHouse support, price cache, transaction costs, Docker Compose deployment, heartbeats, graceful shutdown, 101 tests.
+**Done:** Live pipeline (4 channels), 5 news sources, 4 brokers, fill confirmation with rollback, pending order tracking, MongoDB persistence, dedup, 2 analyzers (keyword + LLM), SL/TP (trailing), backtesting (sentiment + price), React dashboard, single/distributed modes, Redis Streams, PriceMonitor, replay mode, ClickHouse support, price cache, transaction costs, Docker Compose deployment, heartbeats, graceful shutdown, 141 tests.
 
 **To do:** Cross-source dedup, inverse ETF support, sector trading, real-news backtest, side-by-side comparison, live dashboard, Telegram alerts.
