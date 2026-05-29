@@ -43,11 +43,11 @@ from src.common.sample_news import SAMPLE_NEWS
 
 
 @app.get("/api/health")
-def health():
+async def health():
     try:
         client = get_mongo_client()
         db = client["EonTradingDB"]
-        positions = list(db["positions"].find({}, {"_id": 0}))
+        positions = await db["positions"].find({}, {"_id": 0}).to_list(None)
         return {
             "status": "ok",
             "open_positions": len(positions),
@@ -149,12 +149,12 @@ def docker_logs(name: str, lines: int = Query(default=50, ge=1, le=1000)):
 
 
 @app.get("/api/trades")
-def trades(limit: int = 100):
+async def trades(limit: int = 100):
     """Return recent confirmed trades from the trades collection."""
     try:
         client = get_mongo_client()
         col = client["EonTradingDB"]["trades"]
-        docs = list(col.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit))
+        docs = await col.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(None)
         return docs
     except Exception:
         logger.warning("Failed to fetch trades from MongoDB", exc_info=True)
@@ -299,7 +299,7 @@ async def _run_live_backtest(job_id: str, params: dict):
         if news_src == "mongodb":
             try:
                 client = get_mongo_client()
-                docs = list(client["EonTradingDB"]["news"].find({}, {"_id": 0}).sort("timestamp", 1).limit(200))
+                docs = await client["EonTradingDB"]["news"].find({}, {"_id": 0}).sort("timestamp", 1).limit(200).to_list(None)
                 news_list = [{"date": d.get("timestamp", ""), "headline": d.get("headline", "")} for d in docs if d.get("headline")]
                 if not news_list:
                     job["status"] = "error"
@@ -480,11 +480,11 @@ def get_live_backtest(job_id: str):
 
 
 @app.get("/api/news")
-def news(limit: int = 100):
+async def news(limit: int = 100):
     try:
         client = get_mongo_client()
         col = client["EonTradingDB"]["news"]
-        docs = list(col.find({}, {"_id": 0}).sort("collected_at", -1).limit(limit))
+        docs = await col.find({}, {"_id": 0}).sort("collected_at", -1).limit(limit).to_list(None)
         return docs
     except Exception as e:
         logger.warning("News fetch error: %s", e)
@@ -492,11 +492,11 @@ def news(limit: int = 100):
 
 
 @app.get("/api/news/count")
-def news_count():
+async def news_count():
     try:
         client = get_mongo_client()
         col = client["EonTradingDB"]["news"]
-        return {"count": col.count_documents({})}
+        return {"count": await col.count_documents({})}
     except Exception:
         logger.warning("Failed to count news", exc_info=True)
         return {"count": 0}

@@ -10,7 +10,7 @@ from src.strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnal
 
 logger = logging.getLogger(__name__)
 
-MAX_NEWS_AGE_SEC = 600  # skip news older than 10 minutes
+MAX_NEWS_AGE_SEC = 600
 
 
 class AnalyzerService:
@@ -20,7 +20,7 @@ class AnalyzerService:
                  get_positions=None, max_age_sec: int = MAX_NEWS_AGE_SEC):
         self.bus = bus
         self.analyzer = analyzer or KeywordSentimentAnalyzer()
-        self.get_positions = get_positions  # callable → {symbol: shares}
+        self.get_positions = get_positions
         self.max_age_sec = max_age_sec
 
     async def start(self):
@@ -43,9 +43,8 @@ class AnalyzerService:
         event = NewsEvent.from_dict(msg)
         if self._is_stale(event):
             return
-        # Run synchronous MongoDB + LLM calls off the event loop
-        positions = await asyncio.to_thread(self.get_positions) if self.get_positions else None
-        sentiment = await asyncio.to_thread(self.analyzer.analyze, event, positions)
+        positions = await self.get_positions() if self.get_positions else None
+        sentiment = await self.analyzer.analyze(event, positions)
         if sentiment.confidence > 0:
             await self.bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
             logger.info("[%+.2f] %s", sentiment.sentiment, sentiment.headline[:80])

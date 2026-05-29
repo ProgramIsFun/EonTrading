@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-import requests
+import httpx
 
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 class NewsSource:
     """Base class for news sources."""
-    MAX_SEEN = 5000  # cap in-memory dedup set to prevent unbounded growth
+    MAX_SEEN = 5000
 
     def __init__(self):
-        self._seen: dict[str, int] = {}  # key → insertion order
+        self._seen: dict[str, int] = {}
         self._seen_counter = 0
 
     def _check_seen(self, key: str) -> bool:
@@ -26,14 +26,13 @@ class NewsSource:
         if key in self._seen:
             return True
         if len(self._seen) >= self.MAX_SEEN:
-            # Evict oldest 20%
             cutoff = sorted(self._seen.values())[self.MAX_SEEN // 5]
             self._seen = {k: v for k, v in self._seen.items() if v > cutoff}
         self._seen_counter += 1
         self._seen[key] = self._seen_counter
         return False
 
-    def fetch_latest(self) -> list[NewsEvent]:
+    async def fetch_latest(self) -> list[NewsEvent]:
         raise NotImplementedError
 
 
@@ -46,14 +45,10 @@ class NewsAPISource(NewsSource):
         self.base_url = "https://newsapi.org/v2"
         self.categories = categories or ["business"]
 
-    def fetch_latest(self, query: str = "stock market OR trading OR tariff OR earnings") -> list[NewsEvent]:
-        """Fetch from NewsAPI /v2/everything.
-
-        Response: { "articles": [{ "title", "url", "publishedAt", "description", "source": {"name"} }] }
-        """
+    async def fetch_latest(self, query: str = "stock market OR trading OR tariff OR earnings") -> list[NewsEvent]:
         events = []
         try:
-            resp = self._fetch_with_retry(query)
+            resp = await self._fetch_with_retry(query)
             data = resp.json()
             for article in data.get("articles", []):
                 url = article.get("url", "")
@@ -70,15 +65,16 @@ class NewsAPISource(NewsSource):
             logger.error("NewsAPI error: %s", e)
         return events
 
-    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
-    def _fetch_with_retry(self, query: str):
-        resp = requests.get(f"{self.base_url}/everything", params={
-            "apiKey": self.api_key,
-            "q": query,
-            "language": "en",
-            "sortBy": "publishedAt",
-            "pageSize": 20,
-            "from": (utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }, timeout=10)
-        resp.raise_for_status()
-        return resp
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError,))
+    async def _fetch_with_retry(self, query: str):
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{self.base_url}/everything", params={
+                "apiKey": self.api_key,
+                "q": query,
+                "language": "en",
+                "sortBy": "publishedAt",
+                "pageSize": 20,
+                "from": (utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            })
+            resp.raise_for_status()
+            return resp

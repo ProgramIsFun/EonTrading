@@ -1,6 +1,5 @@
 """Tests for NewsWatcher concurrent polling and timeout."""
 import asyncio
-import time
 
 import pytest
 
@@ -11,7 +10,7 @@ from src.live.news_watcher import NewsWatcher
 
 
 class FastSource(NewsSource):
-    def fetch_latest(self):
+    async def fetch_latest(self):
         return [NewsEvent(source="fast", headline="Fast news", timestamp="2026-01-01T00:00:00Z", url="http://fast/1", body="")]
 
 
@@ -20,13 +19,13 @@ class SlowSource(NewsSource):
         super().__init__()
         self.delay = delay
 
-    def fetch_latest(self):
-        time.sleep(self.delay)
+    async def fetch_latest(self):
+        await asyncio.sleep(self.delay)
         return [NewsEvent(source="slow", headline="Slow news", timestamp="2026-01-01T00:00:00Z", url="http://slow/1", body="")]
 
 
 class FailingSource(NewsSource):
-    def fetch_latest(self):
+    async def fetch_latest(self):
         raise ConnectionError("source down")
 
 
@@ -38,9 +37,9 @@ async def test_concurrent_polling_faster_than_sequential():
     sources = [SlowSource(delay=0.3), SlowSource(delay=0.3), SlowSource(delay=0.3)]
     watcher = NewsWatcher(bus, sources=sources, persist_seen=False)
 
-    start = time.monotonic()
+    start = asyncio.get_event_loop().time()
     events = await watcher._poll_concurrent()
-    elapsed = time.monotonic() - start
+    elapsed = asyncio.get_event_loop().time() - start
 
     assert len(events) == 3
     # Concurrent: ~0.3s. Sequential would be ~0.9s.
@@ -68,9 +67,9 @@ async def test_poll_timeout():
     sources = [SlowSource(delay=60)]  # way over timeout
     watcher = NewsWatcher(bus, sources=sources, persist_seen=False)
 
-    start = time.monotonic()
+    start = asyncio.get_event_loop().time()
     events = await watcher._poll_concurrent()
-    elapsed = time.monotonic() - start
+    elapsed = asyncio.get_event_loop().time() - start
 
     assert events == []
     assert elapsed < 35, f"Timeout didn't fire — took {elapsed:.2f}s"

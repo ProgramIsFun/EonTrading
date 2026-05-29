@@ -17,7 +17,6 @@ class SentimentTrader:
     """Listens to sentiment events and decides trades.
 
     Flow: decide → mark pending → publish trade → wait for fill → confirm or rollback.
-    Timestamps flow with events — no global clock needed.
     """
 
     def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0,
@@ -25,18 +24,18 @@ class SentimentTrader:
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
         self.holdings: dict[str, datetime] = {}
-        self.pending: dict[str, dict] = {}  # symbol → {"action", "price", "shares"}
+        self.pending: dict[str, dict] = {}
         self.max_hold_days = max_hold_days
         self.position_store = position_store
         self._trades_col = trade_log
         self.broker = broker
         self.price_monitor = price_monitor
-        if self.position_store:
-            self.holdings = self.position_store.get_positions()
-            if self.holdings:
-                logger.info("Restored %d position(s) from store: %s", len(self.holdings), list(self.holdings.keys()))
 
     async def start(self):
+        if self.position_store:
+            self.holdings = await self.position_store.get_positions()
+            if self.holdings:
+                logger.info("Restored %d position(s) from store: %s", len(self.holdings), list(self.holdings.keys()))
         await self.bus.subscribe(CHANNEL_SENTIMENT, self._on_sentiment)
         await self.bus.subscribe(CHANNEL_FILL, self._on_fill)
         if self.max_hold_days > 0:
@@ -57,15 +56,14 @@ class SentimentTrader:
             logger.info("✅ %s %s confirmed by broker", action.upper(), symbol)
             if self._trades_col is not None:
                 doc = trade_to_doc(symbol, action, entry_price, shares, event.reason, event.timestamp)
-                await asyncio.to_thread(self._trades_col.insert_one, doc)
+                await self._trades_col.insert_one(doc)
             if self.position_store:
                 if action == "buy":
-                    await asyncio.to_thread(
-                        self.position_store.open_position, symbol, self.holdings[symbol], entry_price)
+                    await self.position_store.open_position(symbol, self.holdings[symbol], entry_price)
                     if self.price_monitor:
                         self.price_monitor.register_entry(symbol, entry_price, shares)
                 elif action == "sell":
-                    await asyncio.to_thread(self.position_store.close_position, symbol)
+                    await self.position_store.close_position(symbol)
         else:
             logger.warning("⚠️ %s %s rejected by broker: %s", action.upper(), symbol, event.reason)
             if action == "buy":
@@ -115,13 +113,12 @@ class SentimentTrader:
                     shares = broker_positions.get(symbol, 1)
                 else:
                     shares = 1
-                # to_thread: get_price uses synchronous requests (yfinance), would block the event loop
+                # get_price uses yfinance (sync) — offload to thread
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
                 self.holdings.pop(symbol, None)
             elif symbol not in self.holdings:
                 if event.confidence < self.logic.min_confidence or event.sentiment < self.logic.threshold:
                     continue
-                # to_thread: get_price uses synchronous requests (yfinance), would block the event loop
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
                 if price <= 0:
                     continue
@@ -132,7 +129,6 @@ class SentimentTrader:
                         self.holdings, cash, price,
                     )
                 else:
-                    # No broker or no cash info — buy 1 share as fallback
                     shares = 1
                 if shares > 0:
                     action = "buy"

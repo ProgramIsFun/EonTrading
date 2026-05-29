@@ -1,12 +1,8 @@
-"""Reddit news source — scrapes subreddit posts via public JSON API.
-
-No API key needed. Uses Reddit's public .json endpoints.
-Rate limit: ~10 req/min without auth.
-"""
+"""Reddit news source — scrapes subreddit posts via public JSON API."""
 import logging
 from datetime import datetime, timezone
 
-import requests
+import httpx
 
 from src.common.events import NewsEvent
 from src.common.retry import retry
@@ -24,15 +20,11 @@ class RedditSource(NewsSource):
         self.subreddits = subreddits or ["wallstreetbets", "stocks", "investing"]
         self.limit = limit
 
-    def fetch_latest(self) -> list[NewsEvent]:
-        """Fetch from Reddit /r/{sub}/new.json.
-
-        Response: { "data": { "children": [{ "data": { "id", "title", "selftext", "created_utc", "permalink" } }] } }
-        """
+    async def fetch_latest(self) -> list[NewsEvent]:
         events = []
         for sub in self.subreddits:
             try:
-                resp = self._fetch_sub(sub)
+                resp = await self._fetch_sub(sub)
                 for post in resp.json().get("data", {}).get("children", []):
                     d = post["data"]
                     pid = d.get("id", "")
@@ -49,15 +41,15 @@ class RedditSource(NewsSource):
                 logger.error("Reddit error (r/%s): %s", sub, e)
         return events
 
-    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
-    def _fetch_sub(self, sub: str):
-        resp = requests.get(
-            f"https://www.reddit.com/r/{sub}/new.json?limit={self.limit}",
-            headers={"User-Agent": "EonTrading/1.0"},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        return resp
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError,))
+    async def _fetch_sub(self, sub: str):
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"https://www.reddit.com/r/{sub}/new.json?limit={self.limit}",
+                headers={"User-Agent": "EonTrading/1.0"},
+            )
+            resp.raise_for_status()
+            return resp
 
     @staticmethod
     def _epoch_to_iso(epoch: float) -> str:

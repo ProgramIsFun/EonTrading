@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Mock MongoClient before importing news_trader (module-level get_mongo_client())
 mock_client = MagicMock()
 mock_db = MagicMock()
 mock_client.__getitem__.return_value = mock_db
@@ -17,13 +16,11 @@ from src.strategies.sentiment import LLMSentimentAnalyzer
 
 class TestMongoLogHandler:
     def test_handler_added_to_root_logger(self):
-        """MongoLogHandler is added to root logger when news_trader imports."""
         root = logging.getLogger()
         found = any(isinstance(h, MongoLogHandler) for h in root.handlers)
-        assert found, "MongoLogHandler should be registered on root logger"
+        assert found
 
     def test_emit_swallows_exceptions(self):
-        """Handler should not crash on emit failures."""
         handler = MongoLogHandler()
         record = logging.LogRecord(
             name="test", level=logging.INFO,
@@ -32,10 +29,9 @@ class TestMongoLogHandler:
         handler.emit(record)
 
     def test_emit_calls_insert_one(self):
-        """Handler calls insert_one on the logs collection."""
         mock_col = MagicMock()
         handler = MongoLogHandler()
-        handler._col = mock_col  # bypass property to avoid DB dependency
+        handler._col = mock_col
 
         record = logging.LogRecord(
             name="test", level=logging.WARNING,
@@ -51,7 +47,6 @@ class TestMongoLogHandler:
 
 class TestLLMSentimentAnalyzerOpencode:
     def test_opencode_key_sets_correct_defaults(self):
-        """OPENCODE_API_KEY env var configures analyzer for opencode Zen."""
         os.environ["OPENCODE_API_KEY"] = "sk-test-key"
         try:
             a = LLMSentimentAnalyzer()
@@ -62,7 +57,6 @@ class TestLLMSentimentAnalyzerOpencode:
             del os.environ["OPENCODE_API_KEY"]
 
     def test_opencode_key_no_azure(self):
-        """Opencode config should not set azure flag."""
         os.environ["OPENCODE_API_KEY"] = "sk-test-key"
         try:
             a = LLMSentimentAnalyzer()
@@ -71,7 +65,6 @@ class TestLLMSentimentAnalyzerOpencode:
             del os.environ["OPENCODE_API_KEY"]
 
     def test_openai_key_fallback_when_no_opencode(self):
-        """Without OPENCODE_API_KEY, falls back to OpenAI defaults."""
         os.environ.pop("OPENCODE_API_KEY", None)
         os.environ.pop("OPENAI_API_KEY", None)
         os.environ.pop("OPENAI_BASE_URL", None)
@@ -82,7 +75,6 @@ class TestLLMSentimentAnalyzerOpencode:
         assert a.model == "gpt-4o-mini"
 
     def test_opencode_custom_model(self):
-        """OPENCODE_MODEL env var overrides default big-pickle."""
         os.environ["OPENCODE_API_KEY"] = "sk-test"
         os.environ["OPENCODE_MODEL"] = "deepseek-v4-flash-free"
         try:
@@ -93,7 +85,6 @@ class TestLLMSentimentAnalyzerOpencode:
             del os.environ["OPENCODE_MODEL"]
 
     def test_constructor_explicit_wins_over_env(self):
-        """Explicit constructor args override OPENCODE_API_KEY env."""
         os.environ["OPENCODE_API_KEY"] = "sk-env-key"
         try:
             a = LLMSentimentAnalyzer(api_key="sk-explicit", base_url="https://custom.url/v1", model="custom-model")
@@ -103,15 +94,15 @@ class TestLLMSentimentAnalyzerOpencode:
         finally:
             del os.environ["OPENCODE_API_KEY"]
 
-    def test_opencode_uses_chat_completions_endpoint(self):
-        """Verify _call_llm constructs the right URL for opencode."""
+    @pytest.mark.asyncio
+    async def test_opencode_uses_chat_completions_endpoint(self):
         os.environ["OPENCODE_API_KEY"] = "sk-test"
         try:
             a = LLMSentimentAnalyzer()
-            with patch("requests.post") as mock_post:
-                mock_post.return_value = MagicMock(status_code=200, json=lambda: {"choices": [{"message": {"content": '{"symbols":[],"sentiment":0,"confidence":0}'}}]})
-                a._call_llm("test prompt")
-                called_url = mock_post.call_args[0][0]
+            mock_resp = MagicMock(status_code=200, json=lambda: {"choices": [{"message": {"content": '{"symbols":[],"sentiment":0,"confidence":0}'}}]})
+            with patch("httpx.AsyncClient.post", return_value=mock_resp):
+                await a._call_llm("test prompt")
+                called_url = mock_resp.post.call_args[0][0]
                 assert called_url.endswith("/chat/completions")
                 assert "opencode.ai" in called_url
         finally:

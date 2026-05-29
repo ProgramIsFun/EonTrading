@@ -5,7 +5,7 @@ Tests verify that components wire together correctly through the event bus.
 """
 import asyncio
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -48,8 +48,11 @@ BULLISH_NVIDIA = make_news("Nvidia rallies on strong AI chip demand and record r
 
 def mock_position_store():
     store = MagicMock()
-    store.get_positions.return_value = {}
-    store.get_positions_with_prices.return_value = {}
+    store.get_positions = AsyncMock(return_value={})
+    store.get_positions_with_prices = AsyncMock(return_value={})
+    store.open_position = AsyncMock()
+    store.close_position = AsyncMock()
+    store.set_positions = AsyncMock()
     return store
 
 

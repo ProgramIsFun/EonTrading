@@ -5,6 +5,8 @@ import os
 import re
 from abc import ABC, abstractmethod
 
+import httpx
+
 from ..common.clock import utcnow
 from ..common.events import NewsEvent, SentimentEvent
 from ..common.retry import retry
@@ -16,7 +18,7 @@ class BaseSentimentAnalyzer(ABC):
     """Interface for sentiment analyzers. Swap implementations freely."""
 
     @abstractmethod
-    def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
+    async def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         pass
 
 
@@ -60,7 +62,7 @@ BEARISH_WORDS = [
 class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
     """Fast keyword-based scorer. No external dependencies."""
 
-    def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
+    async def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         text = (event.headline + " " + event.body).lower()
 
         symbols = []
@@ -146,7 +148,6 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
     """LLM-based scorer. More accurate, needs API key.
 
     Supports any OpenAI-compatible API (OpenAI, opencode Zen, Ollama, local LLMs).
-    Set OPENCODE_API_KEY to use opencode Zen (free big-pickle model by default).
     """
 
     def __init__(
@@ -167,17 +168,14 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         self.api_version = os.getenv("OPENAI_API_VERSION", "")
         self._is_azure = "azure" in self.base_url
 
-    def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
-        import requests
-
+    async def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         if positions:
             pos_str = "\n".join(f"- {sym}" for sym in positions.keys()) or "None"
             prompt = LLM_PROMPT_WITH_POSITIONS.format(headline=event.headline, positions=pos_str)
         else:
             prompt = LLM_PROMPT.format(headline=event.headline)
         try:
-            content = self._call_llm(prompt)
-            # Extract JSON from response (handle markdown code blocks)
+            content = await self._call_llm(prompt)
             content = re.sub(r"```json?\s*", "", content).replace("```", "").strip()
             data = json.loads(content)
 
@@ -200,15 +198,14 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
             )
 
     @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
-    def _call_llm(self, prompt: str) -> str:
-        import requests
+    async def _call_llm(self, prompt: str) -> str:
         url = f"{self.base_url}/chat/completions"
         headers = {"api-key": self.api_key} if self._is_azure else {"Authorization": f"Bearer {self.api_key}"}
         params = {"api-version": self.api_version} if self._is_azure and self.api_version else {}
-        resp = requests.post(
-            url, headers=headers, params=params,
-            json={"model": self.model, "messages": [{"role": "user", "content": prompt}], "temperature": 0},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                url, headers=headers, params=params,
+                json={"model": self.model, "messages": [{"role": "user", "content": prompt}], "temperature": 0},
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]

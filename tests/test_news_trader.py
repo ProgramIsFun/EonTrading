@@ -54,30 +54,35 @@ class TestKeywordSentiment:
     def setup_method(self):
         self.analyzer = KeywordSentimentAnalyzer()
 
-    def test_bullish_news_positive_sentiment(self):
-        result = self.analyzer.analyze(BULLISH_NEWS)
+    @pytest.mark.asyncio
+    async def test_bullish_news_positive_sentiment(self):
+        result = await self.analyzer.analyze(BULLISH_NEWS)
         assert result.sentiment > 0
         assert result.confidence > 0
         assert "AAPL" in result.symbols
 
-    def test_bearish_news_negative_sentiment(self):
-        result = self.analyzer.analyze(BEARISH_NEWS)
+    @pytest.mark.asyncio
+    async def test_bearish_news_negative_sentiment(self):
+        result = await self.analyzer.analyze(BEARISH_NEWS)
         assert result.sentiment < 0
         assert result.confidence > 0
         assert "TSLA" in result.symbols
 
-    def test_neutral_news_zero_confidence(self):
-        result = self.analyzer.analyze(NEUTRAL_NEWS)
+    @pytest.mark.asyncio
+    async def test_neutral_news_zero_confidence(self):
+        result = await self.analyzer.analyze(NEUTRAL_NEWS)
         assert result.confidence == 0.0
 
-    def test_urgency_high_on_crash(self):
-        result = self.analyzer.analyze(BEARISH_NEWS)
+    @pytest.mark.asyncio
+    async def test_urgency_high_on_crash(self):
+        result = await self.analyzer.analyze(BEARISH_NEWS)
         assert result.urgency == "high"
 
-    def test_urgency_normal_on_mild_news(self):
+    @pytest.mark.asyncio
+    async def test_urgency_normal_on_mild_news(self):
         mild = NewsEvent(source="test", headline="Microsoft reports steady growth",
                          timestamp="2026-04-22T10:00:00Z", body="Profit increased.")
-        result = self.analyzer.analyze(mild)
+        result = await self.analyzer.analyze(mild)
         assert result.urgency == "normal"
 
 
@@ -207,7 +212,7 @@ class TestFullPipeline:
         await executor.start()
 
         # Simulate what NewsWatcher does
-        sentiment = analyzer.analyze(BULLISH_NEWS)
+        sentiment = await analyzer.analyze(BULLISH_NEWS)
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
         await asyncio.sleep(0.2)
 
@@ -379,26 +384,33 @@ class TestFillConfirmation:
 
 class TestTraderWithPositionStore:
     @pytest.mark.asyncio
-    async def test_restore_positions_on_init(self):
-        """Trader should restore holdings from position store on startup."""
-        from unittest.mock import MagicMock
-        mock_store = MagicMock()
+    async def test_restore_positions_on_start(self):
+        """Trader should restore holdings from position store on start()."""
+        mock_store = AsyncMock()
         now = utcnow()
-        mock_store.get_positions.return_value = {"AAPL": now, "NVDA": now}
+        mock_store.get_positions = AsyncMock(return_value={"AAPL": now, "NVDA": now})
+        mock_store.get_positions_with_prices = AsyncMock(return_value={})
+        # Other methods may be called during fill events
+        mock_store.open_position = AsyncMock()
+        mock_store.close_position = AsyncMock()
 
         bus = LocalEventBus()
+        await bus.start()
         trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, position_store=mock_store)
+        await trader.start()
 
         assert "AAPL" in trader.holdings
         assert "NVDA" in trader.holdings
-        mock_store.get_positions.assert_called_once()
+        mock_store.get_positions.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_fill_persists_to_store(self):
         """On confirmed fill, trader should write to position store."""
-        from unittest.mock import MagicMock
-        mock_store = MagicMock()
-        mock_store.get_positions.return_value = {}
+        mock_store = AsyncMock()
+        mock_store.get_positions = AsyncMock(return_value={})
+        mock_store.get_positions_with_prices = AsyncMock(return_value={})
+        mock_store.open_position = AsyncMock()
+        mock_store.close_position = AsyncMock()
 
         bus = LocalEventBus()
         await bus.start()
@@ -422,9 +434,9 @@ class TestTraderWithPositionStore:
     @pytest.mark.asyncio
     async def test_rejected_fill_does_not_persist(self):
         """On rejected fill, trader should NOT write to position store."""
-        from unittest.mock import MagicMock
-        mock_store = MagicMock()
-        mock_store.get_positions.return_value = {}
+        mock_store = AsyncMock()
+        mock_store.get_positions = AsyncMock(return_value={})
+        mock_store.get_positions_with_prices = AsyncMock(return_value={})
 
         bus = LocalEventBus()
         await bus.start()

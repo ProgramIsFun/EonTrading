@@ -1,16 +1,13 @@
 """Shared news polling logic — used by both live trader and collector."""
 import logging
 
-from src.common.events import NewsEvent
-from src.data.news.newsapi_source import NewsSource
-
 logger = logging.getLogger(__name__)
 
 
 class NewsPoller:
-    """Polls news sources and deduplicates. Callbacks handle what to do with each article."""
+    """Polls news sources and deduplicates. Sources are now async."""
 
-    def __init__(self, sources: list[NewsSource] = None, interval_sec: int = 120, persist_seen: bool = False):
+    def __init__(self, sources: list = None, interval_sec: int = 120, persist_seen: bool = False):
         self.sources = sources or []
         self.interval = interval_sec
         self._seen_col = None
@@ -18,30 +15,35 @@ class NewsPoller:
             try:
                 from src.data.utils.db_helper import get_mongo_client
                 self._seen_col = get_mongo_client()["EonTradingDB"]["seen_urls"]
-                self._seen_col.create_index("url", unique=True)
             except Exception:
                 logger.warning("Failed to init persistent dedup — falling back to in-memory only", exc_info=True)
 
-    def _is_seen(self, url: str) -> bool:
+    async def _init_index(self):
+        if self._seen_col is not None:
+            try:
+                await self._seen_col.create_index("url", unique=True)
+            except Exception:
+                pass
+
+    async def _is_seen(self, url: str) -> bool:
         if self._seen_col is None or not url:
             return False
-        return self._seen_col.find_one({"url": url}) is not None
+        return (await self._seen_col.find_one({"url": url})) is not None
 
-    def _mark_seen(self, url: str):
+    async def _mark_seen(self, url: str):
         if self._seen_col is not None and url:
             try:
-                self._seen_col.insert_one({"url": url})
+                await self._seen_col.insert_one({"url": url})
             except Exception:
-                pass  # duplicate key — already seen
+                pass
 
-    def poll_once(self) -> list[NewsEvent]:
-        """Fetch new articles from all sources. Dedup handled by each source's _seen set + optional MongoDB."""
+    async def poll_once(self) -> list:
         events = []
         for source in self.sources:
-            for event in source.fetch_latest():
+            for event in await source.fetch_latest():
                 if self._seen_col is not None:
-                    if self._is_seen(event.url):
+                    if await self._is_seen(event.url):
                         continue
-                    self._mark_seen(event.url)
+                    await self._mark_seen(event.url)
                 events.append(event)
         return events

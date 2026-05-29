@@ -8,12 +8,13 @@ dependencies = [
     "yfinance>=0.2.66",
     "finnhub-python>=2.4.25",
     "pymongo[srv]>=4.15.3",
+    "motor>=3.6.0",
     "python-dotenv>=1.2.1",
     "pandas>=2.0.0",
     "numpy>=1.24.0",
     "tqdm>=4.67.1",
     "clickhouse-connect>=0.7.0",
-    "requests>=2.31.0",
+    "httpx>=0.27.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
     "redis>=5.0.0",
@@ -24,7 +25,7 @@ dependencies = [
 backtest = ["backtesting>=0.6.5"]
 futu = ["futu-api>=9.1"]
 dev = ["ipykernel>=7.1.0", "jupyter>=1.0.0"]
-test = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0", "httpx>=0.27.0"]
+test = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"

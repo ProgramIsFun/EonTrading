@@ -8,7 +8,6 @@ from src.common.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
-
 COLLECTION = "heartbeats"
 DB = "EonTradingDB"
 
@@ -27,10 +26,10 @@ class Heartbeat:
         except Exception as e:
             logger.warning("Heartbeat MongoDB unavailable: %s", e)
 
-    def beat(self):
+    async def beat(self):
         if self._col is None:
             return
-        self._col.update_one(
+        await self._col.update_one(
             {"component": self.component},
             {"$set": {
                 "component": self.component,
@@ -43,9 +42,8 @@ class Heartbeat:
         )
 
     async def run(self):
-        """Background task — call once, runs forever."""
         while True:
-            await asyncio.to_thread(self.beat)
+            await self.beat()
             await asyncio.sleep(self.interval)
 
     @staticmethod

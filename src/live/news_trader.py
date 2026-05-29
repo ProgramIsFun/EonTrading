@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class MongoLogHandler(logging.Handler):
+    """Sync logging handler using pymongo (cannot be async)."""
     def __init__(self, level=logging.INFO):
         super().__init__(level)
         self._col = None
@@ -31,8 +32,8 @@ class MongoLogHandler(logging.Handler):
     @property
     def col(self):
         if self._col is None:
-            from src.data.utils.db_helper import get_mongo_client
-            self._col = get_mongo_client()["EonTradingDB"]["logs"]
+            from pymongo import MongoClient
+            self._col = MongoClient()["EonTradingDB"]["logs"]
         return self._col
 
     def emit(self, record):

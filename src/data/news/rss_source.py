@@ -1,14 +1,8 @@
-"""RSS feed news source — works with any RSS/Atom feed, no API key needed.
-
-Good free feeds:
-  - https://feeds.finance.yahoo.com/rss/2.0/headline?s=AAPL&region=US&lang=en-US
-  - https://www.cnbc.com/id/100003114/device/rss/rss.html  (CNBC top news)
-  - https://feeds.reuters.com/reuters/businessNews  (Reuters business)
-"""
+"""RSS feed news source — works with any RSS/Atom feed, no API key needed."""
 import logging
 import re
 
-import requests
+import httpx
 
 from src.common.clock import utcnow
 from src.common.events import NewsEvent
@@ -29,32 +23,27 @@ class RSSSource(NewsSource):
             "https://www.cnbc.com/id/100003114/device/rss/rss.html",
         ]
 
-    def fetch_latest(self) -> list[NewsEvent]:
-        """Fetch from RSS/Atom feeds.
-
-        RSS: <item><title/><link/><pubDate/><description/></item>
-        Atom: <entry><title/><link href="..."/><published/><summary/></entry>
-        """
+    async def fetch_latest(self) -> list[NewsEvent]:
         events = []
         for feed_url in self.feeds:
             try:
-                resp = self._fetch_feed(feed_url)
+                resp = await self._fetch_feed(feed_url)
                 events.extend(self._parse_feed(resp.text, feed_url))
             except Exception as e:
                 logger.error("RSS error (%s): %s", feed_url[:50], e)
         return events
 
-    @retry(max_attempts=3, base_delay=2.0, exceptions=(requests.RequestException, requests.Timeout))
-    def _fetch_feed(self, feed_url: str):
-        resp = requests.get(feed_url, timeout=10, headers={"User-Agent": "EonTrading/1.0"})
-        resp.raise_for_status()
-        return resp
+    @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError,))
+    async def _fetch_feed(self, feed_url: str):
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(feed_url, headers={"User-Agent": "EonTrading/1.0"})
+            resp.raise_for_status()
+            return resp
 
     def _parse_feed(self, xml: str, feed_url: str) -> list[NewsEvent]:
-        """Simple regex XML parser — no lxml/feedparser dependency."""
         events = []
         items = re.findall(r"<item>(.*?)</item>", xml, re.DOTALL)
-        if not items:  # try Atom format
+        if not items:
             items = re.findall(r"<entry>(.*?)</entry>", xml, re.DOTALL)
         for item in items:
             title = self._tag(item, "title")
@@ -65,7 +54,6 @@ class RSSSource(NewsSource):
             if not title or self._check_seen(link):
                 continue
 
-            # Strip HTML tags from description
             desc = re.sub(r"<[^>]+>", "", desc).strip()
 
             events.append(NewsEvent(

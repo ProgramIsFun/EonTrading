@@ -1,17 +1,28 @@
 """Tests for the API endpoints — backtest job lifecycle, health."""
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+
+
+def _make_mock_cursor(return_value=None):
+    """Create a mock motor cursor that supports chaining (sort, limit) and awaitable .to_list()."""
+    cursor = MagicMock()
+    cursor.to_list = AsyncMock(return_value=return_value or [])
+    cursor.sort.return_value = cursor
+    cursor.limit.return_value = cursor
+    return cursor
 
 
 @pytest.fixture
 def mock_mongo():
     with patch("src.api.server.get_mongo_client") as m:
         mock_db = MagicMock()
-        mock_db["EonTradingDB"]["heartbeats"].find.return_value = []
-        mock_db["EonTradingDB"]["positions"].find.return_value = []
+        mock_col = MagicMock()
+        mock_col.find.return_value = _make_mock_cursor([])
+        mock_col.count_documents = AsyncMock(return_value=0)
+        mock_db.__getitem__.return_value = mock_col
         m.return_value = mock_db
         yield m
 
