@@ -30,6 +30,58 @@ def fast_broker():
 
 
 @pytest.mark.asyncio
+async def test_buy_one_share(broker):
+    from src.common.event_bus import LocalEventBus
+    from src.common.events import CHANNEL_FILL, TradeEvent
+    from src.common.clock import utcnow
+
+    bus = LocalEventBus()
+    broker.set_bus(bus)
+    fills = []
+    event = asyncio.Event()
+
+    async def on_fill(msg):
+        fills.append(msg)
+        event.set()
+
+    await bus.subscribe(CHANNEL_FILL, on_fill)
+
+    cash_before = await broker.get_cash()
+    SYMBOL = "HK.00700"
+    trade = TradeEvent(
+        symbol=SYMBOL, action="buy", reason="test buy 1 share",
+        timestamp=utcnow().isoformat() + "Z", price=400.0, size=1,
+    )
+    await broker.execute(trade)
+    await asyncio.wait_for(event.wait(), timeout=20)
+
+    assert len(fills) == 1
+    assert fills[0]["success"] is True, f"Buy failed: {fills[0].get('reason', '')}"
+    assert fills[0]["symbol"] == SYMBOL
+    assert fills[0]["action"] == "buy"
+
+    cash_after = await broker.get_cash()
+    assert cash_after < cash_before, "Cash should decrease after buy"
+
+    # Revert: sell back
+    fills.clear()
+    event.clear()
+    trade = TradeEvent(
+        symbol=SYMBOL, action="sell", reason="revert test buy",
+        timestamp=utcnow().isoformat() + "Z", price=1.0, size=1,
+    )
+    await broker.execute(trade)
+    await asyncio.wait_for(event.wait(), timeout=20)
+
+    assert len(fills) == 1
+    assert fills[0]["success"] is True, f"Sell failed: {fills[0].get('reason', '')}"
+
+    cash_final = await broker.get_cash()
+    diff = abs(cash_final - cash_before)
+    assert diff < 20.0, f"Cash drift too large after round-trip: ${diff:.2f}"
+
+
+@pytest.mark.asyncio
 async def test_get_cash(broker):
     cash = await broker.get_cash()
     assert isinstance(cash, float)
