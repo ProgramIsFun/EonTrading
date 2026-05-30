@@ -133,6 +133,15 @@ scripts/                       # Data collection, backfill, backtest
 tests/                         # 141 tests
 ```
 
+## Data Stores
+
+| Store | Collection | Purpose | Size | Read pattern |
+|---|---|---|---|---|
+| **PositionStore** | `positions` | Current open positions only (1 doc / symbol) | O(1) | SentimentTrader reads every cycle for 'what positions are open right now?' |
+| **trade_log** | `trades` | Permanent audit trail of every executed fill | O(n) | Portfolio P&L, historical reporting, debugging |
+
+**Design rule:** never infer current positions from `trade_log` — it's O(n) and fragile (documents could be deleted or out of order). Always use `PositionStore` for current state.
+
 ## Sentiment Analyzers
 
 | Analyzer | When |
