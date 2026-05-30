@@ -18,14 +18,10 @@ def _get_function_source(module_path: str, func_name: str) -> str:
 class TestDistributedWiring:
     """Verify distributed runners create the same component graph as single-process."""
 
-    def test_trader_creates_price_monitor(self):
-        """run_trader must create PriceMonitor and pass it to SentimentTrader."""
+    def test_trader_no_price_monitor(self):
+        """run_trader must NOT create PriceMonitor — it runs separately in run_monitor.py."""
         src = _get_function_source("src/live/runners/run_trader.py", "main")
-        # PriceMonitor must be created
-        assert "PriceMonitor(" in src, "run_trader.py must create a PriceMonitor"
-        # And passed to SentimentTrader
-        assert "price_monitor=monitor" in src or "price_monitor=" in src, \
-            "run_trader.py must pass PriceMonitor to SentimentTrader"
+        assert "PriceMonitor" not in src, "run_trader.py should not create PriceMonitor"
 
     def test_trader_creates_trading_logic(self):
         """run_trader must create TradingLogic (not rely on SentimentTrader defaults)."""

@@ -21,13 +21,12 @@ class SentimentTrader:
     """
 
     def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0,
-                 position_store=None, broker=None, price_monitor=None, **kwargs):
+                 position_store=None, broker=None, **kwargs):
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
         self.max_hold_days = max_hold_days
         self.position_store = position_store
         self.broker = broker
-        self.price_monitor = price_monitor
         self._last_trade_at: dict[str, dict[str, datetime]] = {}
         self._dedup_seconds = 60
 

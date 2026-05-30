@@ -1,4 +1,4 @@
-"""Run SentimentTrader as its own process. Subscribes to [sentiment]+[fill], publishes to [trade]."""
+"""Run SentimentTrader as its own process. Subscribes to [sentiment], publishes to [trade]."""
 import asyncio
 import logging
 
@@ -18,7 +18,6 @@ from src.common.position_store import PositionStore
 from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
 from src.common.trading_logic import TradingLogic
-from src.live.price_monitor import PriceMonitor
 from src.live.sentiment_trader import SentimentTrader
 from src.settings import settings
 
@@ -42,9 +41,7 @@ async def main():
         stop_loss_pct=settings.stop_loss_pct,
         take_profit_pct=settings.take_profit_pct,
     )
-    monitor = PriceMonitor(bus, store, logic, interval_sec=0)
-    trader = SentimentTrader(bus, logic=logic, position_store=store,
-                             price_monitor=monitor)
+    trader = SentimentTrader(bus, logic=logic, position_store=store)
     await trader.start()
     logger.info("🟢 Started. Waiting for [sentiment] events.")
     Heartbeat.create_background("trader", metadata={"mode": "distributed"})

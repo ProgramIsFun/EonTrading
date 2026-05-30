@@ -48,7 +48,7 @@ async def main(start: str, end: str):
     db = get_mongo_client()["EonTradingDB"]
     price_monitor = PriceMonitor(bus, store, logic)
 
-    trader = SentimentTrader(bus, logic=logic, position_store=store, broker=broker, price_monitor=price_monitor)
+    trader = SentimentTrader(bus, logic=logic, position_store=store, broker=broker)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     executor = TradeExecutor(bus, broker, position_store=store, trade_log=db["replay_trades"], price_monitor=price_monitor)
 

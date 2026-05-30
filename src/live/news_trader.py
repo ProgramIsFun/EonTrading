@@ -75,7 +75,7 @@ async def main_single():
     )
     monitor = PriceMonitor(bus, store, logic, interval_sec=60)
     trader = SentimentTrader(bus, logic=logic, position_store=store,
-                             broker=broker, price_monitor=monitor)
+                             broker=broker)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
                           persist_news=settings.persist_news,
