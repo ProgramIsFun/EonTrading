@@ -66,6 +66,8 @@ class FillEvent:
     success: bool                  # did the broker fill the order?
     reason: str                    # "filled" or error message
     timestamp: str
+    price: float = 0.0
+    shares: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)

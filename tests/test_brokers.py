@@ -91,37 +91,28 @@ def _remove_futu_mock():
     sys.modules.pop("futu", None)
 
 
-class TestFutuBrokerPoll:
+class TestFutuBroker:
 
     @pytest.mark.asyncio
-    async def test_buy_fills_successfully(self, event_bus):
+    async def test_execute_places_order_and_returns_id(self, event_bus):
         _install_futu_mock()
         try:
             from src.live.brokers.broker import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["12345"]}))
-            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_FILLED_ALL"]}))
 
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
-            broker = FutuBroker(poll_interval=0.01, poll_timeout=1.0)
+            broker = FutuBroker()
             broker.set_bus(event_bus)
             broker._ctx = mock_ctx
 
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is True
-            assert fills[0]["symbol"] == "AAPL"
-            assert fills[0]["action"] == "buy"
+            order_id = await broker.execute(_make_trade())
+            assert order_id == "12345"
         finally:
             _remove_futu_mock()
 
     @pytest.mark.asyncio
-    async def test_order_rejected(self, event_bus):
+    async def test_execute_rejected_publishes_fill(self, event_bus):
         _install_futu_mock()
         try:
             from src.live.brokers.broker import FutuBroker
@@ -132,13 +123,13 @@ class TestFutuBrokerPoll:
             sub, get = await _collect_fills(event_bus)
             await sub()
 
-            broker = FutuBroker(poll_interval=0.01, poll_timeout=1.0)
+            broker = FutuBroker()
             broker.set_bus(event_bus)
             broker._ctx = mock_ctx
 
-            await broker.execute(_make_trade())
+            order_id = await broker.execute(_make_trade())
+            assert order_id is None
             fills = await get()
-
             assert len(fills) == 1
             assert fills[0]["success"] is False
             assert "rejected" in fills[0]["reason"]
@@ -146,60 +137,7 @@ class TestFutuBrokerPoll:
             _remove_futu_mock()
 
     @pytest.mark.asyncio
-    async def test_order_failed_status(self, event_bus):
-        _install_futu_mock()
-        try:
-            from src.live.brokers.broker import FutuBroker
-
-            mock_ctx = MagicMock()
-            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["12345"]}))
-            mock_status = MagicMock()
-            mock_status.__getitem__ = MagicMock(return_value="FilledStatus_FAILED")
-            mock_ctx.order_list_query.return_value = (0, mock_status)
-
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
-            broker = FutuBroker(poll_interval=0.01, poll_timeout=1.0)
-            broker.set_bus(event_bus)
-            broker._ctx = mock_ctx
-
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-        finally:
-            _remove_futu_mock()
-
-    @pytest.mark.asyncio
-    async def test_timeout(self, event_bus):
-        _install_futu_mock()
-        try:
-            from src.live.brokers.broker import FutuBroker
-
-            mock_ctx = MagicMock()
-            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["12345"]}))
-            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_NEW"]}))
-
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
-            broker = FutuBroker(poll_interval=0.01, poll_timeout=0.05)
-            broker.set_bus(event_bus)
-            broker._ctx = mock_ctx
-
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-            assert fills[0]["reason"] == "timeout"
-        finally:
-            _remove_futu_mock()
-
-    @pytest.mark.asyncio
-    async def test_exception_during_order(self, event_bus):
+    async def test_execute_exception_publishes_fill(self, event_bus):
         _install_futu_mock()
         try:
             from src.live.brokers.broker import FutuBroker
@@ -210,16 +148,101 @@ class TestFutuBrokerPoll:
             sub, get = await _collect_fills(event_bus)
             await sub()
 
-            broker = FutuBroker(poll_interval=0.01, poll_timeout=1.0)
+            broker = FutuBroker()
             broker.set_bus(event_bus)
             broker._ctx = mock_ctx
 
-            await broker.execute(_make_trade())
+            order_id = await broker.execute(_make_trade())
+            assert order_id is None
             fills = await get()
-
             assert len(fills) == 1
             assert fills[0]["success"] is False
             assert "connection lost" in fills[0]["reason"]
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_check_order_filled(self):
+        _install_futu_mock()
+        try:
+            from src.live.brokers.broker import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_FILLED_ALL"]}))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            status, reason = await broker.check_order("12345")
+            assert status == "filled"
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_check_order_cancelled(self):
+        _install_futu_mock()
+        try:
+            from src.live.brokers.broker import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_FAILED"]}))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            status, reason = await broker.check_order("12345")
+            assert status == "cancelled"
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_check_order_pending(self):
+        _install_futu_mock()
+        try:
+            from src.live.brokers.broker import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_NEW"]}))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            status, reason = await broker.check_order("12345")
+            assert status == "pending"
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_check_order_query_error_returns_pending(self):
+        _install_futu_mock()
+        try:
+            from src.live.brokers.broker import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.order_list_query.return_value = (1, None)
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            status, reason = await broker.check_order("12345")
+            assert status == "pending"
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_cancel_order(self):
+        _install_futu_mock()
+        try:
+            from src.live.brokers.broker import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.undo_order.return_value = (0, None)
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            result = await broker.cancel_order("12345")
+            assert result is True
         finally:
             _remove_futu_mock()
 
@@ -274,84 +297,6 @@ class TestFutuBrokerPoll:
 
             cash = await broker.get_cash()
             assert cash == 50000.0
-        finally:
-            _remove_futu_mock()
-
-
-class TestFutuBrokerCallback:
-
-    @pytest.mark.asyncio
-    async def test_place_order_rejected(self, event_bus):
-        _install_futu_mock()
-        try:
-            from src.live.brokers.broker import FutuBroker
-
-            mock_ctx = MagicMock()
-            mock_ctx.place_order.return_value = (1, None)
-
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
-            broker = FutuBroker(confirm_mode="callback", poll_timeout=1.0)
-            broker.set_bus(event_bus)
-            broker._ctx = mock_ctx
-
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-            assert "rejected" in fills[0]["reason"]
-        finally:
-            _remove_futu_mock()
-
-    @pytest.mark.asyncio
-    async def test_callback_timeout(self, event_bus):
-        _install_futu_mock()
-        try:
-            from src.live.brokers.broker import FutuBroker
-
-            mock_ctx = MagicMock()
-            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["12345"]}))
-
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
-            broker = FutuBroker(confirm_mode="callback", poll_timeout=0.05, poll_interval=0.01)
-            broker.set_bus(event_bus)
-            broker._ctx = mock_ctx
-
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-            assert "callback timeout" in fills[0]["reason"]
-        finally:
-            _remove_futu_mock()
-
-    @pytest.mark.asyncio
-    async def test_exception_during_callback(self, event_bus):
-        _install_futu_mock()
-        try:
-            from src.live.brokers.broker import FutuBroker
-
-            mock_ctx = MagicMock()
-            mock_ctx.place_order.side_effect = RuntimeError("callback error")
-
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
-            broker = FutuBroker(confirm_mode="callback", poll_timeout=1.0)
-            broker.set_bus(event_bus)
-            broker._ctx = mock_ctx
-
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-            assert "callback error" in fills[0]["reason"]
         finally:
             _remove_futu_mock()
 

@@ -18,6 +18,7 @@ from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_FILL, CHANNEL_TRADE, FillEvent, TradeEvent
 from src.common.trade_store import trade_to_doc
+from src.data.utils.db_helper import get_mongo_client
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -33,18 +34,31 @@ class Broker(ABC):
     def set_bus(self, bus: EventBus):
         self._bus = bus
 
-    async def _publish_fill(self, symbol: str, action: str, success: bool, reason: str = ""):
+    async def _publish_fill(self, symbol: str, action: str, success: bool, reason: str = "", price: float = 0.0, shares: int = 0):
         fill = FillEvent(
             symbol=symbol, action=action, success=success,
             reason=reason or ("filled" if success else "broker rejected"),
             timestamp=utcnow().isoformat() + "Z",
+            price=price, shares=shares,
         )
         await self._bus.publish(CHANNEL_FILL, fill.to_dict())
 
     @abstractmethod
-    async def execute(self, trade: TradeEvent):
-        """Submit a trade. Must eventually call _publish_fill()."""
+    async def execute(self, trade: TradeEvent) -> str | None:
+        """Submit a trade.
+        Returns order_id if async (tracker will poll), or None if instantly filled.
+        """
         pass
+
+    async def check_order(self, order_id: str) -> tuple[str, str | None]:
+        """Returns (status, error_reason).
+        status: 'pending' | 'filled' | 'cancelled' | 'failed'
+        Override for brokers that use OrderTracker.
+        """
+        raise NotImplementedError
+
+    async def cancel_order(self, order_id: str) -> bool:
+        return False
 
     @abstractmethod
     async def get_positions(self) -> dict[str, int]:
@@ -75,7 +89,7 @@ class PaperBroker(Broker):
         self._cash = initial_cash
         self.cost_model = cost_model
 
-    async def execute(self, trade: TradeEvent):
+    async def execute(self, trade: TradeEvent) -> str | None:
         qty = int(trade.size)
         if trade.action == "buy":
             cost = trade.price * qty
@@ -90,7 +104,8 @@ class PaperBroker(Broker):
             fees = self.cost_model.sell_cost(trade.price, qty) if self.cost_model else 0
             self._cash += proceeds - fees
             logger.info("📝 [DRY RUN] SELL %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, trade.price, fees, trade.reason)
-        await self._publish_fill(trade.symbol, trade.action, True, "filled (dry run)")
+        await self._publish_fill(trade.symbol, trade.action, True, "filled (dry run)", price=float(trade.price), shares=qty)
+        return None
 
     async def get_positions(self) -> dict[str, int]:
         return dict(self._positions)
@@ -128,16 +143,8 @@ class FutuBroker(Broker):
             self._ctx = OpenSecTradeContext(host=self.host, port=self.port)
         return self._ctx
 
-    async def execute(self, trade: TradeEvent):
-        if self.confirm_mode == "callback":
-            await self._execute_callback(trade)
-        else:
-            await self._execute_poll(trade)
-
-    async def _execute_poll(self, trade: TradeEvent):
-        import asyncio
-
-        from futu import OrderStatus, TrdEnv, TrdSide
+    async def execute(self, trade: TradeEvent) -> str | None:
+        from futu import TrdEnv, TrdSide
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         trd_side = TrdSide.BUY if trade.action == "buy" else TrdSide.SELL
         try:
@@ -148,91 +155,34 @@ class FutuBroker(Broker):
             )
             if ret != 0:
                 await self._publish_fill(trade.symbol, trade.action, False, "order rejected")
-                return
-
-            order_id = data["order_id"].iloc[0]
-            logger.info("📤 Futu order placed: %s %s", trade.action.upper(), trade.symbol)
-            asyncio.ensure_future(self._poll_order(trade.symbol, trade.action, order_id, trd_env))
+                return None
+            order_id = str(data["order_id"].iloc[0])
+            logger.info("📤 Futu order placed: %s %s (id=%s)", trade.action.upper(), trade.symbol, order_id)
+            return order_id
         except Exception as e:
             await self._publish_fill(trade.symbol, trade.action, False, str(e))
+            return None
 
-    async def _poll_order(self, symbol: str, action: str, order_id: int, trd_env):
-        from futu import OrderStatus
+    async def check_order(self, order_id: str) -> tuple[str, str | None]:
+        from futu import OrderStatus, TrdEnv
         ctx = self._get_ctx()
-        elapsed = 0.0
-        try:
-            while elapsed < self.poll_timeout:
-                await asyncio.sleep(self.poll_interval)
-                elapsed += self.poll_interval
-                ret2, orders = ctx.order_list_query(order_id=order_id, trd_env=trd_env)
-                if ret2 != 0:
-                    continue
-                status = orders["order_status"].iloc[0]
-                if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
-                    await self._publish_fill(symbol, action, True)
-                    return
-                if status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
-                    await self._publish_fill(symbol, action, False, f"status: {status}")
-                    return
-            await self._publish_fill(symbol, action, False, "timeout")
-        except Exception as e:
-            await self._publish_fill(symbol, action, False, str(e))
-
-    async def _execute_callback(self, trade: TradeEvent):
-        """Place order and wait for Futu's push notification on status change."""
-        import asyncio
-
-        from futu import TradeOrderHandlerBase, TrdEnv, TrdSide
-
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
-        trd_side = TrdSide.BUY if trade.action == "buy" else TrdSide.SELL
-        result_future = asyncio.get_event_loop().create_future()
+        ret, orders = ctx.order_list_query(order_id=int(order_id), trd_env=trd_env)
+        if ret != 0:
+            return "pending", None
+        status = orders["order_status"].iloc[0]
+        if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
+            return "filled", None
+        if status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
+            return "cancelled", f"status: {status}"
+        return "pending", None
 
-        class Handler(TradeOrderHandlerBase):
-            def on_recv_rsp(self, rsp_pb):
-                ret, data = super().on_recv_rsp(rsp_pb)
-                if ret != 0 or data.empty:
-                    return
-                for _, row in data.iterrows():
-                    status = row.get("order_status", "")
-                    code = row.get("code", "")
-                    if code != trade.symbol:
-                        continue
-                    from futu import OrderStatus
-                    if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
-                        if not result_future.done():
-                            result_future.set_result(("filled", True))
-                    elif status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
-                        if not result_future.done():
-                            result_future.set_result((f"status: {status}", False))
-
-        try:
-            ctx = self._get_ctx()
-            handler = Handler()
-            ctx.set_handler(handler)
-
-            ret, data = ctx.place_order(
-                price=trade.price, qty=int(trade.size),
-                code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
-            )
-            if ret != 0:
-                await self._publish_fill(trade.symbol, trade.action, False, "order rejected")
-                return
-
-            logger.info("📤 Futu order placed: %s %s", trade.action.upper(), trade.symbol)
-            asyncio.ensure_future(self._wait_callback(trade.symbol, trade.action, result_future))
-        except Exception as e:
-            await self._publish_fill(trade.symbol, trade.action, False, str(e))
-
-    async def _wait_callback(self, symbol: str, action: str, result_future: asyncio.Future):
-        import asyncio
-        try:
-            reason, success = await asyncio.wait_for(result_future, timeout=self.poll_timeout)
-            await self._publish_fill(symbol, action, success, reason)
-        except asyncio.TimeoutError:
-            await self._publish_fill(symbol, action, False, "callback timeout")
-        except Exception as e:
-            await self._publish_fill(symbol, action, False, str(e))
+    async def cancel_order(self, order_id: str) -> bool:
+        from futu import TrdEnv
+        ctx = self._get_ctx()
+        trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
+        ret, _ = ctx.undo_order(order_id=int(order_id), trd_env=trd_env)
+        return ret == 0
 
     async def get_positions(self) -> dict[str, int]:
         from futu import TrdEnv
@@ -282,7 +232,7 @@ class IBKRBroker(Broker):
         self._ib = IB()
         self._ib.connect(self.host, self.port, clientId=self.client_id)
 
-    async def execute(self, trade: TradeEvent):
+    async def execute(self, trade: TradeEvent) -> str | None:
         import asyncio
 
         from ib_insync import MarketOrder, Stock
@@ -301,9 +251,11 @@ class IBKRBroker(Broker):
 
             filled = ib_trade.orderStatus.status == "Filled"
             await self._publish_fill(trade.symbol, trade.action, filled,
-                                     "filled" if filled else ib_trade.orderStatus.status)
+                                     "filled" if filled else ib_trade.orderStatus.status,
+                                     price=float(trade.price), shares=int(trade.size))
         except Exception as e:
             await self._publish_fill(trade.symbol, trade.action, False, str(e))
+        return None
 
     async def get_positions(self) -> dict[str, int]:
         try:
@@ -345,7 +297,7 @@ class AlpacaBroker(Broker):
         import alpaca_trade_api as tradeapi
         self._api = tradeapi.REST(self.api_key, self.secret_key, self.base_url, api_version="v2")
 
-    async def execute(self, trade: TradeEvent):
+    async def execute(self, trade: TradeEvent) -> str | None:
         import asyncio
         try:
             self._connect()
@@ -358,15 +310,16 @@ class AlpacaBroker(Broker):
                 await asyncio.sleep(2)
                 order = self._api.get_order(order.id)
                 if order.status == "filled":
-                    await self._publish_fill(trade.symbol, trade.action, True)
-                    return
+                    await self._publish_fill(trade.symbol, trade.action, True, price=float(trade.price), shares=int(trade.size))
+                    return None
                 if order.status in ("canceled", "expired", "rejected"):
                     await self._publish_fill(trade.symbol, trade.action, False, order.status)
-                    return
+                    return None
 
             await self._publish_fill(trade.symbol, trade.action, False, "timeout")
         except Exception as e:
             await self._publish_fill(trade.symbol, trade.action, False, str(e))
+        return None
 
     async def get_positions(self) -> dict[str, int]:
         try:
@@ -403,7 +356,6 @@ class TradeExecutor:
         self.broker = broker
         self.broker.set_bus(bus)
         self._seen: set[str] = set()
-        self._pending_trades: dict[str, dict] = {}
         self.position_store = position_store
         self._trades_col = trade_log
         self.price_monitor = price_monitor
@@ -423,35 +375,43 @@ class TradeExecutor:
         if len(self._seen) > 10000:
             self._seen = set(list(self._seen)[-5000:])
 
-        # Store trade details for fill handler
-        self._pending_trades[trade.symbol] = {
-            "action": trade.action,
-            "price": trade.price or 0.0,
-            "size": trade.size or 1,
-            "timestamp": trade.timestamp,
-        }
-        await self.broker.execute(trade)
+        order_id = await self.broker.execute(trade)
+        if order_id:
+            col = get_mongo_client()["EonTradingDB"]["pending_orders"]
+            doc = {
+                "order_id": order_id,
+                "broker_type": self.broker.__class__.__name__,
+                "symbol": trade.symbol,
+                "action": trade.action,
+                "price": trade.price,
+                "shares": trade.size,
+                "status": "pending",
+                "placed_at": utcnow(),
+                "checked_at": None,
+                "filled_at": None,
+                "cancelled_at": None,
+                "next_check_at": utcnow(),
+                "retry_count": 0,
+                "error": None,
+            }
+            await asyncio.to_thread(col.insert_one, doc)
 
     async def _on_fill(self, msg: dict):
         event = FillEvent.from_dict(msg)
         symbol = event.symbol
-        pending = self._pending_trades.pop(symbol, None)
-        if not pending:
-            logger.debug("Fill for untracked trade: %s %s (already processed or from another source)", event.action.upper(), symbol)
-            return
 
         if event.success:
             logger.info("Fill confirmed: %s %s", event.action.upper(), symbol)
             if self._trades_col is not None:
-                doc = trade_to_doc(symbol, event.action, pending["price"], pending["size"], event.reason, event.timestamp)
+                doc = trade_to_doc(symbol, event.action, event.price, event.shares, event.reason, event.timestamp)
                 await asyncio.to_thread(self._trades_col.insert_one, doc)
             if self.position_store:
                 if event.action == "buy":
-                    entry_time = datetime.fromisoformat(pending["timestamp"].rstrip("Z")) if pending["timestamp"] else utcnow()
-                    await asyncio.to_thread(self.position_store.open_position, symbol, entry_time, pending["price"])
+                    entry_time = datetime.fromisoformat(event.timestamp.rstrip("Z")) if event.timestamp else utcnow()
+                    await asyncio.to_thread(self.position_store.open_position, symbol, entry_time, event.price)
                 elif event.action == "sell":
                     await asyncio.to_thread(self.position_store.close_position, symbol)
             if self.price_monitor and event.action == "buy":
-                self.price_monitor.register_entry(symbol, pending["price"], pending["size"])
+                self.price_monitor.register_entry(symbol, event.price, event.shares)
         else:
             logger.warning("Trade rejected: %s %s — %s", event.action.upper(), symbol, event.reason)

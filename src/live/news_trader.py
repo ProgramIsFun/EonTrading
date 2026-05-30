@@ -80,6 +80,12 @@ async def main_single():
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
                           persist_news=settings.persist_news,
                           publish=settings.publish_pipeline)
+    from src.common.order_tracker import OrderTracker
+
+    if broker.__class__.__name__ not in ("PaperBroker", "MockBroker"):
+        tracker = OrderTracker(bus, broker)
+        asyncio.create_task(tracker.run())
+
     executor = TradeExecutor(bus, broker,
                              position_store=store,
                              trade_log=get_mongo_client()["EonTradingDB"]["trades"],
@@ -117,5 +123,6 @@ if __name__ == "__main__":
         print("  python3 -m src.live.runners.run_analyzer")
         print("  python3 -m src.live.runners.run_trader")
         print("  python3 -m src.live.runners.run_executor")
+        print("  python3 -m src.live.runners.run_order_tracker")
     else:
         asyncio.run(main_single())
