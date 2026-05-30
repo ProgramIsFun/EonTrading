@@ -63,3 +63,45 @@ class PositionStore:
             for doc in self._col.find()
             if "entryTime" in doc
         }
+
+
+class InMemoryPositionStore:
+    """Positions backed by a plain dict — no MongoDB. For replay/backtest use."""
+
+    def __init__(self):
+        self._positions: dict[str, dict] = {}
+
+    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None):
+        prices = entry_prices or {}
+        self._positions = {}
+        for symbol, entry_time in holdings.items():
+            self._positions[symbol] = {
+                "entryTime": entry_time.isoformat(),
+                "entryPrice": prices.get(symbol, 0.0),
+            }
+
+    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0):
+        self._positions[symbol] = {
+            "entryTime": entry_time.isoformat(),
+            "entryPrice": entry_price,
+        }
+
+    def close_position(self, symbol: str):
+        self._positions.pop(symbol, None)
+
+    def get_positions(self) -> dict[str, datetime]:
+        return {
+            sym: datetime.fromisoformat(info["entryTime"])
+            for sym, info in self._positions.items()
+            if "entryTime" in info
+        }
+
+    def get_positions_with_prices(self) -> dict[str, dict]:
+        return {
+            sym: {
+                "entryTime": datetime.fromisoformat(info["entryTime"]),
+                "entryPrice": info.get("entryPrice", 0.0),
+            }
+            for sym, info in self._positions.items()
+            if "entryTime" in info
+        }

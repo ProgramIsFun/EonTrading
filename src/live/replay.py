@@ -20,7 +20,7 @@ async def main(start: str, end: str):
     from src.common.clock import clock
     from src.common.event_bus import LocalEventBus
     from src.common.events import CHANNEL_NEWS, NewsEvent
-    from src.common.position_store import PositionStore
+    from src.common.position_store import InMemoryPositionStore
     from src.common.startup import banner
     from src.common.trading_logic import TradingLogic
     from src.data.utils.db_helper import get_mongo_client
@@ -43,7 +43,7 @@ async def main(start: str, end: str):
 
     analyzer = LLMSentimentAnalyzer() if (settings.openai_api_key or settings.opencode_api_key) else KeywordSentimentAnalyzer()
     broker = PaperBroker()
-    store = PositionStore()
+    store = InMemoryPositionStore()
     logic = TradingLogic(threshold=0.4, min_confidence=0.15)
     db = get_mongo_client()["EonTradingDB"]
     price_monitor = PriceMonitor(bus, store, logic)
