@@ -151,9 +151,16 @@ class FutuBroker(Broker):
                 return
 
             order_id = data["order_id"].iloc[0]
-            logger.info("📤 Futu order placed: %s %s (polling...)", trade.action.upper(), trade.symbol)
+            logger.info("📤 Futu order placed: %s %s", trade.action.upper(), trade.symbol)
+            asyncio.ensure_future(self._poll_order(trade.symbol, trade.action, order_id, trd_env))
+        except Exception as e:
+            await self._publish_fill(trade.symbol, trade.action, False, str(e))
 
-            elapsed = 0.0
+    async def _poll_order(self, symbol: str, action: str, order_id: int, trd_env):
+        from futu import OrderStatus
+        ctx = self._get_ctx()
+        elapsed = 0.0
+        try:
             while elapsed < self.poll_timeout:
                 await asyncio.sleep(self.poll_interval)
                 elapsed += self.poll_interval
@@ -162,15 +169,14 @@ class FutuBroker(Broker):
                     continue
                 status = orders["order_status"].iloc[0]
                 if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
-                    await self._publish_fill(trade.symbol, trade.action, True)
+                    await self._publish_fill(symbol, action, True)
                     return
                 if status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
-                    await self._publish_fill(trade.symbol, trade.action, False, f"status: {status}")
+                    await self._publish_fill(symbol, action, False, f"status: {status}")
                     return
-
-            await self._publish_fill(trade.symbol, trade.action, False, "timeout")
+            await self._publish_fill(symbol, action, False, "timeout")
         except Exception as e:
-            await self._publish_fill(trade.symbol, trade.action, False, str(e))
+            await self._publish_fill(symbol, action, False, str(e))
 
     async def _execute_callback(self, trade: TradeEvent):
         """Place order and wait for Futu's push notification on status change."""
@@ -213,15 +219,20 @@ class FutuBroker(Broker):
                 await self._publish_fill(trade.symbol, trade.action, False, "order rejected")
                 return
 
-            logger.info("📤 Futu order placed: %s %s (waiting for callback...)", trade.action.upper(), trade.symbol)
-
-            try:
-                reason, success = await asyncio.wait_for(result_future, timeout=self.poll_timeout)
-                await self._publish_fill(trade.symbol, trade.action, success, reason)
-            except asyncio.TimeoutError:
-                await self._publish_fill(trade.symbol, trade.action, False, "callback timeout")
+            logger.info("📤 Futu order placed: %s %s", trade.action.upper(), trade.symbol)
+            asyncio.ensure_future(self._wait_callback(trade.symbol, trade.action, result_future))
         except Exception as e:
             await self._publish_fill(trade.symbol, trade.action, False, str(e))
+
+    async def _wait_callback(self, symbol: str, action: str, result_future: asyncio.Future):
+        import asyncio
+        try:
+            reason, success = await asyncio.wait_for(result_future, timeout=self.poll_timeout)
+            await self._publish_fill(symbol, action, success, reason)
+        except asyncio.TimeoutError:
+            await self._publish_fill(symbol, action, False, "callback timeout")
+        except Exception as e:
+            await self._publish_fill(symbol, action, False, str(e))
 
     async def get_positions(self) -> dict[str, int]:
         from futu import TrdEnv
