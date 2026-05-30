@@ -102,8 +102,8 @@ export default function ArchitectureDiagram() {
   NW[NewsWatcher] -- [news] --> AS[AnalyzerService]
   AS -- [sentiment] --> ST[SentimentTrader]
   ST -- [trade] --> TE[TradeExecutor]
-  TE -- [fill] --> ST
-  PM[PriceMonitor] -- [trade] --> TE`} />
+  PM[PriceMonitor] -- [trade] --> TE
+  Broker -- [fill] --> TE`} />
         <div style={{ fontSize: 10, color: "#666", textAlign: "center", marginTop: 8 }}>
           Same channels whether LocalEventBus (in-memory) or RedisStreamBus (persistent message queue).
         </div>
@@ -228,7 +228,7 @@ export default function ArchitectureDiagram() {
             <div style={boxStyle(INTERNAL)}>
               <div style={{ fontWeight: 600 }}>SentimentTrader</div>
               <div style={{ fontSize: 10, color: "#818cf8" }}>TradingLogic ↗</div>
-              <div style={{ fontSize: 9, color: "#888" }}>tracks pending orders</div>
+              <div style={{ fontSize: 9, color: "#888" }}>reads positions from PositionStore</div>
               {internalTag()}
               {pathTag("src/live/sentiment_trader.py")}
             </div>
@@ -257,11 +257,11 @@ export default function ArchitectureDiagram() {
             <span style={arrow}>→</span>
             <div>
               <div style={{ ...boxStyle(INTERNAL), border: "1px solid #22c55e66" }}>
-                <div style={{ fontWeight: 600 }}>SentimentTrader</div>
-                <div style={{ fontSize: 10, color: "#22c55e" }}>✅ filled → persist</div>
-                <div style={{ fontSize: 10, color: "#ef4444" }}>❌ rejected → rollback</div>
+                <div style={{ fontWeight: 600 }}>TradeExecutor</div>
+                <div style={{ fontSize: 10, color: "#22c55e" }}>✅ on success → persist + register</div>
+                <div style={{ fontSize: 10, color: "#ef4444" }}>❌ on reject → log only (no rollback needed)</div>
               </div>
-              <div style={arrowDown}>↓ on fill</div>
+              <div style={arrowDown}>↓ writes on success</div>
               {mongoBox("positions", "open/close position")}
             </div>
           </div>
@@ -283,8 +283,8 @@ export default function ArchitectureDiagram() {
         </div>
 
         <div style={{ fontSize: 10, color: "#666", marginTop: 10 }}>
-          Trader updates in-memory first, marks order as pending, then waits for <code style={{ color: "#818cf8" }}>[fill]</code> from broker.
-          MongoDB is only written after broker confirms. If rejected, in-memory state rolls back.
+          TradeExecutor stores pending trade details in-memory, forwards to broker, and writes to PositionStore + trade_log only after broker confirms via <code style={{ color: "#818cf8" }}>[fill]</code>.
+          SentimentTrader is stateless — it reads positions from PositionStore each cycle and never subscribes to fills.
         </div>
 
         {/* Replay mode */}
@@ -483,16 +483,22 @@ export default function ArchitectureDiagram() {
         {sectionTitle("Ephemeral State (in-memory, resets on restart)", "#c084fc")}
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <div style={boxStyle(STATE)}>
-            <div style={{ fontWeight: 600 }}>Trader holdings</div>
-            <div style={{ fontSize: 10, color: "#888" }}>in-memory dict</div>
+            <div style={{ fontWeight: 600 }}>TradeExecutor pending</div>
+            <div style={{ fontSize: 10, color: "#888" }}>symbol → buy/sell details</div>
             {stateTag()}
-            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>restored from MongoDB on startup</div>
+            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>stored until [fill] arrives</div>
           </div>
           <div style={boxStyle(STATE)}>
-            <div style={{ fontWeight: 600 }}>Pending orders</div>
-            <div style={{ fontSize: 10, color: "#888" }}>symbol → buy/sell</div>
+            <div style={{ fontWeight: 600 }}>SentimentTrader dedup</div>
+            <div style={{ fontSize: 10, color: "#888" }}>symbol+action → last trade time</div>
             {stateTag()}
-            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>awaiting [fill] from broker</div>
+            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>60s TTL, prevents duplicate orders</div>
+          </div>
+          <div style={boxStyle(STATE)}>
+            <div style={{ fontWeight: 600 }}>PriceMonitor entries</div>
+            <div style={{ fontSize: 10, color: "#888" }}>symbol → entry price for SL/TP</div>
+            {stateTag()}
+            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>restored from PositionStore on startup</div>
           </div>
           <div style={boxStyle(STATE)}>
             <div style={{ fontWeight: 600 }}>Source _seen sets</div>
