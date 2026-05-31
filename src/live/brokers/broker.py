@@ -133,11 +133,14 @@ class FutuBroker(Broker):
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         trd_side = TrdSide.BUY if trade.action == "buy" else TrdSide.SELL
         try:
-            ctx = self._get_ctx()
-            ret, data = ctx.place_order(
-                price=trade.price, qty=int(trade.size),
-                code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
-            )
+            ctx = await asyncio.to_thread(self._get_ctx)
+
+            def _place():
+                return ctx.place_order(
+                    price=trade.price, qty=int(trade.size),
+                    code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
+                )
+            ret, data = await asyncio.to_thread(_place)
             if ret != 0:
                 logger.error("Futu order rejected: %s %s", trade.action.upper(), trade.symbol)
                 return None
@@ -150,31 +153,48 @@ class FutuBroker(Broker):
 
     async def check_order(self, order_id: str) -> tuple[str, str | None]:
         from futu import OrderStatus, TrdEnv
-        ctx = self._get_ctx()
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
-        ret, orders = ctx.order_list_query(order_id=int(order_id), trd_env=trd_env)
-        if ret != 0:
+        try:
+            ctx = await asyncio.to_thread(self._get_ctx)
+
+            def _query():
+                return ctx.order_list_query(order_id=int(order_id), trd_env=trd_env)
+            ret, orders = await asyncio.to_thread(_query)
+            if ret != 0:
+                return "pending", None
+            status = orders["order_status"].iloc[0]
+            if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
+                return "filled", None
+            if status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
+                return "cancelled", f"status: {status}"
             return "pending", None
-        status = orders["order_status"].iloc[0]
-        if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
-            return "filled", None
-        if status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
-            return "cancelled", f"status: {status}"
-        return "pending", None
+        except Exception as e:
+            logger.error("Futu check_order error: %s", e)
+            return "pending", None
 
     async def cancel_order(self, order_id: str) -> bool:
         from futu import TrdEnv
-        ctx = self._get_ctx()
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
-        ret, _ = ctx.undo_order(order_id=int(order_id), trd_env=trd_env)
-        return ret == 0
+        try:
+            ctx = await asyncio.to_thread(self._get_ctx)
+
+            def _cancel():
+                return ctx.undo_order(order_id=int(order_id), trd_env=trd_env)
+            ret, _ = await asyncio.to_thread(_cancel)
+            return ret == 0
+        except Exception as e:
+            logger.error("Futu cancel_order error: %s", e)
+            return False
 
     async def get_positions(self) -> dict[str, int]:
         from futu import TrdEnv
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
-            ctx = self._get_ctx()
-            ret, data = ctx.position_list_query(trd_env=trd_env)
+            ctx = await asyncio.to_thread(self._get_ctx)
+
+            def _query():
+                return ctx.position_list_query(trd_env=trd_env)
+            ret, data = await asyncio.to_thread(_query)
             if ret != 0:
                 return {}
             return {row["code"]: int(row["qty"]) for _, row in data.iterrows() if int(row["qty"]) > 0}
@@ -186,8 +206,11 @@ class FutuBroker(Broker):
         from futu import TrdEnv
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
-            ctx = self._get_ctx()
-            ret, data = ctx.accinfo_query(trd_env=trd_env)
+            ctx = await asyncio.to_thread(self._get_ctx)
+
+            def _query():
+                return ctx.accinfo_query(trd_env=trd_env)
+            ret, data = await asyncio.to_thread(_query)
             if ret == 0:
                 return float(data["cash"].iloc[0])
         except Exception as e:

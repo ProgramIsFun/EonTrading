@@ -53,8 +53,8 @@ class ComponentFormatter(logging.Formatter):
         return super().format(record)
 
 
-def setup_logging():
-    """One-call setup: console logging with *component* format + MongoDB handler.
+def setup_logging(log_dir: str = "logs", max_bytes: int = 10 * 1024 * 1024, backup_count: int = 5):
+    """One-call setup: console + rotating file logging + optional MongoDB handler.
 
     Reads ``settings.log_format`` to control the console label:
 
@@ -68,12 +68,26 @@ def setup_logging():
         from src.common.log_handler import setup_logging
         setup_logging()
     """
+    from logging.handlers import RotatingFileHandler
+    from pathlib import Path
     from src.settings import settings
     fmt = ComponentFormatter(log_format=settings.log_format, datefmt="%H:%M:%S")
-    handler = logging.StreamHandler()
-    handler.setFormatter(fmt)
-    logging.getLogger().addHandler(handler)
-    logging.getLogger().setLevel(logging.INFO)
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+
+    # Console handler
+    console = logging.StreamHandler()
+    console.setFormatter(fmt)
+    root.addHandler(console)
+
+    # Rotating file handler
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        Path(log_dir) / "trading.log", maxBytes=max_bytes, backupCount=backup_count,
+    )
+    file_handler.setFormatter(fmt)
+    root.addHandler(file_handler)
+
     maybe_enable_mongo_logging()
 
 

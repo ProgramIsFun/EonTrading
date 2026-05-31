@@ -157,7 +157,10 @@ class PriceMonitor:
         """Continuous monitoring loop for live mode."""
         logger.info("PriceMonitor started, checking every %ds", self.interval)
         while True:
-            await self.check_once()
+            try:
+                await self.check_once()
+            except Exception as exc:
+                logger.exception("PriceMonitor.check_once failed — %s", exc)
             await asyncio.sleep(self.interval)
 
     def register_entry(self, symbol: str, price: float, shares: int):
