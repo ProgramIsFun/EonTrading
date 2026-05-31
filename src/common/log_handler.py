@@ -8,6 +8,75 @@ from datetime import datetime
 from typing import Any
 
 
+class ComponentFilter(logging.Filter):
+    """Adds a *component* attribute to every log record.
+
+    Usage::
+
+        handler.addFilter(ComponentFilter("watcher"))
+    """
+    def __init__(self, component: str):
+        super().__init__()
+        self.component = component
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.component = self.component
+        return True
+
+
+COMPONENT_FORMAT = "%(asctime)s [%(component_or_name)s] %(levelname)s: %(message)s"
+
+
+class ComponentFormatter(logging.Formatter):
+    """Formatter that shows ``[component]``, ``[name]``, or ``[component:name]``.
+
+    Controlled by the ``log_format`` setting (``"component"``, ``"module"``,
+    or ``"both"``).  Falls back to module name when the record has no
+    *component* attribute.
+    """
+    def __init__(self, fmt: str = COMPONENT_FORMAT, datefmt: str | None = None,
+                 style: str = "%", log_format: str = "both"):
+        super().__init__(fmt, datefmt, style)
+        self.log_format = log_format
+
+    def format(self, record: logging.LogRecord) -> str:
+        comp = getattr(record, "component", "")
+        if comp:
+            if self.log_format == "component":
+                record.component_or_name = comp
+            elif self.log_format == "module":
+                record.component_or_name = record.name
+            else:  # "both"
+                record.component_or_name = f"{comp}:{record.name}"
+        else:
+            record.component_or_name = record.name
+        return super().format(record)
+
+
+def setup_logging():
+    """One-call setup: console logging with *component* format + MongoDB handler.
+
+    Reads ``settings.log_format`` to control the console label:
+
+    * ``"both"`` (default) — ``[watcher:src.live.news_watcher]``
+    * ``"component"`` — ``[watcher]``
+    * ``"module"`` — ``[src.live.news_watcher]``
+
+    Intended as a drop-in replacement for the manual ``basicConfig`` +
+    ``maybe_enable_mongo_logging`` pattern used in every runner::
+
+        from src.common.log_handler import setup_logging
+        setup_logging()
+    """
+    from src.settings import settings
+    fmt = ComponentFormatter(log_format=settings.log_format, datefmt="%H:%M:%S")
+    handler = logging.StreamHandler()
+    handler.setFormatter(fmt)
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.INFO)
+    maybe_enable_mongo_logging()
+
+
 def maybe_enable_mongo_logging():
     """Add MongoBatchHandler to root logger if MONGODB_LOG is enabled.
 
@@ -74,6 +143,7 @@ class MongoBatchHandler(logging.Handler):
                     "timestamp": datetime.utcnow(),
                     "level": r.levelname,
                     "logger": r.name,
+                    "component": getattr(r, "component", ""),
                     "message": r.getMessage(),
                     "module": r.module,
                     "func": r.funcName,

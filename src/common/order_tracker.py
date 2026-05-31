@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 
 from src.common.clock import utcnow
+from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.position_store import PositionStore
 from src.data.utils.db_helper import get_mongo_client
@@ -12,6 +13,7 @@ DB = "EonTradingDB"
 COLLECTION = "orders"
 
 logger = logging.getLogger(__name__)
+logger.addFilter(ComponentFilter("order_tracker"))
 
 
 class OrderTracker:

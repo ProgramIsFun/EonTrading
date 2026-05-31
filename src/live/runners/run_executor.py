@@ -2,15 +2,9 @@
 import asyncio
 import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
+from src.common.log_handler import setup_logging
+setup_logging()
 logger = logging.getLogger(__name__)
-
-from src.common.log_handler import maybe_enable_mongo_logging
-maybe_enable_mongo_logging()
 
 from src.common.event_bus import RedisStreamBus
 from src.common.factories import build_broker

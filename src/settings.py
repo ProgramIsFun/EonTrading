@@ -58,6 +58,7 @@ class Settings(BaseSettings):
 
     # Logging
     mongodb_log: bool = True
+    log_format: str = "both"  # "component", "module", or "both"
 
     # API
     cors_origins: str = "http://localhost:5173,http://localhost:8000"

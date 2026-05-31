@@ -4,11 +4,13 @@ import logging
 from datetime import datetime
 
 from src.common.clock import utcnow
+from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_NEWS, CHANNEL_SENTIMENT, NewsEvent
 from src.strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
 
 logger = logging.getLogger(__name__)
+logger.addFilter(ComponentFilter("analyzer"))
 
 MAX_NEWS_AGE_SEC = 600  # skip news older than 10 minutes
 

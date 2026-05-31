@@ -4,12 +4,14 @@ import logging
 from datetime import datetime
 
 from src.common.clock import utcnow
+from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_NEWS
 from src.common.news_poller import NewsPoller
 from src.common.news_store import news_to_doc
 
 logger = logging.getLogger(__name__)
+logger.addFilter(ComponentFilter("watcher"))
 
 
 class NewsWatcher:

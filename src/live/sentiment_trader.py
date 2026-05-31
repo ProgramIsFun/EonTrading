@@ -4,12 +4,14 @@ import logging
 from datetime import datetime, timedelta
 
 from src.common.clock import utcnow
+from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, SentimentEvent, TradeEvent
 from src.common.price import get_price
 from src.common.trading_logic import TradingLogic
 
 logger = logging.getLogger(__name__)
+logger.addFilter(ComponentFilter("trader"))
 
 
 class SentimentTrader:

@@ -12,12 +12,14 @@ from datetime import datetime
 from uuid import uuid4
 
 from src.common.clock import utcnow
+from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
 from src.data.utils.db_helper import get_mongo_client
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
+logger.addFilter(ComponentFilter("executor"))
 
 
 class Broker(ABC):

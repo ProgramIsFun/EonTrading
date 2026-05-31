@@ -10,10 +10,18 @@ mock_client = MagicMock()
 mock_db = MagicMock()
 mock_client.__getitem__.return_value = mock_db
 with patch("src.data.utils.db_helper.get_mongo_client", return_value=mock_client):
-    from src.common.log_handler import MongoBatchHandler as MongoLogHandler
+    from src.common.log_handler import ComponentFilter, MongoBatchHandler as MongoLogHandler
     import src.live.news_trader  # triggers handler registration on root logger
 
 from src.strategies.sentiment import LLMSentimentAnalyzer
+
+# Import component modules so their loggers and filters get registered
+import src.live.news_watcher  # noqa: F811
+import src.live.analyzer_service  # noqa: F811
+import src.live.sentiment_trader  # noqa: F811
+import src.live.brokers.broker  # noqa: F811
+import src.live.price_monitor  # noqa: F811
+import src.common.order_tracker  # noqa: F811
 
 
 class TestMongoLogHandler:
@@ -45,6 +53,59 @@ class TestMongoLogHandler:
         # Record should be in the queue (_not_ flushed yet)
         queued = handler._queue.get_nowait()
         assert queued.getMessage() == "test warning"
+
+
+class TestComponentFilter:
+    def test_filter_adds_attribute(self):
+        """ComponentFilter sets record.component."""
+        f = ComponentFilter("trader")
+        record = logging.LogRecord("x", logging.INFO, "", 0, "msg", (), None)
+        assert f.filter(record)
+        assert record.component == "trader"
+
+    def test_empty_component_when_no_filter(self):
+        """Unfiltered records get empty component in the doc."""
+        handler = MongoLogHandler()
+        record = logging.LogRecord("x", logging.INFO, "", 0, "msg", (), None)
+        handler.emit(record)
+        # Drain and verify the doc shape
+        docs = []
+        for r in [handler._queue.get_nowait()]:
+            doc = {
+                "component": getattr(r, "component", ""),
+            }
+        assert doc["component"] == ""
+
+    def test_flush_includes_component(self):
+        """_flush writes component into the MongoDB document."""
+        handler = MongoLogHandler(get_col=lambda: mock_db["logs"])
+        handler.addFilter(ComponentFilter("watcher"))
+
+        record = logging.LogRecord("x", logging.INFO, "", 0, "msg", (), None)
+        handler.handle(record)  # handle() applies filters before emit()
+        records = [handler._queue.get_nowait()]
+        handler._flush(records)
+
+        inserted = mock_db["logs"].insert_many.call_args[0][0]
+        assert inserted[0]["component"] == "watcher"
+
+    def test_module_logger_has_filter(self):
+        """Each component module's logger has a ComponentFilter attached."""
+        mod_loggers = [
+            ("src.live.news_watcher", "watcher"),
+            ("src.live.analyzer_service", "analyzer"),
+            ("src.live.sentiment_trader", "trader"),
+            ("src.live.brokers.broker", "executor"),
+            ("src.live.price_monitor", "monitor"),
+            ("src.common.order_tracker", "order_tracker"),
+        ]
+        for name, expected in mod_loggers:
+            lg = logging.getLogger(name)
+            found = any(
+                isinstance(f, ComponentFilter) and f.component == expected
+                for f in lg.filters
+            )
+            assert found, f"{name} missing ComponentFilter({expected!r})"
 
 
 class TestLLMSentimentAnalyzerOpencode:

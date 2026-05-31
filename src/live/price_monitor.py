@@ -7,6 +7,7 @@ import asyncio
 import logging
 
 from src.common.clock import utcnow
+from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
 from src.common.position_store import PositionStore
@@ -14,6 +15,7 @@ from src.common.price import get_price
 from src.common.trading_logic import PositionState, TradingLogic
 
 logger = logging.getLogger(__name__)
+logger.addFilter(ComponentFilter("monitor"))
 
 
 class PriceMonitor:
