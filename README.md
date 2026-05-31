@@ -81,7 +81,7 @@ Copy `.env.example` to `.env`. All vars optional — default is PaperBroker + ke
 | Broker | Confirmation | Env |
 |--------|-------------|-----|
 | PaperBroker (default) | Instant (dry run) | — |
-| Futu | Poll or callback | `BROKER=futu` + `futu-api` |
+| Futu | Poll or callback | `BROKER=futu` + `futu-api` ([install guide](docs/futu-opend-install.md)) |
 | IBKR | Callback | `BROKER=ibkr` + `ib_insync` |
 | Alpaca | Poll | `BROKER=alpaca` + keys |
 
