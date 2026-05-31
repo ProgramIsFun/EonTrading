@@ -125,7 +125,7 @@ class FutuBroker(Broker):
     def _get_ctx(self):
         from futu import OpenSecTradeContext, TrdMarket
         if not self._ctx:
-            self._ctx = OpenSecTradeContext(filter_trdmarket=TrdMarket.US | TrdMarket.HK, host=self.host, port=self.port)
+            self._ctx = OpenSecTradeContext(filter_trdmarket=[TrdMarket.US, TrdMarket.HK], host=self.host, port=self.port)
         return self._ctx
 
     async def execute(self, trade: TradeEvent) -> str | None:
