@@ -88,19 +88,19 @@ def trade_collector(lst):
 
 
 # ---------------------------------------------------------------------------
-# 1. Full pipeline: news → analyzer → trader → executor → fill
+# 1. Full pipeline: news → analyzer → trader → executor → pending_orders
 # ---------------------------------------------------------------------------
 
 class TestFullPipelineIntegration:
-    """News goes in one end, fills come out the other."""
+    """News goes in one end, trades come out the other."""
 
     @pytest.mark.asyncio
     async def test_news_flows_through_entire_pipeline(self):
         bus = LocalEventBus()
         await bus.start()
 
-        fills = []
-        await bus.subscribe(CHANNEL_FILL, fill_collector(fills))
+        trades = []
+        await bus.subscribe(CHANNEL_TRADE, trade_collector(trades))
 
         store = mock_position_store()
         analyzer = KeywordSentimentAnalyzer()
@@ -115,15 +115,14 @@ class TestFullPipelineIntegration:
         await trader.start()
         await executor.start()
 
-        # Publish raw news — should flow: news → sentiment → trade → fill
+        # Publish raw news — should flow: news → sentiment → trade
         with patch("src.common.price.get_price", return_value=150.0):
             await bus.publish(CHANNEL_NEWS, BULLISH_APPLE.to_dict())
             await asyncio.sleep(0.3)
 
-        assert len(fills) == 1
-        assert fills[0].symbol == "AAPL"
-        assert fills[0].action == "buy"
-        assert fills[0].success is True
+        assert len(trades) == 1
+        assert trades[0].symbol == "AAPL"
+        assert trades[0].action == "buy"
         broker_pos = await broker.get_positions()
         assert "AAPL" in broker_pos
 
@@ -132,16 +131,25 @@ class TestFullPipelineIntegration:
         bus = LocalEventBus()
         await bus.start()
 
-        fills = []
-        await bus.subscribe(CHANNEL_FILL, fill_collector(fills))
-
+        trades = []
         store = mock_position_store()
+
+        async def on_trade(msg):
+            t = TradeEvent.from_dict(msg)
+            trades.append(t)
+            if t.action == "buy":
+                store.open_position(t.symbol, datetime.utcnow(), t.price)
+            elif t.action == "sell":
+                store.close_position(t.symbol)
+
+        await bus.subscribe(CHANNEL_TRADE, on_trade)
+
         broker = PaperBroker(initial_cash=100000)
         logic = TradingLogic(threshold=0.3, min_confidence=0.2, max_allocation=0.2)
 
         analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer(), max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker, position_store=store)
+        executor = TradeExecutor(bus, broker)
 
         await analyzer_svc.start()
         await trader.start()
@@ -154,24 +162,24 @@ class TestFullPipelineIntegration:
 
             broker_pos = await broker.get_positions()
             assert "TSLA" in broker_pos
-            assert fills[-1].action == "buy"
+            assert trades[-1].action == "buy"
 
-            # Sell on bearish news
+            # Sell on bearish news — trader reads position_store to detect holding
             await bus.publish(CHANNEL_NEWS, BEARISH_TESLA.to_dict())
             await asyncio.sleep(0.3)
 
         broker_pos = await broker.get_positions()
         assert "TSLA" not in broker_pos
-        assert fills[-1].action == "sell"
-        assert len(fills) == 2
+        assert trades[-1].action == "sell"
+        assert len(trades) == 2
 
     @pytest.mark.asyncio
     async def test_multiple_symbols_independent(self):
         bus = LocalEventBus()
         await bus.start()
 
-        fills = []
-        await bus.subscribe(CHANNEL_FILL, fill_collector(fills))
+        trades = []
+        await bus.subscribe(CHANNEL_TRADE, trade_collector(trades))
 
         store = mock_position_store()
         broker = PaperBroker(initial_cash=100000)
@@ -194,9 +202,8 @@ class TestFullPipelineIntegration:
         broker_pos = await broker.get_positions()
         assert "AAPL" in broker_pos
         assert "NVDA" in broker_pos
-        assert len(fills) == 2
-        symbols_filled = {f.symbol for f in fills}
-        assert symbols_filled == {"AAPL", "NVDA"}
+        assert len(trades) == 2
+        assert {t.symbol for t in trades} == {"AAPL", "NVDA"}
 
 
 # ---------------------------------------------------------------------------
@@ -246,8 +253,17 @@ class TestBrokerCashIntegration:
         logic = TradingLogic(threshold=0.3, min_confidence=0.2, max_allocation=0.2)
         store = mock_position_store()
 
+        async def on_trade(msg):
+            t = TradeEvent.from_dict(msg)
+            if t.action == "buy":
+                store.open_position(t.symbol, datetime.utcnow(), t.price)
+            elif t.action == "sell":
+                store.close_position(t.symbol)
+
+        await bus.subscribe(CHANNEL_TRADE, on_trade)
+
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker, position_store=store)
+        executor = TradeExecutor(bus, broker)
         await trader.start()
         await executor.start()
 
@@ -386,8 +402,15 @@ class TestSLTPFullCycle:
         monitor = PriceMonitor(bus, store, logic)
         trader = SentimentTrader(bus, logic=logic, broker=broker,
                                  position_store=store, price_monitor=monitor)
-        executor = TradeExecutor(bus, broker, price_monitor=monitor)
+        executor = TradeExecutor(bus, broker)
 
+        async def on_trade(msg):
+            t = TradeEvent.from_dict(msg)
+            if t.action == "buy":
+                store.open_position(t.symbol, datetime.utcnow(), t.price)
+                monitor.register_entry(t.symbol, t.price, int(t.size))
+
+        await bus.subscribe(CHANNEL_TRADE, on_trade)
         await trader.start()
         await executor.start()
 
@@ -412,6 +435,7 @@ class TestSLTPFullCycle:
 
         assert "AAPL" in sold
         # Executor processed the sell → broker position cleared
+        await asyncio.sleep(0.2)
         broker_pos = await broker.get_positions()
         assert broker_pos.get("AAPL", 0) == 0
 

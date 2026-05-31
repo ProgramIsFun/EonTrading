@@ -73,16 +73,25 @@ class PriceMonitor:
                 sold.append((symbol, tp, state.shares))
         return sold
 
+    def _ensure_entry_price(self, symbol: str):
+        """Fetch entry price from store if not already known."""
+        if symbol in self._states or not self.store:
+            return
+        try:
+            positions = self.store.get_positions_with_prices()
+            if symbol in positions:
+                info = positions[symbol]
+                price = info.get("entryPrice", 0.0)
+                if price > 0:
+                    self._states[symbol] = PositionState(symbol=symbol, shares=0, entry_price=price)
+        except Exception:
+            pass
+
     async def check_once(self, broker=None, as_of: str = None) -> list[str]:
         """Check all positions against SL/TP. Returns list of symbols sold."""
-        # Use _states directly if available (avoids MongoDB call in replay)
-        if self._states:
-            check_symbols = set(self._states.keys())
-        elif self.store:
-            positions = self.store.get_positions()
-            check_symbols = set(positions.keys())
-        else:
-            check_symbols = set()
+        check_symbols = set(self._states.keys())
+        if self.store:
+            check_symbols |= set(self.store.get_positions().keys())
 
         broker_positions = {}
         if broker:
@@ -94,6 +103,8 @@ class PriceMonitor:
         ts = as_of or (utcnow().isoformat() + "Z")
         sold = []
         for symbol in list(check_symbols):
+            if symbol not in self._states:
+                self._ensure_entry_price(symbol)
             if symbol not in self._states:
                 continue  # no entry price — can't check SL/TP
             price = get_price(symbol, as_of=as_of)

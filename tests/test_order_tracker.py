@@ -37,21 +37,21 @@ def _make_doc(overrides=None):
 def mock_mongo():
     mock_pending = MagicMock()
     mock_trades = MagicMock()
-    mock_positions = MagicMock()
+    mock_stores = MagicMock()
 
     with patch("src.common.order_tracker.get_mongo_client") as m:
         mock_db = MagicMock()
         mock_db.__getitem__ = MagicMock(side_effect=lambda name: {
             "pending_orders": mock_pending,
             "trades": mock_trades,
-            "positions": mock_positions,
         }[name])
         m.return_value.__getitem__ = MagicMock(return_value=mock_db)
 
         tracker = _build_tracker()
         tracker._col = mock_pending
+        tracker._position_store = mock_stores
 
-        yield tracker, mock_pending, mock_trades, mock_positions
+        yield tracker, mock_pending, mock_trades, mock_stores
 
 
 def _build_tracker(**kwargs):
@@ -70,7 +70,7 @@ def _build_tracker(**kwargs):
 class TestMarkFilled:
     @pytest.mark.asyncio
     async def test_buy_updates_pending_and_inserts_trade_and_upserts_position(self, mock_mongo):
-        tracker, pending, trades, positions = mock_mongo
+        tracker, pending, trades, store = mock_mongo
         doc = _make_doc({"action": "buy", "price": 150.0, "shares": 10})
         await tracker._mark_filled(doc)
 
@@ -82,20 +82,20 @@ class TestMarkFilled:
         assert insert_args["price"] == 150.0
         assert insert_args["shares"] == 10
 
-        positions.update_one.assert_called_once()
-        upsert_args = positions.update_one.call_args
-        assert upsert_args[0][0] == {"symbol": "AAPL"}
-        assert upsert_args[0][1]["$set"]["entryPrice"] == 150.0
+        store.open_position.assert_called_once()
+        open_args = store.open_position.call_args[0]
+        assert open_args[0] == "AAPL"
+        assert open_args[2] == 150.0  # entry_price
 
     @pytest.mark.asyncio
     async def test_sell_deletes_position(self, mock_mongo):
-        tracker, pending, trades, positions = mock_mongo
+        tracker, pending, trades, store = mock_mongo
         doc = _make_doc({"action": "sell"})
         await tracker._mark_filled(doc)
 
         pending.update_one.assert_called_once()
         trades.insert_one.assert_called_once()
-        positions.delete_one.assert_called_once_with({"symbol": "AAPL"})
+        store.close_position.assert_called_once_with("AAPL")
 
 
 

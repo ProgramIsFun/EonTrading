@@ -1,4 +1,4 @@
-"""Run TradeExecutor as its own process. Subscribes to [trade], broker publishes to [fill]."""
+"""Run TradeExecutor as its own process. Subscribes to [trade], writes pending_orders."""
 import asyncio
 import logging
 
@@ -15,30 +15,24 @@ maybe_enable_mongo_logging()
 from src.common.event_bus import RedisStreamBus
 from src.common.factories import build_broker
 from src.common.heartbeat import Heartbeat
-from src.common.position_store import PositionStore
 from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
-from src.data.utils.db_helper import get_mongo_client
 from src.live.brokers.broker import TradeExecutor
 
 
 async def main():
     broker = build_broker()
 
-    store = PositionStore()
-
     banner("TradeExecutor", {
-        "Subscribes to": "[trade], [fill]",
-        "Publishes to": "PositionStore + trades collection",
+        "Subscribes to": "[trade]",
+        "Publishes to": "pending_orders (OrderTracker polls)",
         "Broker": broker.__class__.__name__,
     })
 
     bus = RedisStreamBus(group="executor")
     await bus.start()
 
-    executor = TradeExecutor(bus, broker,
-                             position_store=store,
-                             trade_log=get_mongo_client()["EonTradingDB"]["trades"])
+    executor = TradeExecutor(bus, broker)
     await executor.start()
     logger.info("🟢 Started. Waiting for [trade] events.")
     Heartbeat.create_background("executor", metadata={"broker": broker.__class__.__name__, "mode": "distributed"})

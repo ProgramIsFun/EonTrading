@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
+from src.common.position_store import PositionStore
 from src.common.trade_store import trade_to_doc
 from src.data.utils.db_helper import get_mongo_client
 
@@ -22,12 +23,14 @@ class OrderTracker:
         check_interval: float = 2.0,
         max_pending_age: float = 300.0,
         collection=None,
+        position_store=None,
     ):
         self.bus = bus
         self.broker = broker
         self.check_interval = check_interval
         self.max_pending_age = max_pending_age
         self._col = collection or get_mongo_client()[DB][COLLECTION]
+        self._position_store = position_store or PositionStore()
         self._ensure_indexes()
 
     def _ensure_indexes(self):
@@ -88,24 +91,17 @@ class OrderTracker:
         price = float(doc["price"])
         shares = int(doc["shares"])
 
-        db = get_mongo_client()[DB]
         ts = now.isoformat() + "Z"
-
         await asyncio.to_thread(
-            db["trades"].insert_one,
+            get_mongo_client()[DB]["trades"].insert_one,
             trade_to_doc(symbol, action, price, shares, "filled", ts),
         )
 
         if action == "buy":
-            await asyncio.to_thread(
-                db["positions"].update_one,
-                {"symbol": symbol},
-                {"$set": {"symbol": symbol, "entryTime": now.isoformat(),
-                          "entryPrice": price, "updatedAt": now}},
-                upsert=True,
-            )
+            entry_time = now.replace(microsecond=0)
+            await asyncio.to_thread(self._position_store.open_position, symbol, entry_time, price)
         elif action == "sell":
-            await asyncio.to_thread(db["positions"].delete_one, {"symbol": symbol})
+            await asyncio.to_thread(self._position_store.close_position, symbol)
 
     async def _cancel(self, doc):
         try:

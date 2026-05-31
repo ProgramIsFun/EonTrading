@@ -2,22 +2,18 @@
 
 To add a new broker:
   1. Subclass Broker
-  2. Implement execute() — submit order, then call self._publish_fill() when confirmed
-  3. Each broker handles confirmation differently:
-     - PaperBroker: instant (dry run)
-     - FutuBroker: polls order status
-     - IBKRBroker: callback via ib_insync
-     - AlpacaBroker: REST polling or websocket
+  2. Implement execute() — submit order, return order_id
+  3. Implement check_order() — OrderTracker polls this to confirm fills
 """
 import asyncio
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from uuid import uuid4
 
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
-from src.common.events import CHANNEL_FILL, CHANNEL_TRADE, FillEvent, TradeEvent
-from src.common.trade_store import trade_to_doc
+from src.common.events import CHANNEL_TRADE, TradeEvent
 from src.data.utils.db_helper import get_mongo_client
 from src.settings import settings
 
@@ -27,27 +23,13 @@ logger = logging.getLogger(__name__)
 class Broker(ABC):
     """Interface for trade execution.
 
-    Brokers publish FillEvent to [fill] channel when the order is confirmed or rejected.
-    Confirmation mechanism varies by broker (polling, callback, websocket, instant).
+    execute() submits the order and returns an order_id.
+    OrderTracker polls check_order() to confirm fills or detect failures.
     """
-
-    def set_bus(self, bus: EventBus):
-        self._bus = bus
-
-    async def _publish_fill(self, symbol: str, action: str, success: bool, reason: str = "", price: float = 0.0, shares: int = 0):
-        fill = FillEvent(
-            symbol=symbol, action=action, success=success,
-            reason=reason or ("filled" if success else "broker rejected"),
-            timestamp=utcnow().isoformat() + "Z",
-            price=price, shares=shares,
-        )
-        await self._bus.publish(CHANNEL_FILL, fill.to_dict())
 
     @abstractmethod
     async def execute(self, trade: TradeEvent) -> str | None:
-        """Submit a trade.
-        Returns order_id if async (tracker will poll), or None if instantly filled.
-        """
+        """Submit a trade. Returns order_id for tracking, or None on failure."""
         pass
 
     async def check_order(self, order_id: str) -> tuple[str, str | None]:
@@ -104,8 +86,10 @@ class PaperBroker(Broker):
             fees = self.cost_model.sell_cost(trade.price, qty) if self.cost_model else 0
             self._cash += proceeds - fees
             logger.info("📝 [DRY RUN] SELL %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, trade.price, fees, trade.reason)
-        await self._publish_fill(trade.symbol, trade.action, True, "filled (dry run)", price=float(trade.price), shares=qty)
-        return None
+        return f"paper-{trade.symbol}-{uuid4().hex[:8]}"
+
+    async def check_order(self, order_id: str) -> tuple[str, str | None]:
+        return ("filled", None)
 
     async def get_positions(self) -> dict[str, int]:
         return dict(self._positions)
@@ -154,13 +138,13 @@ class FutuBroker(Broker):
                 code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
             )
             if ret != 0:
-                await self._publish_fill(trade.symbol, trade.action, False, "order rejected")
+                logger.error("Futu order rejected: %s %s", trade.action.upper(), trade.symbol)
                 return None
             order_id = str(data["order_id"].iloc[0])
             logger.info("📤 Futu order placed: %s %s (id=%s)", trade.action.upper(), trade.symbol, order_id)
             return order_id
         except Exception as e:
-            await self._publish_fill(trade.symbol, trade.action, False, str(e))
+            logger.error("Futu order failed: %s — %s", trade.symbol, e)
             return None
 
     async def check_order(self, order_id: str) -> tuple[str, str | None]:
@@ -233,8 +217,6 @@ class IBKRBroker(Broker):
         self._ib.connect(self.host, self.port, clientId=self.client_id)
 
     async def execute(self, trade: TradeEvent) -> str | None:
-        import asyncio
-
         from ib_insync import MarketOrder, Stock
         try:
             self._connect()
@@ -244,18 +226,35 @@ class IBKRBroker(Broker):
             order = MarketOrder(action, int(trade.size))
             ib_trade = self._ib.placeOrder(contract, order)
 
-            # Wait for fill via callback
+            # Wait for fill confirmation
+            import asyncio
             while not ib_trade.isDone():
                 await asyncio.sleep(0.5)
                 self._ib.sleep(0)
 
-            filled = ib_trade.orderStatus.status == "Filled"
-            await self._publish_fill(trade.symbol, trade.action, filled,
-                                     "filled" if filled else ib_trade.orderStatus.status,
-                                     price=float(trade.price), shares=int(trade.size))
+            order_id = str(ib_trade.order.orderId)
+            return order_id
         except Exception as e:
-            await self._publish_fill(trade.symbol, trade.action, False, str(e))
-        return None
+            logger.error("IBKR order failed: %s — %s", trade.symbol, e)
+            return None
+
+    async def check_order(self, order_id: str) -> tuple[str, str | None]:
+        from ib_insync import Order
+        try:
+            self._connect()
+            trades = self._ib.trades()
+            for t in trades:
+                if str(t.order.orderId) == order_id:
+                    status = t.orderStatus.status
+                    if status == "Filled":
+                        return ("filled", None)
+                    if status in ("Cancelled", "Inactive", "ApiCancelled"):
+                        return ("cancelled", status)
+                    return ("pending", None)
+            return ("pending", None)
+        except Exception as e:
+            logger.error("IBKR check_order error: %s", e)
+            return ("pending", None)
 
     async def get_positions(self) -> dict[str, int]:
         try:
@@ -298,28 +297,29 @@ class AlpacaBroker(Broker):
         self._api = tradeapi.REST(self.api_key, self.secret_key, self.base_url, api_version="v2")
 
     async def execute(self, trade: TradeEvent) -> str | None:
-        import asyncio
         try:
             self._connect()
             order = self._api.submit_order(
                 symbol=trade.symbol, qty=int(trade.size),
                 side=trade.action, type="market", time_in_force="day",
             )
-            # Poll until terminal state
-            for _ in range(30):
-                await asyncio.sleep(2)
-                order = self._api.get_order(order.id)
-                if order.status == "filled":
-                    await self._publish_fill(trade.symbol, trade.action, True, price=float(trade.price), shares=int(trade.size))
-                    return None
-                if order.status in ("canceled", "expired", "rejected"):
-                    await self._publish_fill(trade.symbol, trade.action, False, order.status)
-                    return None
-
-            await self._publish_fill(trade.symbol, trade.action, False, "timeout")
+            return order.id
         except Exception as e:
-            await self._publish_fill(trade.symbol, trade.action, False, str(e))
-        return None
+            logger.error("Alpaca order failed: %s — %s", trade.symbol, e)
+            return None
+
+    async def check_order(self, order_id: str) -> tuple[str, str | None]:
+        try:
+            self._connect()
+            order = self._api.get_order(order_id)
+            if order.status == "filled":
+                return ("filled", None)
+            if order.status in ("canceled", "expired", "rejected"):
+                return ("cancelled", order.status)
+            return ("pending", None)
+        except Exception as e:
+            logger.error("Alpaca check_order error: %s", e)
+            return ("pending", None)
 
     async def get_positions(self) -> dict[str, int]:
         try:
@@ -342,27 +342,18 @@ class AlpacaBroker(Broker):
 # TradeExecutor — routes [trade] events to the configured broker
 # ---------------------------------------------------------------------------
 class TradeExecutor:
-    """Listens to trade events and forwards to broker. Writes fill results to DB.
+    """Listens to trade events, submits orders via broker, writes pending_orders for tracking.
 
-    Safety: in replay mode (clock.is_replay), real brokers are blocked.
-    Only PaperBroker is allowed during backtest replay.
-    Dedup: tracks recent trade keys to prevent duplicate execution (at-least-once delivery).
-    PositionStore writes are done on fill confirmation, not on trade intent —
-    SentimentTrader reads from PositionStore each cycle and never subscribes to [fill].
+    Does NOT track fill results — OrderTracker handles confirmation via polling.
     """
 
-    def __init__(self, bus: EventBus, broker: Broker, position_store=None, trade_log=None, price_monitor=None):
+    def __init__(self, bus: EventBus, broker: Broker):
         self.bus = bus
         self.broker = broker
-        self.broker.set_bus(bus)
         self._seen: set[str] = set()
-        self.position_store = position_store
-        self._trades_col = trade_log
-        self.price_monitor = price_monitor
 
     async def start(self):
         await self.bus.subscribe(CHANNEL_TRADE, self._on_trade)
-        await self.bus.subscribe(CHANNEL_FILL, self._on_fill)
 
     async def _on_trade(self, msg: dict):
         trade = TradeEvent.from_dict(msg)
@@ -371,47 +362,28 @@ class TradeExecutor:
             logger.warning("Duplicate trade ignored: %s %s @ %s", trade.action, trade.symbol, trade.timestamp)
             return
         self._seen.add(dedup_key)
-        # Cap dedup set size
         if len(self._seen) > 10000:
             self._seen = set(list(self._seen)[-5000:])
 
         order_id = await self.broker.execute(trade)
-        if order_id:
-            col = get_mongo_client()["EonTradingDB"]["pending_orders"]
-            doc = {
-                "order_id": order_id,
-                "broker_type": self.broker.__class__.__name__,
-                "symbol": trade.symbol,
-                "action": trade.action,
-                "price": trade.price,
-                "shares": trade.size,
-                "status": "pending",
-                "placed_at": utcnow(),
-                "checked_at": None,
-                "filled_at": None,
-                "cancelled_at": None,
-                "next_check_at": utcnow(),
-                "retry_count": 0,
-                "error": None,
-            }
-            await asyncio.to_thread(col.insert_one, doc)
-
-    async def _on_fill(self, msg: dict):
-        event = FillEvent.from_dict(msg)
-        symbol = event.symbol
-
-        if event.success:
-            logger.info("Fill confirmed: %s %s", event.action.upper(), symbol)
-            if self._trades_col is not None:
-                doc = trade_to_doc(symbol, event.action, event.price, event.shares, event.reason, event.timestamp)
-                await asyncio.to_thread(self._trades_col.insert_one, doc)
-            if self.position_store:
-                if event.action == "buy":
-                    entry_time = datetime.fromisoformat(event.timestamp.rstrip("Z")) if event.timestamp else utcnow()
-                    await asyncio.to_thread(self.position_store.open_position, symbol, entry_time, event.price)
-                elif event.action == "sell":
-                    await asyncio.to_thread(self.position_store.close_position, symbol)
-            if self.price_monitor and event.action == "buy":
-                self.price_monitor.register_entry(symbol, event.price, event.shares)
-        else:
-            logger.warning("Trade rejected: %s %s — %s", event.action.upper(), symbol, event.reason)
+        if order_id is None:
+            logger.error("Order submission failed: %s %s", trade.action.upper(), trade.symbol)
+            return
+        col = get_mongo_client()["EonTradingDB"]["pending_orders"]
+        doc = {
+            "order_id": order_id,
+            "broker_type": self.broker.__class__.__name__,
+            "symbol": trade.symbol,
+            "action": trade.action,
+            "price": trade.price,
+            "shares": trade.size,
+            "status": "pending",
+            "placed_at": utcnow(),
+            "checked_at": None,
+            "filled_at": None,
+            "cancelled_at": None,
+            "next_check_at": utcnow(),
+            "retry_count": 0,
+            "error": None,
+        }
+        await asyncio.to_thread(col.insert_one, doc)

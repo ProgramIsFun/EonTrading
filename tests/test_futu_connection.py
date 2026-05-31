@@ -29,22 +29,20 @@ def fast_broker():
     )
 
 
+async def _poll_until_filled(broker, order_id, timeout=20):
+    """Poll check_order until filled or timeout."""
+    for _ in range(int(timeout / 0.5)):
+        status, _ = await broker.check_order(order_id)
+        if status == "filled":
+            return True
+        await asyncio.sleep(0.5)
+    return False
+
+
 @pytest.mark.asyncio
 async def test_buy_one_share(broker):
-    from src.common.event_bus import LocalEventBus
-    from src.common.events import CHANNEL_FILL, TradeEvent
+    from src.common.events import TradeEvent
     from src.common.clock import utcnow
-
-    bus = LocalEventBus()
-    broker.set_bus(bus)
-    fills = []
-    event = asyncio.Event()
-
-    async def on_fill(msg):
-        fills.append(msg)
-        event.set()
-
-    await bus.subscribe(CHANNEL_FILL, on_fill)
 
     cash_before = await broker.get_cash()
     SYMBOL = "HK.00700"
@@ -52,29 +50,25 @@ async def test_buy_one_share(broker):
         symbol=SYMBOL, action="buy", reason="test buy 1 share",
         timestamp=utcnow().isoformat() + "Z", price=400.0, size=1,
     )
-    await broker.execute(trade)
-    await asyncio.wait_for(event.wait(), timeout=20)
+    order_id = await broker.execute(trade)
+    assert order_id is not None, "Buy execution returned no order_id"
 
-    assert len(fills) == 1
-    assert fills[0]["success"] is True, f"Buy failed: {fills[0].get('reason', '')}"
-    assert fills[0]["symbol"] == SYMBOL
-    assert fills[0]["action"] == "buy"
+    filled = await _poll_until_filled(broker, order_id, timeout=20)
+    assert filled, f"Buy order {order_id} was not filled within timeout"
 
     cash_after = await broker.get_cash()
     assert cash_after < cash_before, "Cash should decrease after buy"
 
     # Revert: sell back
-    fills.clear()
-    event.clear()
     trade = TradeEvent(
         symbol=SYMBOL, action="sell", reason="revert test buy",
         timestamp=utcnow().isoformat() + "Z", price=1.0, size=1,
     )
-    await broker.execute(trade)
-    await asyncio.wait_for(event.wait(), timeout=20)
+    order_id = await broker.execute(trade)
+    assert order_id is not None, "Sell execution returned no order_id"
 
-    assert len(fills) == 1
-    assert fills[0]["success"] is True, f"Sell failed: {fills[0].get('reason', '')}"
+    filled = await _poll_until_filled(broker, order_id, timeout=20)
+    assert filled, f"Sell order {order_id} was not filled within timeout"
 
     cash_final = await broker.get_cash()
     diff = abs(cash_final - cash_before)
@@ -100,8 +94,8 @@ async def test_get_positions(broker):
 
 @pytest.mark.asyncio
 async def test_buy_and_sell(fast_broker):
-    from src.common.event_bus import LocalEventBus
-    from src.common.events import CHANNEL_FILL
+    from src.common.events import TradeEvent
+    from src.common.clock import utcnow
 
     SYMBOL = "HK.00700"
     QTY = 100
@@ -112,35 +106,18 @@ async def test_buy_and_sell(fast_broker):
     positions_before = await fast_broker.get_positions()
     pos_before = positions_before.get(SYMBOL, 0)
 
-    # --- Set up bus + fill collector ---
-    bus = LocalEventBus()
-    fast_broker.set_bus(bus)
-    fills = []
-    event = asyncio.Event()
+    TIMEOUT = fast_broker.poll_timeout + 5.0
 
-    async def on_fill(msg):
-        fills.append(msg)
-        event.set()
-
-    await bus.subscribe(CHANNEL_FILL, on_fill)
-
-    # --- Buy 1 share ---
-    from src.common.events import TradeEvent
-    from src.common.clock import utcnow
-
+    # --- Buy QTY shares ---
     trade = TradeEvent(
         symbol=SYMBOL, action="buy", reason="integration test",
         timestamp=utcnow().isoformat() + "Z", price=PRICE, size=QTY,
     )
-    TIMEOUT = fast_broker.poll_timeout + 5.0
+    order_id = await fast_broker.execute(trade)
+    assert order_id is not None, "Buy execution returned no order_id"
 
-    await fast_broker.execute(trade)
-    await asyncio.wait_for(event.wait(), timeout=TIMEOUT)
-
-    assert len(fills) == 1
-    assert fills[0]["success"] is True, f"Buy failed: {fills[0].get('reason', '')}"
-    assert fills[0]["symbol"] == SYMBOL
-    assert fills[0]["action"] == "buy"
+    filled = await _poll_until_filled(fast_broker, order_id, timeout=TIMEOUT)
+    assert filled, f"Buy order {order_id} was not filled within timeout"
 
     # --- Verify cash decreased / position increased ---
     cash_mid = await fast_broker.get_cash()
@@ -149,10 +126,6 @@ async def test_buy_and_sell(fast_broker):
 
     assert cash_mid < cash_before, "Cash should decrease after buy"
     assert pos_mid == pos_before + QTY, f"Position should increase by {QTY}"
-
-    # --- Reset fill collector ---
-    fills.clear()
-    event.clear()
 
     # --- Verify deal history (only in real trading — simulate mode skips) ---
     from futu import TrdEnv
@@ -168,13 +141,11 @@ async def test_buy_and_sell(fast_broker):
         symbol=SYMBOL, action="sell", reason="integration test revert",
         timestamp=utcnow().isoformat() + "Z", price=1.0, size=QTY,
     )
-    await fast_broker.execute(trade)
-    await asyncio.wait_for(event.wait(), timeout=TIMEOUT)
+    order_id = await fast_broker.execute(trade)
+    assert order_id is not None, "Sell execution returned no order_id"
 
-    assert len(fills) == 1
-    assert fills[0]["success"] is True, f"Sell failed: {fills[0].get('reason', '')}"
-    assert fills[0]["symbol"] == SYMBOL
-    assert fills[0]["action"] == "sell"
+    filled = await _poll_until_filled(fast_broker, order_id, timeout=TIMEOUT)
+    assert filled, f"Sell order {order_id} was not filled within timeout"
 
     # --- Verify deal history shows the sell (if supported) ---
     ret, deals = ctx.deal_list_query(trd_env=TrdEnv.SIMULATE)

@@ -103,7 +103,7 @@ class TestFutuBroker:
             mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["12345"]}))
 
             broker = FutuBroker()
-            broker.set_bus(event_bus)
+
             broker._ctx = mock_ctx
 
             order_id = await broker.execute(_make_trade())
@@ -112,7 +112,7 @@ class TestFutuBroker:
             _remove_futu_mock()
 
     @pytest.mark.asyncio
-    async def test_execute_rejected_publishes_fill(self, event_bus):
+    async def test_execute_rejected_returns_none(self, event_bus):
         _install_futu_mock()
         try:
             from src.live.brokers.broker import FutuBroker
@@ -120,24 +120,16 @@ class TestFutuBroker:
             mock_ctx = MagicMock()
             mock_ctx.place_order.return_value = (1, None)
 
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
             broker = FutuBroker()
-            broker.set_bus(event_bus)
             broker._ctx = mock_ctx
 
             order_id = await broker.execute(_make_trade())
             assert order_id is None
-            fills = await get()
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-            assert "rejected" in fills[0]["reason"]
         finally:
             _remove_futu_mock()
 
     @pytest.mark.asyncio
-    async def test_execute_exception_publishes_fill(self, event_bus):
+    async def test_execute_exception_returns_none(self, event_bus):
         _install_futu_mock()
         try:
             from src.live.brokers.broker import FutuBroker
@@ -145,19 +137,11 @@ class TestFutuBroker:
             mock_ctx = MagicMock()
             mock_ctx.place_order.side_effect = RuntimeError("connection lost")
 
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
             broker = FutuBroker()
-            broker.set_bus(event_bus)
             broker._ctx = mock_ctx
 
             order_id = await broker.execute(_make_trade())
             assert order_id is None
-            fills = await get()
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-            assert "connection lost" in fills[0]["reason"]
         finally:
             _remove_futu_mock()
 
@@ -323,66 +307,76 @@ def _remove_ibkr_mock():
 class TestIBKRBroker:
 
     @pytest.mark.asyncio
-    async def test_buy_fills_successfully(self, event_bus):
+    async def test_buy_returns_order_id(self, event_bus):
         _install_ibkr_mock()
         try:
             from src.live.brokers.broker import IBKRBroker
 
+            mock_order = MagicMock()
+            mock_order.orderId = 12345
+
             mock_ib_trade = MagicMock()
             mock_ib_trade.isDone.return_value = True
-            mock_ib_trade.orderStatus.status = "Filled"
+            mock_ib_trade.order = mock_order
 
             mock_ib = MagicMock()
             mock_ib.isConnected.return_value = True
             mock_ib.placeOrder.return_value = mock_ib_trade
 
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
             broker = IBKRBroker()
             broker._ib = mock_ib
-            broker.set_bus(event_bus)
 
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is True
-            assert fills[0]["symbol"] == "AAPL"
+            order_id = await broker.execute(_make_trade())
+            assert order_id == "12345"
         finally:
             _remove_ibkr_mock()
 
     @pytest.mark.asyncio
-    async def test_order_not_filled(self, event_bus):
+    async def test_check_order_filled(self, event_bus):
         _install_ibkr_mock()
         try:
             from src.live.brokers.broker import IBKRBroker
 
-            mock_ib_trade = MagicMock()
-            mock_ib_trade.isDone.return_value = True
-            mock_ib_trade.orderStatus.status = "Cancelled"
+            mock_trade = MagicMock()
+            mock_trade.order.orderId = 12345
+            mock_trade.orderStatus.status = "Filled"
 
             mock_ib = MagicMock()
             mock_ib.isConnected.return_value = True
-            mock_ib.placeOrder.return_value = mock_ib_trade
-
-            sub, get = await _collect_fills(event_bus)
-            await sub()
+            mock_ib.trades.return_value = [mock_trade]
 
             broker = IBKRBroker()
             broker._ib = mock_ib
-            broker.set_bus(event_bus)
 
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
+            status, reason = await broker.check_order("12345")
+            assert status == "filled"
         finally:
             _remove_ibkr_mock()
 
     @pytest.mark.asyncio
-    async def test_exception_during_execution(self, event_bus):
+    async def test_check_order_cancelled(self, event_bus):
+        _install_ibkr_mock()
+        try:
+            from src.live.brokers.broker import IBKRBroker
+
+            mock_trade = MagicMock()
+            mock_trade.order.orderId = 12345
+            mock_trade.orderStatus.status = "Cancelled"
+
+            mock_ib = MagicMock()
+            mock_ib.isConnected.return_value = True
+            mock_ib.trades.return_value = [mock_trade]
+
+            broker = IBKRBroker()
+            broker._ib = mock_ib
+
+            status, reason = await broker.check_order("12345")
+            assert status == "cancelled"
+        finally:
+            _remove_ibkr_mock()
+
+    @pytest.mark.asyncio
+    async def test_execute_exception_returns_none(self, event_bus):
         _install_ibkr_mock()
         try:
             from src.live.brokers.broker import IBKRBroker
@@ -390,20 +384,12 @@ class TestIBKRBroker:
             mock_ib = MagicMock()
             mock_ib.isConnected.side_effect = ConnectionError("TWS not running")
 
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
             broker = IBKRBroker()
             broker._ib = mock_ib
-            broker.set_bus(event_bus)
             broker._connect = MagicMock(side_effect=ConnectionError("TWS not running"))
 
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-            assert "TWS not running" in fills[0]["reason"]
+            order_id = await broker.execute(_make_trade())
+            assert order_id is None
         finally:
             _remove_ibkr_mock()
 
@@ -513,102 +499,67 @@ def _remove_alpaca_mock():
 class TestAlpacaBroker:
 
     @pytest.mark.asyncio
-    async def test_buy_fills_successfully(self, event_bus):
+    async def test_buy_returns_order_id(self, event_bus):
         _install_alpaca_mock()
         try:
             from src.live.brokers.broker import AlpacaBroker
 
             mock_order = MagicMock()
             mock_order.id = "order-123"
+
+            mock_api = MagicMock()
+            mock_api.submit_order.return_value = mock_order
+
+            broker = AlpacaBroker(api_key="test", secret_key="test", paper=True)
+            broker._api = mock_api
+
+            order_id = await broker.execute(_make_trade())
+            assert order_id == "order-123"
+        finally:
+            _remove_alpaca_mock()
+
+    @pytest.mark.asyncio
+    async def test_check_order_filled(self, event_bus):
+        _install_alpaca_mock()
+        try:
+            from src.live.brokers.broker import AlpacaBroker
+
+            mock_order = MagicMock()
             mock_order.status = "filled"
 
             mock_api = MagicMock()
-            mock_api.submit_order.return_value = mock_order
             mock_api.get_order.return_value = mock_order
-
-            sub, get = await _collect_fills(event_bus)
-            await sub()
 
             broker = AlpacaBroker(api_key="test", secret_key="test", paper=True)
             broker._api = mock_api
-            broker.set_bus(event_bus)
 
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is True
-            assert fills[0]["symbol"] == "AAPL"
+            status, reason = await broker.check_order("order-123")
+            assert status == "filled"
         finally:
             _remove_alpaca_mock()
 
     @pytest.mark.asyncio
-    async def test_order_cancelled(self, event_bus):
+    async def test_check_order_cancelled(self, event_bus):
         _install_alpaca_mock()
         try:
             from src.live.brokers.broker import AlpacaBroker
 
             mock_order = MagicMock()
-            mock_order.id = "order-123"
             mock_order.status = "canceled"
 
             mock_api = MagicMock()
-            mock_api.submit_order.return_value = mock_order
             mock_api.get_order.return_value = mock_order
-
-            sub, get = await _collect_fills(event_bus)
-            await sub()
 
             broker = AlpacaBroker(api_key="test", secret_key="test", paper=True)
             broker._api = mock_api
-            broker.set_bus(event_bus)
 
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
+            status, reason = await broker.check_order("order-123")
+            assert status == "cancelled"
         finally:
             _remove_alpaca_mock()
 
     @pytest.mark.asyncio
-    async def test_timeout(self, event_bus):
-        _install_alpaca_mock()
-        try:
-            from unittest.mock import patch
-            # AlpacaBroker.execute polls 30× with await asyncio.sleep(2) to not spam Alpaca's API.
-            # In this test all calls are mocked, so the sleep is just 60s of dead time.
-            patcher = patch("asyncio.sleep", return_value=None)
-            patcher.start()
-            from src.live.brokers.broker import AlpacaBroker
-
-            mock_order = MagicMock()
-            mock_order.id = "order-123"
-            mock_order.status = "new"
-
-            mock_api = MagicMock()
-            mock_api.submit_order.return_value = mock_order
-            mock_api.get_order.return_value = mock_order
-
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
-            broker = AlpacaBroker(api_key="test", secret_key="test", paper=True)
-            broker._api = mock_api
-            broker.set_bus(event_bus)
-
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-            assert fills[0]["reason"] == "timeout"
-        finally:
-            patcher.stop()
-            _remove_alpaca_mock()
-
-    @pytest.mark.asyncio
-    async def test_exception_during_execution(self, event_bus):
+    async def test_execute_exception_returns_none(self, event_bus):
         _install_alpaca_mock()
         try:
             from src.live.brokers.broker import AlpacaBroker
@@ -616,19 +567,11 @@ class TestAlpacaBroker:
             mock_api = MagicMock()
             mock_api.submit_order.side_effect = RuntimeError("API rate limited")
 
-            sub, get = await _collect_fills(event_bus)
-            await sub()
-
             broker = AlpacaBroker(api_key="test", secret_key="test", paper=True)
             broker._api = mock_api
-            broker.set_bus(event_bus)
 
-            await broker.execute(_make_trade())
-            fills = await get()
-
-            assert len(fills) == 1
-            assert fills[0]["success"] is False
-            assert "rate limited" in fills[0]["reason"]
+            order_id = await broker.execute(_make_trade())
+            assert order_id is None
         finally:
             _remove_alpaca_mock()
 

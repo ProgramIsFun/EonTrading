@@ -11,7 +11,6 @@ from unittest.mock import MagicMock
 from src.common.clock import utcnow
 from src.common.event_bus import LocalEventBus
 from src.common.events import (
-    CHANNEL_FILL,
     CHANNEL_NEWS,
     CHANNEL_SENTIMENT,
     CHANNEL_TRADE,
@@ -228,9 +227,9 @@ class RejectingBroker(Broker):
     def __init__(self):
         self.trades: list[TradeEvent] = []
 
-    async def execute(self, trade: TradeEvent):
+    async def execute(self, trade: TradeEvent) -> str | None:
         self.trades.append(trade)
-        await self._publish_fill(trade.symbol, trade.action, False, "rejected by broker")
+        return None
 
     async def get_positions(self) -> dict[str, int]:
         return {}
@@ -253,9 +252,19 @@ class TestFillEvent:
         assert fill.reason == "timeout"
 
 
-# --- Fill confirmation & rollback tests ---
+# --- Trade confirmation & pending_orders tests ---
 
-class TestFillConfirmation:
+@pytest.fixture
+def _mock_pending():
+    with patch("src.live.brokers.broker.get_mongo_client") as m:
+        mock_db = MagicMock()
+        mock_pending = MagicMock()
+        mock_db.__getitem__.return_value = mock_pending
+        m.return_value.__getitem__.return_value = mock_db
+        yield mock_pending
+
+
+class TestTradeExecution:
     @pytest.fixture
     def setup_with_mock(self):
         bus = LocalEventBus()
@@ -273,12 +282,9 @@ class TestFillConfirmation:
         return bus, trader, executor, broker
 
     @pytest.mark.asyncio
-    async def test_buy_confirmed_persists_to_store(self, setup_with_mock):
-        """On confirmed fill, executor writes to position store."""
+    async def test_buy_writes_pending_order(self, setup_with_mock, _mock_pending):
+        """Executor writes pending_order to MongoDB when broker confirms."""
         bus, trader, executor, broker = setup_with_mock
-        mock_store = MagicMock()
-        mock_store.get_positions.return_value = {}
-        executor.position_store = mock_store
         await bus.start()
         await trader.start()
         await executor.start()
@@ -291,16 +297,12 @@ class TestFillConfirmation:
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
         await asyncio.sleep(0.2)
 
-        mock_store.open_position.assert_called_once()
-        assert mock_store.open_position.call_args[0][0] == "AAPL"
+        _mock_pending.insert_one.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_buy_rejected_does_not_persist(self, setup_with_rejecting):
-        """On rejected fill, executor does NOT write to position store."""
+    async def test_buy_rejected_skips_pending_order(self, setup_with_rejecting, _mock_pending):
+        """Executor skips pending_order when broker rejects."""
         bus, trader, executor, broker = setup_with_rejecting
-        mock_store = MagicMock()
-        mock_store.get_positions.return_value = {}
-        executor.position_store = mock_store
         await bus.start()
         await trader.start()
         await executor.start()
@@ -313,8 +315,7 @@ class TestFillConfirmation:
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
         await asyncio.sleep(0.2)
 
-        mock_store.open_position.assert_not_called()
-        mock_store.close_position.assert_not_called()
+        _mock_pending.insert_one.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ttl_dedup_blocks_duplicate_orders(self, setup_with_mock):
@@ -340,29 +341,6 @@ class TestFillConfirmation:
 
         # Still only one trade published (TTL dedup, not pending dict)
         assert len(trades_published) == 1
-
-    @pytest.mark.asyncio
-    async def test_sell_confirmed_removes_position(self, setup_with_mock):
-        """On sell fill, executor closes position in store."""
-        bus, trader, executor, broker = setup_with_mock
-        mock_store = MagicMock()
-        mock_store.get_positions.return_value = {"TSLA": utcnow()}
-        trader.position_store = mock_store
-        executor.position_store = mock_store
-        await bus.start()
-        await trader.start()
-        await executor.start()
-
-        sentiment = SentimentEvent(
-            source="test", headline="Tesla crashes", timestamp="2026-04-22T10:00:00Z",
-            analyzed_at="2026-04-22T10:00:01Z", symbols=["TSLA"],
-            sentiment=-0.8, confidence=0.9,
-        )
-        await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
-        await asyncio.sleep(0.2)
-
-        mock_store.close_position.assert_called_once()
-        assert mock_store.close_position.call_args[0][0] == "TSLA"
 
 
 # --- Position store integration with trader ---

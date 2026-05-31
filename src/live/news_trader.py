@@ -35,7 +35,6 @@ async def main_single():
     from src.common.startup import banner, env_status
     from src.common.trading_logic import TradingLogic
     from src.data.news.loader import build_news_sources
-    from src.data.utils.db_helper import get_mongo_client
     from src.live.analyzer_service import AnalyzerService
     from src.live.brokers.broker import TradeExecutor
     from src.live.news_watcher import NewsWatcher
@@ -82,14 +81,10 @@ async def main_single():
                           publish=settings.publish_pipeline)
     from src.common.order_tracker import OrderTracker
 
-    if broker.__class__.__name__ not in ("PaperBroker", "MockBroker"):
-        tracker = OrderTracker(bus, broker)
-        asyncio.create_task(tracker.run())
+    tracker = OrderTracker(bus, broker)
+    asyncio.create_task(tracker.run())
 
-    executor = TradeExecutor(bus, broker,
-                             position_store=store,
-                             trade_log=get_mongo_client()["EonTradingDB"]["trades"],
-                             price_monitor=monitor)
+    executor = TradeExecutor(bus, broker)
 
     await analyzer_svc.start()
     await trader.start()
@@ -106,6 +101,8 @@ async def main_single():
     await reconcile(broker, store)
 
     # Graceful shutdown
+    # ⚠️  Must be started AFTER all subscribe() calls (e.g., analyzer_svc.start())
+    #     otherwise [news] messages are published before any handler is registered.
     watcher_task = asyncio.create_task(watcher.run())
 
     await create_shutdown_event().wait()

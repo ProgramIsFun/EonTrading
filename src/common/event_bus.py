@@ -41,7 +41,11 @@ class LocalEventBus(EventBus):
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
 
     async def publish(self, channel: str, message: dict):
-        for handler in self._subscribers.get(channel, []):
+        handlers = self._subscribers.get(channel, [])
+        if not handlers:
+            logger.warning("No subscribers for [%s] — message lost", channel)
+            return
+        for handler in handlers:
             task = asyncio.create_task(handler(message))
             task.add_done_callback(_log_task_exception)
 

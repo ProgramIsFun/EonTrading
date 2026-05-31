@@ -279,7 +279,7 @@ async def _run_live_backtest(job_id: str, params: dict):
 
     from src.common.costs import CRYPTO, HK_STOCKS, US_STOCKS, ZERO
     from src.common.event_bus import LocalEventBus
-    from src.common.events import CHANNEL_FILL, CHANNEL_NEWS, NewsEvent
+    from src.common.events import CHANNEL_NEWS, CHANNEL_TRADE, NewsEvent
     from src.common.price import get_price
     from src.common.trading_logic import TradingLogic
     from src.live.analyzer_service import AnalyzerService
@@ -332,16 +332,16 @@ async def _run_live_backtest(job_id: str, params: dict):
         analyzer_svc = AnalyzerService(bus, analyzer=anlzr, get_positions=lambda: trader.holdings)
         executor = TradeExecutor(bus, broker)
 
-        fills = []
+        trades = []
 
-        async def on_fill(msg):
-            fills.append(msg)
+        async def on_trade(msg):
+            trades.append(msg)
             action = msg.get("action", "")
             symbol = msg.get("symbol", "")
-            status = "✅" if msg.get("success") else "❌"
+            status = "✅"
             job["log"].append(f"{status} {action.upper()} {symbol} — {msg.get('reason', '')}")
 
-        await bus.subscribe(CHANNEL_FILL, on_fill)
+        await bus.subscribe(CHANNEL_TRADE, on_trade)
         await analyzer_svc.start()
         await trader.start()
         await executor.start()
@@ -388,14 +388,14 @@ async def _run_live_backtest(job_id: str, params: dict):
         await asyncio.sleep(0.3)
         await bus.stop()
 
-        trades = []
-        for f in fills:
-            trades.append({
-                "symbol": f.get("symbol", ""),
-                "action": f.get("action", ""),
-                "date": f.get("timestamp", ""),
+        fill_trades = []
+        for t in trades:
+            fill_trades.append({
+                "symbol": t.get("symbol", ""),
+                "action": t.get("action", ""),
+                "date": t.get("timestamp", ""),
                 "price": 0, "shares": 0, "sentiment": 0, "pnl": 0,
-                "headline": f.get("reason", ""),
+                "headline": t.get("reason", ""),
             })
 
         final_cash = await broker.get_cash()
@@ -427,10 +427,10 @@ async def _run_live_backtest(job_id: str, params: dict):
             "final_value": round(final_value, 2),
             "total_return_pct": round(total_return, 2),
             "max_drawdown_pct": round(max_dd, 2),
-            "total_trades": len(fills),
+            "total_trades": len(trades),
             "win_rate": 0,
             "equity_curve": equity,
-            "trades": trades,
+            "trades": fill_trades,
             "open_positions": open_positions,
             "cash": round(final_cash, 2),
         }
