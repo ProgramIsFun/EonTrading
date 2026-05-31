@@ -11,7 +11,7 @@ import pytest
 
 def _get_function_source(module_path: str, func_name: str) -> str:
     """Read a module file and return the source of a function."""
-    with open(module_path) as f:
+    with open(module_path, encoding="utf-8") as f:
         return f.read()
 
 
