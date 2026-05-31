@@ -13,23 +13,24 @@ def get_mongo_client():
     if _client is not None:
         return _client
 
-    # Load environment variables
-    MONGODB_URI = os.getenv('MONGODB_URI')
-    MONGODB_USER = os.getenv('MONGODB_USER')
-    MONGODB_PASS = os.getenv('MONGODB_PASS')
-    MONGODB_CLUSTERNAME = os.getenv('MONGODB_CLUSTERNAME')
+    MONGODB_URI = os.getenv('MONGODB_URI', '')
+    MONGODB_USER = os.getenv('MONGODB_USER', '')
+    MONGODB_PASS = os.getenv('MONGODB_PASS', '')
 
-    # Validate environment variables
-    if not all([MONGODB_URI, MONGODB_USER, MONGODB_PASS, MONGODB_CLUSTERNAME]):
-        raise ValueError("Missing one or more required MongoDB environment variables.")
+    if MONGODB_URI and not MONGODB_URI.startswith("mongodb://") and not MONGODB_URI.startswith("mongodb+srv://"):
+        # Atlas SRV mode — requires cluster name for appName
+        MONGODB_CLUSTERNAME = os.getenv('MONGODB_CLUSTERNAME', '')
+        if not all([MONGODB_USER, MONGODB_PASS, MONGODB_CLUSTERNAME]):
+            raise ValueError("MONGODB_USER, MONGODB_PASS, and MONGODB_CLUSTERNAME are required for Atlas SRV.")
+        uri = f"mongodb+srv://{quote_plus(MONGODB_USER)}:{quote_plus(MONGODB_PASS)}@{MONGODB_URI}/?appName={MONGODB_CLUSTERNAME}"
+    elif MONGODB_URI:
+        # Full URI mode (local or Atlas) — use as-is
+        uri = MONGODB_URI
+    else:
+        raise ValueError("Set MONGODB_URI (or MONGODB_URI + USER + PASS + CLUSTERNAME for Atlas SRV).")
 
-    # URL-encode user/pass to handle special characters (@, :, /, %, etc.)
-    uri = f"mongodb+srv://{quote_plus(MONGODB_USER)}:{quote_plus(MONGODB_PASS)}@{MONGODB_URI}/?appName={MONGODB_CLUSTERNAME}"
-
-    # Create a new client
     client = MongoClient(uri, server_api=ServerApi('1'))
 
-    # Send a ping to confirm a successful connection
     try:
         client.admin.command('ping')
         logger.info("Successfully connected to MongoDB")

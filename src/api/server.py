@@ -9,9 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 
 from src.backtest.portfolio_backtest import run_portfolio_backtest
-from src.common.clock import utcnow
 from src.common.costs import US_STOCKS
 from src.common.position_store import InMemoryPositionStore
+from src.common.reconcile import reconcile
 from src.data.utils.db_helper import get_mongo_client
 from src.settings import settings
 
@@ -83,7 +83,6 @@ def queue_status():
 @app.get("/api/reconcile")
 async def reconcile_positions():
     """Compare system positions vs broker. Requires BROKER env var."""
-    import os
     try:
         from src.common.factories import build_broker
         broker = build_broker()
@@ -275,7 +274,6 @@ def _cleanup_stale_jobs():
 
 async def _run_live_backtest(job_id: str, params: dict):
     """Background task: runs the live pipeline backtest."""
-    import os
     from datetime import timedelta
 
     from src.common.costs import CRYPTO, HK_STOCKS, US_STOCKS, ZERO

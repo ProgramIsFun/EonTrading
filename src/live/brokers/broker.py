@@ -8,7 +8,6 @@ To add a new broker:
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
 from uuid import uuid4
 
 from src.common.clock import utcnow

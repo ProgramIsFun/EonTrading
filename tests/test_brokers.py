@@ -2,7 +2,6 @@
 
 All external dependencies are mocked — no real connections needed.
 """
-import asyncio
 import sys
 from unittest.mock import MagicMock
 

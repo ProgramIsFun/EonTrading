@@ -1,6 +1,6 @@
 """Tests for OrderTracker — mocked MongoDB, no real connection needed."""
 import asyncio
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

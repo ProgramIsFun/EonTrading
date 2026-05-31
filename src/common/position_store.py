@@ -1,4 +1,5 @@
 """Position state backed by MongoDB — works in both single-process and distributed mode."""
+import logging
 from datetime import datetime
 
 from src.common.clock import utcnow
@@ -12,7 +13,12 @@ class PositionStore:
     """Read/write positions via MongoDB. One document per symbol."""
 
     def __init__(self, collection: str = "positions"):
-        self._col = get_mongo_client()[DB][collection]
+        try:
+            self._col = get_mongo_client()[DB][collection]
+        except Exception:
+            logger = logging.getLogger(__name__)
+            logger.exception("Failed to connect to MongoDB for PositionStore")
+            raise
 
     def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None):
         """Sync holdings to MongoDB — upsert active, remove closed."""

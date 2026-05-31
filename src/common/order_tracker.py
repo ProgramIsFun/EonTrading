@@ -30,7 +30,11 @@ class OrderTracker:
         self.broker = broker
         self.check_interval = check_interval
         self.max_pending_age = max_pending_age
-        self._col = collection or get_mongo_client()[DB][COLLECTION]
+        try:
+            self._col = collection or get_mongo_client()[DB][COLLECTION]
+        except Exception:
+            logger.exception("Failed to connect to MongoDB for OrderTracker")
+            raise
         self._position_store = position_store or PositionStore()
         self._ensure_indexes()
 
