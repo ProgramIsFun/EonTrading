@@ -430,7 +430,7 @@ class TestSLTPFullCycle:
         # Now SL triggers at $140 (>5% drop from $150)
         with patch("src.common.price.get_price", return_value=140.0), \
              patch("src.live.price_monitor.get_price", return_value=140.0):
-            sold = await monitor.check_once(broker, as_of="2026-04-22T14:00:00Z")
+            sold = await monitor.check_once(as_of="2026-04-22T14:00:00Z")
             await asyncio.sleep(0.3)
 
         assert "AAPL" in sold

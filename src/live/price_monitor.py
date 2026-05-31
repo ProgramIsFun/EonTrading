@@ -89,7 +89,7 @@ class PriceMonitor:
         except Exception:
             pass
 
-    async def check_once(self, broker=None, as_of: str = None) -> list[str]:
+    async def check_once(self, as_of: str = None) -> list[str]:
         """Check all positions against SL/TP. Returns list of symbols sold."""
         check_symbols = set(self._states.keys())
         all_positions: dict[str, dict] = {}
@@ -151,11 +151,11 @@ class PriceMonitor:
 
         return sold
 
-    async def run(self, broker=None):
+    async def run(self):
         """Continuous monitoring loop for live mode."""
         logger.info("PriceMonitor started, checking every %ds", self.interval)
         while True:
-            await self.check_once(broker)
+            await self.check_once()
             await asyncio.sleep(self.interval)
 
     def register_entry(self, symbol: str, price: float, shares: int):

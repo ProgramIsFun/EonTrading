@@ -111,7 +111,7 @@ async def main(start: str, end: str):
         except Exception:
             pass
         if price_monitor:
-            await price_monitor.check_once(broker, as_of=close_ts)
+            await price_monitor.check_once(as_of=close_ts)
 
         if day_count % 20 == 0:
             pct = (current - start_dt).total_seconds() / max((end_dt - start_dt).total_seconds(), 1) * 100

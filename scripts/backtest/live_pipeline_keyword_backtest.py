@@ -75,7 +75,7 @@ async def main():
         if prev_date and monitor._states:
             check_time = prev_date + timedelta(hours=SL_CHECK_INTERVAL)
             while check_time < curr:
-                sold = await monitor.check_once(broker, as_of=check_time.isoformat())
+                sold = await monitor.check_once(as_of=check_time.isoformat())
                 if sold:
                     print(f"    ⏰ SL/TP check @ {check_time.strftime('%Y-%m-%d %H:%M')}")
                     await asyncio.sleep(0.3)
@@ -84,7 +84,7 @@ async def main():
         prev_date = curr
 
         # Check SL/TP at this timestamp before processing news
-        sold = await monitor.check_once(broker, as_of=doc["date"])
+        sold = await monitor.check_once(as_of=doc["date"])
         if sold:
             await asyncio.sleep(0.3)
 

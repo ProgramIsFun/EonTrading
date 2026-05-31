@@ -89,7 +89,7 @@ async def main_single():
     await analyzer_svc.start()
     await trader.start()
     await executor.start()
-    monitor_task = asyncio.create_task(monitor.run(broker))
+    monitor_task = asyncio.create_task(monitor.run())
 
     for name in ["watcher", "analyzer", "trader", "executor", "monitor"]:
         Heartbeat.create_background(name, metadata={"mode": "single"})

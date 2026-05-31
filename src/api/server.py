@@ -360,14 +360,14 @@ async def _run_live_backtest(job_id: str, params: dict):
             if prev_date and monitor._states:
                 check_time = prev_date + timedelta(hours=sl_check_hours)
                 while check_time < curr:
-                    sold = await monitor.check_once(broker, as_of=check_time.isoformat())
+                    sold = await monitor.check_once(as_of=check_time.isoformat())
                     await asyncio.sleep(0.05)
                     if sold:
                         job["log"].append(f"⏰ SL/TP check @ {check_time.strftime('%Y-%m-%d %H:%M')} — sold {', '.join(sold)}")
                     check_time += timedelta(hours=sl_check_hours)
 
             prev_date = curr
-            await monitor.check_once(broker, as_of=doc["date"])
+            await monitor.check_once(as_of=doc["date"])
             await asyncio.sleep(0.05)
 
             job["log"].append(f"📅 {doc['date'][:16]} — {doc['headline'][:70]}")

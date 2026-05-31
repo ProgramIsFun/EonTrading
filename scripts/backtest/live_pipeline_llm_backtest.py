@@ -157,7 +157,7 @@ async def main():
         prev_date = curr
 
         # Check SL/TP at event time
-        sold = await monitor.check_once(broker, as_of=doc["date"])
+        sold = await monitor.check_once(as_of=doc["date"])
         if sold:
             await asyncio.sleep(0.05)
 
