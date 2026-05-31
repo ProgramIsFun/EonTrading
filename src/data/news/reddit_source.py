@@ -23,7 +23,7 @@ class RedditSource(NewsSource):
         super().__init__()
         self.subreddits = subreddits or ["wallstreetbets", "stocks", "investing"]
         self.limit = limit
-        self._client = httpx.AsyncClient(timeout=10, headers={"User-Agent": "EonTrading/1.0"})
+        self._client = httpx.AsyncClient(timeout=10, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"})
 
     async def fetch_latest(self) -> list[NewsEvent]:
         """Fetch from Reddit /r/{sub}/new.json.

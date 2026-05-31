@@ -25,10 +25,10 @@ class RSSSource(NewsSource):
     def __init__(self, feeds: list[str] = None):
         super().__init__()
         self.feeds = feeds or [
-            "https://feeds.finance.yahoo.com/rss/2.0/headline?region=US&lang=en-US",
             "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+            "https://feeds.content.dowjones.io/public/rss/mw_topstories",
         ]
-        self._client = httpx.AsyncClient(timeout=10, headers={"User-Agent": "EonTrading/1.0"})
+        self._client = httpx.AsyncClient(timeout=10, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"})
 
     async def fetch_latest(self) -> list[NewsEvent]:
         """Fetch from RSS/Atom feeds.
