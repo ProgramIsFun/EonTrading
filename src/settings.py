@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
 
+    # Kafka
+    kafka_bootstrap_servers: str = "localhost:9092"
+
     # ClickHouse
     clickhouse_host: str = "localhost"
     clickhouse_port: int = 8123

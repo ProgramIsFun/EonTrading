@@ -3,6 +3,7 @@
 Implementations:
   - LocalEventBus: in-memory, single process
   - RedisStreamBus: Redis Streams (persistent message queue)
+  - KafkaEventBus: Apache Kafka (distributed message queue)
 """
 import asyncio
 import json
@@ -128,6 +129,95 @@ class RedisStreamBus(EventBus):
                             except Exception:
                                 logger.error("Handler error on %s", channel, exc_info=True)
                         await self._redis.xack(f"stream:{channel}", self._group, msg_id)
+        except asyncio.CancelledError:
+            pass
+
+
+class KafkaEventBus(EventBus):
+    """Apache Kafka-backed event bus for distributed mode.
+
+    Each channel maps to a Kafka topic.
+    Each subscriber group creates its own consumer group — messages are
+    load-balanced across consumers in the same group.
+    """
+
+    def __init__(self, bootstrap_servers: str = None, group: str = "default"):
+        from src.settings import settings
+        self._bootstrap_servers = bootstrap_servers or settings.kafka_bootstrap_servers
+        self._group = group
+        self._consumer_id = f"{group}-{id(self)}"
+        self._subscribers: dict[str, list[Callable]] = defaultdict(list)
+        self._producer = None
+        self._consumer = None
+        self._running = False
+        self._tasks: list[asyncio.Task] = []
+
+    async def start(self):
+        from aiokafka import AIOKafkaProducer
+        self._running = True
+        self._producer = AIOKafkaProducer(
+            bootstrap_servers=self._bootstrap_servers,
+            value_serializer=lambda v: json.dumps(v).encode(),
+        )
+        await self._producer.start()
+        self._tasks.append(asyncio.create_task(self._listen()))
+
+    async def stop(self):
+        self._running = False
+        for task in self._tasks:
+            task.cancel()
+        if self._producer:
+            await self._producer.stop()
+        if self._consumer:
+            await self._consumer.stop()
+
+    async def publish(self, channel: str, message: dict):
+        await self._producer.send_and_wait(channel, message)
+
+    async def subscribe(self, channel: str, handler: Callable):
+        self._subscribers[channel].append(handler)
+        if self._consumer is not None:
+            self._consumer.subscribe(list(self._subscribers.keys()))
+
+    async def _listen(self):
+        from aiokafka import AIOKafkaConsumer
+
+        try:
+            while self._running:
+                topics = list(self._subscribers.keys())
+                if not topics:
+                    await asyncio.sleep(0.5)
+                    continue
+
+                if self._consumer is None:
+                    self._consumer = AIOKafkaConsumer(
+                        *topics,
+                        bootstrap_servers=self._bootstrap_servers,
+                        group_id=self._group,
+                        value_deserializer=lambda v: json.loads(v.decode()),
+                        auto_offset_reset="earliest",
+                        enable_auto_commit=False,
+                    )
+                    await self._consumer.start()
+                    continue
+
+                try:
+                    msgs = await asyncio.wait_for(
+                        self._consumer.getmany(timeout_ms=1000, max_records=50),
+                        timeout=1.5,
+                    )
+                except asyncio.TimeoutError:
+                    continue
+
+                for tp, records in msgs.items():
+                    for msg in records:
+                        for handler in self._subscribers.get(msg.topic, []):
+                            try:
+                                await handler(msg.value)
+                            except Exception:
+                                logger.error("Handler error on %s", msg.topic, exc_info=True)
+                if msgs:
+                    await self._consumer.commit()
         except asyncio.CancelledError:
             pass
 
