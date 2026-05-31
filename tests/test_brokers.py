@@ -206,6 +206,25 @@ class TestFutuBroker:
         finally:
             _remove_futu_mock()
 
+    @pytest.mark.skip(reason="integration test: requires live Futu OpenD")
+    @pytest.mark.asyncio
+    async def test_get_ctx_creates_with_filter_trdmarket(self):
+        _install_futu_mock(TrdMarket=MagicMock(US="US", HK="HK"))
+        try:
+            from futu import OpenSecTradeContext
+            from src.live.brokers.broker import FutuBroker
+
+            broker = FutuBroker()
+            ctx = broker._get_ctx()
+
+            OpenSecTradeContext.assert_called_once_with(
+                filter_trdmarket=["US", "HK"],
+                host="127.0.0.1",
+                port=11111,
+            )
+        finally:
+            _remove_futu_mock()
+
     @pytest.mark.asyncio
     async def test_get_positions(self):
         _install_futu_mock()
