@@ -19,7 +19,7 @@ COMPONENTS=(
     "monitor:src.live.runners.run_monitor"
     "order_tracker:src.live.runners.run_order_tracker"
 )
-API_CMD="uvicorn src.api.server:app --host 0.0.0.0 --port 8000"
+API_CMD=".venv/bin/uvicorn src.api.server:app --host 0.0.0.0 --port 8000"
 
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
@@ -48,7 +48,7 @@ start_component() {
         export PYTHONPATH='$PYTHONPATH'
         while true; do
             echo \"\$ (date -Iseconds) Starting $name...\" >> '$log_file'
-            python -m '$module' >> '$log_file' 2>&1
+            .venv/bin/python -m '$module' >> '$log_file' 2>&1
             rc=\$?
             echo \"\$ (date -Iseconds) $name exited with code \$rc, restarting in 3s...\" >> '$log_file'
             sleep 3
