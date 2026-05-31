@@ -21,12 +21,13 @@ class OrderTracker:
         broker,
         check_interval: float = 2.0,
         max_pending_age: float = 300.0,
+        collection=None,
     ):
         self.bus = bus
         self.broker = broker
         self.check_interval = check_interval
         self.max_pending_age = max_pending_age
-        self._col = get_mongo_client()[DB][COLLECTION]
+        self._col = collection or get_mongo_client()[DB][COLLECTION]
         self._ensure_indexes()
 
     def _ensure_indexes(self):

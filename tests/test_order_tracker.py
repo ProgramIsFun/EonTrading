@@ -247,7 +247,8 @@ class TestTrackerLifecycle:
 
         bus = MagicMock()
         broker = MagicMock()
-        tracker = OrderTracker(bus, broker, check_interval=0.01)
+        collection = MagicMock()
+        tracker = OrderTracker(bus, broker, check_interval=0.01, collection=collection)
 
         with patch.object(tracker, "_check_pending") as mock_check:
             task = asyncio.create_task(tracker.run())
