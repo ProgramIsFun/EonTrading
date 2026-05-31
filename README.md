@@ -141,6 +141,18 @@ tests/                         # 263 tests
 
 **Design rule:** PositionStore is the canonical source for current holdings. Never infer positions from `orders` — always use `positions`.
 
+## Deploy (VPS)
+
+```bash
+ssh user@your-vps
+cd EonTrading
+git pull
+./scripts/start_distributed.sh restart    # stop all, start all with new code
+./scripts/start_distributed.sh status     # verify all 7 components are running
+```
+
+Logs are in `logs/` — rotated automatically (10 MB each, 5 backups).
+
 ## Sentiment Analyzers
 
 | Analyzer | When |
