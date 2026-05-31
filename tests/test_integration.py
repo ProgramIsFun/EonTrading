@@ -12,11 +12,9 @@ import pytest
 from src.common.costs import US_STOCKS
 from src.common.event_bus import LocalEventBus
 from src.common.events import (
-    CHANNEL_FILL,
     CHANNEL_NEWS,
     CHANNEL_SENTIMENT,
     CHANNEL_TRADE,
-    FillEvent,
     NewsEvent,
     SentimentEvent,
     TradeEvent,
@@ -70,13 +68,6 @@ def collector(lst):
     """Async subscriber that appends raw messages to a list."""
     async def _handler(msg):
         lst.append(msg)
-    return _handler
-
-
-def fill_collector(lst):
-    """Async subscriber that parses FillEvents."""
-    async def _handler(msg):
-        lst.append(FillEvent.from_dict(msg))
     return _handler
 
 
@@ -473,12 +464,12 @@ class TestAnalyzerPositionAware:
 class TestNeutralNewsNoTrades:
 
     @pytest.mark.asyncio
-    async def test_irrelevant_news_produces_no_fills(self):
+    async def test_irrelevant_news_produces_no_trades(self):
         bus = LocalEventBus()
         await bus.start()
 
-        fills = []
-        await bus.subscribe(CHANNEL_FILL, fill_collector(fills))
+        trades = []
+        await bus.subscribe(CHANNEL_TRADE, lambda msg: trades.append(msg))
 
         store = mock_position_store()
         broker = PaperBroker(initial_cash=100000)
@@ -496,7 +487,7 @@ class TestNeutralNewsNoTrades:
         await bus.publish(CHANNEL_NEWS, neutral.to_dict())
         await asyncio.sleep(0.3)
 
-        assert len(fills) == 0
+        assert len(trades) == 0
         broker_pos = await broker.get_positions()
         assert len(broker_pos) == 0
 

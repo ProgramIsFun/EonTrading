@@ -14,7 +14,6 @@ from src.common.events import (
     CHANNEL_NEWS,
     CHANNEL_SENTIMENT,
     CHANNEL_TRADE,
-    FillEvent,
     NewsEvent,
     SentimentEvent,
     TradeEvent,
@@ -235,23 +234,6 @@ class RejectingBroker(Broker):
 
     async def get_positions(self) -> dict[str, int]:
         return {}
-
-
-# --- FillEvent tests ---
-
-class TestFillEvent:
-    def test_fill_event_roundtrip(self):
-        fill = FillEvent(symbol="AAPL", action="buy", success=True, reason="filled", timestamp="2026-04-22T10:00:00Z")
-        d = fill.to_dict()
-        restored = FillEvent.from_dict(d)
-        assert restored.symbol == "AAPL"
-        assert restored.success is True
-        assert restored.reason == "filled"
-
-    def test_fill_event_failure(self):
-        fill = FillEvent(symbol="TSLA", action="sell", success=False, reason="timeout", timestamp="2026-04-22T10:00:00Z")
-        assert fill.success is False
-        assert fill.reason == "timeout"
 
 
 # --- Trade confirmation & orders tests ---

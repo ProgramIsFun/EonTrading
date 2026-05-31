@@ -68,7 +68,7 @@ class TestPublishRouting:
         r = mock_redis
         bus = await make_bus()
 
-        for ch in ["news", "sentiment", "trade", "fill"]:
+        for ch in ["news", "sentiment", "trade"]:
             r.xadd.reset_mock()
             await bus.publish(ch, {"test": True})
             r.xadd.assert_called_once()

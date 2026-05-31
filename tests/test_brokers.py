@@ -11,7 +11,7 @@ import pytest
 
 from src.common.clock import utcnow
 from src.common.event_bus import LocalEventBus
-from src.common.events import CHANNEL_FILL, TradeEvent
+from src.common.events import TradeEvent
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -24,30 +24,7 @@ def _make_trade(symbol: str = "AAPL", action: str = "buy", price: float = 150.0)
     )
 
 
-async def _collect_fills(event_bus):
-    """Subscribe to fill events and return a (subscribe, get_fills) pair.
 
-    Use:
-        sub, get = await _collect_fills(event_bus)
-        await sub()
-        await broker.execute(...)
-        fills = await get()
-    """
-    fills = []
-    event = asyncio.Event()
-
-    async def on_fill(msg):
-        fills.append(msg)
-        event.set()
-
-    async def subscribe():
-        await event_bus.subscribe(CHANNEL_FILL, on_fill)
-
-    async def get(timeout: float = 5.0):
-        await asyncio.wait_for(event.wait(), timeout=timeout)
-        return fills
-
-    return subscribe, get
 
 
 @pytest.fixture

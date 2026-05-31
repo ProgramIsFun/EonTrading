@@ -79,6 +79,7 @@ class InMemoryPositionStore:
             self._positions[symbol] = {
                 "entryTime": entry_time.isoformat(),
                 "entryPrice": prices.get(symbol, 0.0),
+                "qty": 0,
             }
 
     def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0):

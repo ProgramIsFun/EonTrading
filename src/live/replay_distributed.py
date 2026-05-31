@@ -23,11 +23,6 @@ async def main(start: str, end: str):
     bus = RedisStreamBus(host=settings.redis_host, group="replay")
     await bus.start()
 
-    fills = []
-    async def on_fill(msg):
-        fills.append(msg)
-    await bus.subscribe("fill", on_fill)
-
     print(f"\n{'═' * 60}")
     print("  Distributed Replay Controller")
     print(f"  Redis: {settings.redis_host}")
@@ -46,22 +41,7 @@ async def main(start: str, end: str):
             body=doc["headline"],
         )
         await bus.publish(CHANNEL_NEWS, event.to_dict())
-
-        prev_fills = len(fills)
         await asyncio.sleep(2.0)
-
-        for f in fills[prev_fills:]:
-            status = "✅" if f.get("success") else "❌"
-            print(f"    {status} {f.get('action', '').upper()} {f.get('symbol')} — {f.get('reason')}")
-
-    await asyncio.sleep(3.0)
-
-    print(f"\n{'═' * 60}")
-    print(f"  Distributed Replay Complete — {len(fills)} fills")
-    for f in fills:
-        status = "✅" if f.get("success") else "❌"
-        print(f"    {status} {f.get('action', '').upper()} {f.get('symbol')} — {f.get('reason')}")
-    print(f"{'═' * 60}\n")
 
     await bus.stop()
 

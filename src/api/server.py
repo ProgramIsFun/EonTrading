@@ -66,7 +66,7 @@ def queue_status():
         import redis
         r = redis.Redis(host=settings.redis_host, port=6379, decode_responses=True)
         r.ping()
-        streams = ["news", "sentiment", "trade", "fill"]
+        streams = ["news", "sentiment", "trade"]
         result = {}
         for name in streams:
             key = f"stream:{name}"

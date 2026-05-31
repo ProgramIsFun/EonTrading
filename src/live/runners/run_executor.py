@@ -1,4 +1,4 @@
-"""Run TradeExecutor as its own process. Subscribes to [trade], writes pending_orders."""
+"""Run TradeExecutor as its own process. Subscribes to [trade], writes to orders collection."""
 import asyncio
 import logging
 
@@ -25,7 +25,7 @@ async def main():
 
     banner("TradeExecutor", {
         "Subscribes to": "[trade]",
-        "Publishes to": "pending_orders (OrderTracker polls)",
+        "Publishes to": "orders (OrderTracker polls)",
         "Broker": broker.__class__.__name__,
     })
 

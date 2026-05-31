@@ -342,7 +342,7 @@ class AlpacaBroker(Broker):
 # TradeExecutor — routes [trade] events to the configured broker
 # ---------------------------------------------------------------------------
 class TradeExecutor:
-    """Listens to trade events, submits orders via broker, writes pending_orders for tracking.
+    """Listens to trade events, submits orders via broker, writes to orders collection.
 
     Does NOT track fill results — OrderTracker handles confirmation via polling.
     """
