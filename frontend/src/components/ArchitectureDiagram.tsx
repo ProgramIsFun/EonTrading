@@ -88,7 +88,7 @@ export default function ArchitectureDiagram() {
 
       {/* Summary */}
       <div style={{ fontSize: 12, color: "#ccc", marginBottom: 16, lineHeight: 1.6 }}>
-        News comes in → gets scored for sentiment → triggers trades → broker confirms fill.
+        News comes in → gets scored for sentiment → triggers trades → OrderTracker confirms fill.
         <span style={{ color: "#888" }}> Everything flows through event channels, whether in one process or distributed across many.</span>
       </div>
 
@@ -103,7 +103,9 @@ export default function ArchitectureDiagram() {
   AS -- [sentiment] --> ST[SentimentTrader]
   ST -- [trade] --> TE[TradeExecutor]
   PM[PriceMonitor] -- [trade] --> TE
-  Broker -- [fill] --> TE`} />
+  TE -- writes --> orders[orders collection]
+  orders <-- polls --> OT[OrderTracker]
+  OT -- writes --> positions[positions collection]`} />
         <div style={{ fontSize: 10, color: "#666", textAlign: "center", marginTop: 8 }}>
           Same channels whether LocalEventBus (in-memory) or RedisStreamBus (persistent message queue).
         </div>
@@ -170,7 +172,7 @@ export default function ArchitectureDiagram() {
                 {redisUp === true ? "● running" : redisUp === false ? "● stopped" : "● unknown"}
               </div>
             </div>
-            <span style={{ fontSize: 9, color: "#555" }}>streams: [news] [sentiment] [trade] [fill]</span>
+            <span style={{ fontSize: 9, color: "#555" }}>streams: [news] [sentiment] [trade]</span>
           </div>
 
           {/* Row 1: Sources → Watcher → [news] → Analyzer → [sentiment] */}
@@ -222,7 +224,7 @@ export default function ArchitectureDiagram() {
             {label("[sentiment]")}
           </div>
 
-          {/* Row 2: → Trader → [trade] → Executor/Broker → [fill] → back to Trader */}
+          {/* Row 2: → Trader → [trade] → Executor/Broker → orders collection ← OrderTracker polls → positions */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
             <span style={arrow}>→</span>
             <div style={boxStyle(INTERNAL)}>
@@ -235,10 +237,15 @@ export default function ArchitectureDiagram() {
             <span style={arrow}>→</span>
             {label("[trade]")}
             <span style={arrow}>→</span>
-            <div style={boxStyle(INTERNAL)}>
-              <div style={{ fontWeight: 600 }}>Executor</div>
-              {internalTag()}
-              {pathTag("src/live/brokers/broker.py")}
+            <div>
+              <div style={boxStyle(INTERNAL)}>
+                <div style={{ fontWeight: 600 }}>TradeExecutor</div>
+                <div style={{ fontSize: 10, color: "#888" }}>submits trade to broker</div>
+                {internalTag()}
+                {pathTag("src/live/brokers/broker.py")}
+              </div>
+              <div style={arrowDown}>↓ writes order</div>
+              {mongoBox("orders", "pending → filled/failed/timeout")}
             </div>
             <span style={arrow}>→</span>
             <div style={boxStyle(PROCESS)}>
@@ -252,17 +259,24 @@ export default function ArchitectureDiagram() {
               {envOpt("FUTU_LIVE / FUTU_REAL")}
               <div style={{ fontSize: 8, color: "#555" }}>default: PaperBroker (dry run)</div>
             </div>
-            <span style={arrow}>→</span>
-            {label("[fill]")}
-            <span style={arrow}>→</span>
-            <div>
-              <div style={{ ...boxStyle(INTERNAL), border: "1px solid #22c55e66" }}>
-                <div style={{ fontWeight: 600 }}>TradeExecutor</div>
-                <div style={{ fontSize: 10, color: "#22c55e" }}>✅ on success → persist + register</div>
-                <div style={{ fontSize: 10, color: "#ef4444" }}>❌ on reject → log only (no rollback needed)</div>
+          </div>
+
+          {/* Row 3: OrderTracker — polls orders → writes positions on fill */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            <div style={{ marginLeft: 200 }}>
+              <div style={boxStyle(INTERNAL)}>
+                <div style={{ fontWeight: 600 }}>OrderTracker</div>
+                <div style={{ fontSize: 10, color: "#22c55e" }}>✅ fill → write to PositionStore</div>
+                <div style={{ fontSize: 10, color: "#ef4444" }}>❌ fail → mark as failed</div>
+                {internalTag()}
+                {pathTag("src/common/order_tracker.py")}
+                <div style={{ fontSize: 8, color: "#555" }}>polls orders collection every 2s</div>
               </div>
-              <div style={arrowDown}>↓ writes on success</div>
-              {mongoBox("positions", "open/close position")}
+              <div style={arrowDown}>↓ writes position on fill</div>
+              {mongoBox("positions", "qty + entryPrice + entryTime")}
+            </div>
+            <div style={{ fontSize: 10, color: "#666", maxWidth: 200 }}>
+              OrderTracker is the sole writer to PositionStore. TradeExecutor never touches positions.
             </div>
           </div>
 
@@ -274,7 +288,7 @@ export default function ArchitectureDiagram() {
               <div style={{ fontSize: 9, color: "#666" }}>polls prices → publishes sell to [trade]</div>
               {internalTag()}
               {pathTag("src/live/price_monitor.py")}
-              <div style={{ fontSize: 8, color: "#555" }}>live: yfinance (latest prices)</div>
+              <div style={{ fontSize: 8, color: "#555" }}>gets price from get_price()</div>
             </div>
             <span style={arrow}>→</span>
             {label("[trade]")}
@@ -283,8 +297,8 @@ export default function ArchitectureDiagram() {
         </div>
 
         <div style={{ fontSize: 10, color: "#666", marginTop: 10 }}>
-          TradeExecutor stores pending trade details in-memory, forwards to broker, and writes to PositionStore + trade_log only after broker confirms via <code style={{ color: "#818cf8" }}>[fill]</code>.
-          SentimentTrader is stateless — it reads positions from PositionStore each cycle and never subscribes to fills.
+          TradeExecutor writes to <code style={{ color: "#f59e0b" }}>orders</code> collection with status <code>pending</code>. OrderTracker polls pending orders, checks with broker, and transitions to <code>filled</code> (writing to PositionStore) or <code>failed</code>.
+          SentimentTrader is stateless — it reads positions from PositionStore each cycle.
         </div>
 
         {/* Replay mode */}
@@ -292,10 +306,10 @@ export default function ArchitectureDiagram() {
           <div style={{ fontSize: 11, color: "#22c55e", fontWeight: 600, marginBottom: 4 }}>♻️ Replay Mode (backtest via live pipeline)</div>
           <div style={{ fontSize: 10, color: "#888" }}>
             Same pipeline, same code — but fed with historical news from MongoDB.
-            Timestamps flow with events. Prices from ClickHouse (<code style={{ color: "#818cf8" }}>PRICE_SOURCE=clickhouse</code>) or yfinance.
+            Timestamps flow with events. Prices from ClickHouse (<code style={{ color: "#818cf8" }}>PRICE_SOURCE=clickhouse</code>) or <code>get_price()</code> (cache + API fallback).
           </div>
           <div style={{ fontSize: 9, color: "#666", marginTop: 4 }}>
-            {envOpt("PRICE_SOURCE")} <span>clickhouse (fast, local) or yfinance (default, API)</span>
+            {envOpt("PRICE_SOURCE")} <span>clickhouse (fast, local) or default (get_price cache + API)</span>
           </div>
           <div style={{ fontSize: 9, color: "#666" }}>
             {envOpt("SL_CHECK_HOURS")} <span>24 (default) or 1 for hourly SL/TP checks</span>
@@ -303,17 +317,6 @@ export default function ArchitectureDiagram() {
           <code style={{ fontSize: 9, color: "#818cf8", display: "block", marginTop: 4 }}>
             python -m src.live.replay --start 2025-01-01 --end 2025-06-01
           </code>
-          <div style={{ fontSize: 9, color: "#666", marginTop: 6 }}>
-            <div style={{ color: "#ccc", marginBottom: 2 }}>Backtest scripts:</div>
-            <code style={{ fontSize: 8, color: "#818cf8", display: "block" }}>
-              PRICE_SOURCE=clickhouse python3 scripts/backtest/live_pipeline_backtest.py
-            </code>
-            <div style={{ fontSize: 8, color: "#555" }}>↑ keyword analyzer</div>
-            <code style={{ fontSize: 8, color: "#818cf8", display: "block", marginTop: 2 }}>
-              PRICE_SOURCE=clickhouse SL_CHECK_HOURS=1 python3 scripts/backtest/live_pipeline_llm_backtest.py
-            </code>
-            <div style={{ fontSize: 8, color: "#555" }}>↑ pre-scored LLM sentiment, hourly SL/TP</div>
-          </div>
 
           <div style={{ fontSize: 9, color: "#666", marginTop: 6 }}>
             All components emit structured logs via <code style={{ color: "#22c55e" }}>MongoBatchHandler</code> → <code style={{ color: "#f59e0b" }}>EonTradingDB.logs</code> → <code style={{ color: "#818cf8" }}>GET /api/logs</code> → Logs tab.
@@ -332,7 +335,7 @@ export default function ArchitectureDiagram() {
             <tbody>
               {[
                 ["News source", "RSS, Reddit, NewsAPI, Finnhub, Twitter", "Historical from MongoDB or hardcoded"],
-                ["Prices", "Latest market price (yfinance)", "Historical at event timestamp (ClickHouse/yfinance)"],
+                ["Prices", "Latest market price (cache + API)", "Historical at event timestamp (ClickHouse)"],
                 ["Broker", "Futu / IBKR / Alpaca (real orders)", "PaperBroker (simulated, instant fill)"],
                 ["Fill confirmation", "Async — broker polls/callback", "Instant — PaperBroker always succeeds"],
                 ["SL/TP monitoring", "PriceMonitor polls every 60s (live prices)", "Stepped through historical timestamps between events"],
@@ -484,9 +487,9 @@ export default function ArchitectureDiagram() {
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <div style={boxStyle(STATE)}>
             <div style={{ fontWeight: 600 }}>TradeExecutor pending</div>
-            <div style={{ fontSize: 10, color: "#888" }}>symbol → buy/sell details</div>
+            <div style={{ fontSize: 10, color: "#888" }}>in-flight order tracking</div>
             {stateTag()}
-            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>stored until [fill] arrives</div>
+            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>matches broker response to order doc</div>
           </div>
           <div style={boxStyle(STATE)}>
             <div style={{ fontWeight: 600 }}>SentimentTrader dedup</div>
@@ -514,9 +517,9 @@ export default function ArchitectureDiagram() {
         {sectionTitle("MongoDB Collections (EonTradingDB)", "#f59e0b")}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 10, color: "#888" }}>
           {[
-            { name: "news", desc: "Articles from all sources", doc: `{ "source": "rss", "headline": "Apple beats Q2 earnings", "timestamp": "2026-04-30T09:15:00Z", "url": "https://...", "body": "...", "collected_at": "2026-04-30T09:16:02Z", "origin": "live" }` },
-            { name: "trades", desc: "Confirmed trade history (written after broker fill)", doc: `{ "symbol": "AAPL", "action": "buy", "price": 198.50, "shares": 25, "reason": "sentiment:0.72 on Apple beats Q2...", "timestamp": "2026-04-30T09:16:15Z" }` },
-            { name: "positions", desc: "Currently open positions (1 doc per symbol)", doc: `{ "symbol": "AAPL", "entryTime": "2026-04-30T09:16:15", "entryPrice": 198.50, "updatedAt": "2026-04-30T09:16:15Z" }` },
+            { name: "orders", desc: "Full order lifecycle (pending → filled/failed/timeout)", doc: `{ "symbol": "AAPL", "action": "buy", "price": 198.50, "size": 25, "reason": "sentiment:0.72", "status": "pending", "timestamp": "2026-04-30T09:16:15Z", "orderId": "paper-a1b2c3d4" }` },
+            { name: "positions", desc: "Currently open positions (1 doc per symbol)", doc: `{ "symbol": "AAPL", "qty": 25, "entryTime": "2026-04-30T09:16:15", "entryPrice": 198.50, "updatedAt": "2026-04-30T09:16:15Z" }` },
+            { name: "news", desc: "Articles from all sources", doc: `{ "source": "rss", "headline": "Apple beats Q2 earnings", "url": "https://...", "collected_at": "2026-04-30T09:16:02Z" }` },
             { name: "heartbeats", desc: "Component health (updated every 30s)", doc: `{ "component": "trader", "lastBeat": "2026-04-30T09:16:00Z", "host": "macbook.local", "pid": 12345, "mode": "distributed" }` },
             { name: "seen_urls", desc: "Dedup — survives restarts", doc: `{ "url": "https://finance.yahoo.com/news/..." }` },
             { name: "symbols", desc: "Tracked stock list", doc: `{ "symbol": "AAPL", "name": "Apple Inc.", "sector": "Technology" }` },
@@ -531,9 +534,8 @@ export default function ArchitectureDiagram() {
             </div>
           ))}
           <div style={{ fontSize: 9, color: "#555", marginTop: 4 }}>
-            Replay mode uses separate collections (<code style={{ color: "#f59e0b" }}>replay_trades</code>, <code style={{ color: "#f59e0b" }}>replay_positions</code>) with identical schemas.
-            Schema defined by shared builders: <code style={{ color: "#818cf8" }}>news_to_doc()</code>, <code style={{ color: "#818cf8" }}>trade_to_doc()</code>, <code style={{ color: "#818cf8" }}>PositionStore</code>.
-            <br />⚠️ Examples above are hardcoded — source of truth is the builder functions. Ask AI to verify/update these if schemas change.
+            Replay mode uses separate collections (<code style={{ color: "#f59e0b" }}>replay_positions</code>) with identical schemas.
+            <br />⚠️ Examples above are hardcoded — source of truth is the schema definitions in <code style={{ color: "#818cf8" }}>PositionStore</code>.
           </div>
         </div>
       </div>
@@ -560,6 +562,11 @@ export default function ArchitectureDiagram() {
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_analyzer</code>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_trader</code>
               <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_executor</code>
+              <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_monitor</code>
+              <code style={{ fontSize: 10, color: "#818cf8" }}>python3 -m src.live.runners.run_order_tracker</code>
+            </div>
+            <div style={{ fontSize: 9, color: "#22c55e", marginTop: 4 }}>
+              Or: <code style={{ color: "#818cf8" }}>./scripts/start_distributed.sh start</code>
             </div>
           </div>
         </div>
