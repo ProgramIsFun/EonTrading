@@ -11,6 +11,7 @@ from fastapi.security import APIKeyHeader
 from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.clock import utcnow
 from src.common.costs import US_STOCKS
+from src.common.position_store import InMemoryPositionStore
 from src.data.utils.db_helper import get_mongo_client
 from src.settings import settings
 
@@ -326,10 +327,11 @@ async def _run_live_backtest(job_id: str, params: dict):
         else:
             anlzr = KeywordSentimentAnalyzer()
 
+        store = InMemoryPositionStore()
         broker = PaperBroker(initial_cash=capital, cost_model=costs)
-        monitor = PriceMonitor(bus, None, logic, interval_sec=0)
-        trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor)
-        analyzer_svc = AnalyzerService(bus, analyzer=anlzr, get_positions=lambda: trader.holdings)
+        monitor = PriceMonitor(bus, store, logic, interval_sec=0)
+        trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
+        analyzer_svc = AnalyzerService(bus, analyzer=anlzr, get_positions=store.get_positions)
         executor = TradeExecutor(bus, broker)
 
         trades = []
