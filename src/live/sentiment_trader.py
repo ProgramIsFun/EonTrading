@@ -67,25 +67,21 @@ class SentimentTrader:
         event_ts = event.timestamp
 
         if self.position_store:
-            holdings = await asyncio.to_thread(self.position_store.get_positions)
+            positions = await asyncio.to_thread(self.position_store.get_positions_with_prices)
         else:
-            holdings = {}
+            positions = {}
 
         now = utcnow()
 
         for symbol in event.symbols:
             action = None
-            if symbol in holdings:
-                if not self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, holdings):
+            if symbol in positions:
+                if not self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, positions):
                     continue
                 action = "sell"
-                if self.broker:
-                    broker_positions = await self.broker.get_positions()
-                    shares = broker_positions.get(symbol, 1)
-                else:
-                    shares = 1
+                shares = positions[symbol].get("qty", 1)
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
-                holdings.pop(symbol, None)
+                positions.pop(symbol, None)
             else:
                 if event.confidence < self.logic.min_confidence or event.sentiment < self.logic.threshold:
                     continue
@@ -96,7 +92,7 @@ class SentimentTrader:
                 if cash > 0:
                     shares = self.logic.should_buy(
                         event.sentiment, event.confidence, symbol,
-                        holdings, cash, price,
+                        positions, cash, price,
                     )
                 else:
                     shares = 1

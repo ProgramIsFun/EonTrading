@@ -369,7 +369,7 @@ class TradeExecutor:
         if order_id is None:
             logger.error("Order submission failed: %s %s", trade.action.upper(), trade.symbol)
             return
-        col = get_mongo_client()["EonTradingDB"]["pending_orders"]
+        col = get_mongo_client()["EonTradingDB"]["orders"]
         doc = {
             "order_id": order_id,
             "broker_type": self.broker.__class__.__name__,
@@ -377,6 +377,8 @@ class TradeExecutor:
             "action": trade.action,
             "price": trade.price,
             "shares": trade.size,
+            "reason": trade.reason,
+            "timestamp": trade.timestamp,
             "status": "pending",
             "placed_at": utcnow(),
             "checked_at": None,

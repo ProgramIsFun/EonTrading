@@ -6,11 +6,10 @@ from datetime import datetime, timedelta
 from src.common.clock import utcnow
 from src.common.event_bus import EventBus
 from src.common.position_store import PositionStore
-from src.common.trade_store import trade_to_doc
 from src.data.utils.db_helper import get_mongo_client
 
 DB = "EonTradingDB"
-COLLECTION = "pending_orders"
+COLLECTION = "orders"
 
 logger = logging.getLogger(__name__)
 
@@ -91,15 +90,9 @@ class OrderTracker:
         price = float(doc["price"])
         shares = int(doc["shares"])
 
-        ts = now.isoformat() + "Z"
-        await asyncio.to_thread(
-            get_mongo_client()[DB]["trades"].insert_one,
-            trade_to_doc(symbol, action, price, shares, "filled", ts),
-        )
-
         if action == "buy":
             entry_time = now.replace(microsecond=0)
-            await asyncio.to_thread(self._position_store.open_position, symbol, entry_time, price)
+            await asyncio.to_thread(self._position_store.open_position, symbol, entry_time, price, shares)
         elif action == "sell":
             await asyncio.to_thread(self._position_store.close_position, symbol)
 

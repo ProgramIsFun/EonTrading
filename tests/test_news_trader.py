@@ -121,7 +121,9 @@ class TestSentimentTrader:
 
         # Pre-load position via mock store
         mock_store = MagicMock()
-        mock_store.get_positions.return_value = {"TSLA": utcnow()}
+        mock_store.get_positions_with_prices.return_value = {
+            "TSLA": {"entryTime": utcnow(), "entryPrice": 200.0, "qty": 10},
+        }
         trader.position_store = mock_store
 
         sentiment = SentimentEvent(
@@ -252,16 +254,16 @@ class TestFillEvent:
         assert fill.reason == "timeout"
 
 
-# --- Trade confirmation & pending_orders tests ---
+# --- Trade confirmation & orders tests ---
 
 @pytest.fixture
-def _mock_pending():
+def _mock_orders():
     with patch("src.live.brokers.broker.get_mongo_client") as m:
         mock_db = MagicMock()
-        mock_pending = MagicMock()
-        mock_db.__getitem__.return_value = mock_pending
+        mock_orders = MagicMock()
+        mock_db.__getitem__.return_value = mock_orders
         m.return_value.__getitem__.return_value = mock_db
-        yield mock_pending
+        yield mock_orders
 
 
 class TestTradeExecution:
@@ -282,8 +284,8 @@ class TestTradeExecution:
         return bus, trader, executor, broker
 
     @pytest.mark.asyncio
-    async def test_buy_writes_pending_order(self, setup_with_mock, _mock_pending):
-        """Executor writes pending_order to MongoDB when broker confirms."""
+    async def test_buy_writes_order(self, setup_with_mock, _mock_orders):
+        """Executor writes order to MongoDB when broker confirms."""
         bus, trader, executor, broker = setup_with_mock
         await bus.start()
         await trader.start()
@@ -297,11 +299,11 @@ class TestTradeExecution:
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
         await asyncio.sleep(0.2)
 
-        _mock_pending.insert_one.assert_called_once()
+        _mock_orders.insert_one.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_buy_rejected_skips_pending_order(self, setup_with_rejecting, _mock_pending):
-        """Executor skips pending_order when broker rejects."""
+    async def test_buy_rejected_skips_order(self, setup_with_rejecting, _mock_orders):
+        """Executor skips order when broker rejects."""
         bus, trader, executor, broker = setup_with_rejecting
         await bus.start()
         await trader.start()
@@ -315,7 +317,7 @@ class TestTradeExecution:
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
         await asyncio.sleep(0.2)
 
-        _mock_pending.insert_one.assert_not_called()
+        _mock_orders.insert_one.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ttl_dedup_blocks_duplicate_orders(self, setup_with_mock):
@@ -353,7 +355,10 @@ class TestTraderReadsPositionStore:
         """Trader reads from PositionStore when processing sentiment, not at init."""
         mock_store = MagicMock()
         now = utcnow()
-        mock_store.get_positions.return_value = {"AAPL": now, "NVDA": now}
+        mock_store.get_positions_with_prices.return_value = {
+            "AAPL": {"entryTime": now, "entryPrice": 150.0, "qty": 10},
+            "NVDA": {"entryTime": now, "entryPrice": 800.0, "qty": 5},
+        }
 
         bus = LocalEventBus()
         await bus.start()
@@ -364,7 +369,7 @@ class TestTraderReadsPositionStore:
         await executor.start()
 
         # No holdings are tracked on trader — verify by checking the store
-        mock_store.get_positions.assert_not_called()
+        mock_store.get_positions_with_prices.assert_not_called()
 
         # On first sentiment event, trader reads from store
         sentiment = SentimentEvent(
@@ -377,4 +382,4 @@ class TestTraderReadsPositionStore:
 
         # Should NOT buy AAPL — it's already in the store as a holding
         assert len(broker.trades) == 0
-        mock_store.get_positions.assert_called()
+        mock_store.get_positions_with_prices.assert_called()

@@ -30,10 +30,11 @@ class PriceMonitor:
         try:
             for sym, info in store.get_positions_with_prices().items():
                 price = info.get("entryPrice", 0.0)
+                qty = info.get("qty", 0)
                 if price > 0:
-                    self._states[sym] = PositionState(symbol=sym, shares=0, entry_price=price)
+                    self._states[sym] = PositionState(symbol=sym, shares=qty, entry_price=price)
             if self._states:
-                logger.info("PriceMonitor restored %d entry price(s): %s", len(self._states), list(self._states.keys()))
+                logger.info("PriceMonitor restored %d position(s): %s", len(self._states), list(self._states.keys()))
         except Exception as e:
             logger.warning("PriceMonitor failed to restore entry prices: %s", e)
         # Allow injecting known entry prices (for testing)
@@ -82,20 +83,19 @@ class PriceMonitor:
             if symbol in positions:
                 info = positions[symbol]
                 price = info.get("entryPrice", 0.0)
+                qty = info.get("qty", 0)
                 if price > 0:
-                    self._states[symbol] = PositionState(symbol=symbol, shares=0, entry_price=price)
+                    self._states[symbol] = PositionState(symbol=symbol, shares=qty, entry_price=price)
         except Exception:
             pass
 
     async def check_once(self, broker=None, as_of: str = None) -> list[str]:
         """Check all positions against SL/TP. Returns list of symbols sold."""
         check_symbols = set(self._states.keys())
+        all_positions: dict[str, dict] = {}
         if self.store:
-            check_symbols |= set(self.store.get_positions().keys())
-
-        broker_positions = {}
-        if broker:
-            broker_positions = await broker.get_positions()
+            all_positions = self.store.get_positions_with_prices()
+            check_symbols |= set(all_positions.keys())
 
         if not check_symbols:
             return []
@@ -111,7 +111,8 @@ class PriceMonitor:
             if price <= 0:
                 continue
 
-            shares = broker_positions.get(symbol, 1)
+            info = all_positions.get(symbol, {})
+            shares = info.get("qty", 1)
             state = self._get_or_create_state(symbol, price, shares)
 
             self.logic.update_peak(state, price)
@@ -144,9 +145,8 @@ class PriceMonitor:
                 sold.append(symbol)
 
         # Clean up states for positions that no longer exist
-        active = check_symbols | set(broker_positions.keys())
         for sym in list(self._states.keys()):
-            if sym not in active:
+            if sym not in check_symbols:
                 del self._states[sym]
 
         return sold

@@ -32,12 +32,12 @@ class PositionStore:
         else:
             self._col.delete_many({})
 
-    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0):
+    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0):
         """Atomically add a single position."""
         self._col.update_one(
             {"symbol": symbol},
             {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(),
-                      "entryPrice": entry_price, "updatedAt": utcnow()}},
+                      "entryPrice": entry_price, "qty": qty, "updatedAt": utcnow()}},
             upsert=True,
         )
 
@@ -54,11 +54,12 @@ class PositionStore:
         }
 
     def get_positions_with_prices(self) -> dict[str, dict]:
-        """Return {symbol: {entryTime, entryPrice}} for all open positions."""
+        """Return {symbol: {entryTime, entryPrice, qty}} for all open positions."""
         return {
             doc["symbol"]: {
                 "entryTime": datetime.fromisoformat(doc["entryTime"]),
                 "entryPrice": doc.get("entryPrice", 0.0),
+                "qty": doc.get("qty", 0),
             }
             for doc in self._col.find()
             if "entryTime" in doc
@@ -80,10 +81,11 @@ class InMemoryPositionStore:
                 "entryPrice": prices.get(symbol, 0.0),
             }
 
-    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0):
+    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0):
         self._positions[symbol] = {
             "entryTime": entry_time.isoformat(),
             "entryPrice": entry_price,
+            "qty": qty,
         }
 
     def close_position(self, symbol: str):
@@ -101,6 +103,7 @@ class InMemoryPositionStore:
             sym: {
                 "entryTime": datetime.fromisoformat(info["entryTime"]),
                 "entryPrice": info.get("entryPrice", 0.0),
+                "qty": info.get("qty", 0),
             }
             for sym, info in self._positions.items()
             if "entryTime" in info

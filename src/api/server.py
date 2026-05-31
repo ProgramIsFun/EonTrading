@@ -150,11 +150,11 @@ def docker_logs(name: str, lines: int = Query(default=50, ge=1, le=1000)):
 
 @app.get("/api/trades")
 def trades(limit: int = 100):
-    """Return recent confirmed trades from the trades collection."""
+    """Return recent confirmed trades from the orders collection."""
     try:
         client = get_mongo_client()
-        col = client["EonTradingDB"]["trades"]
-        docs = list(col.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit))
+        col = client["EonTradingDB"]["orders"]
+        docs = list(col.find({"status": "filled"}, {"_id": 0}).sort("filled_at", -1).limit(limit))
         return docs
     except Exception:
         logger.warning("Failed to fetch trades from MongoDB", exc_info=True)

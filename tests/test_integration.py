@@ -54,7 +54,7 @@ class FakePositionStore:
         return dict(self._positions)
     def get_positions_with_prices(self):
         return {s: {"entryTime": t, "entryPrice": 0.0} for s, t in self._positions.items()}
-    def open_position(self, symbol, entry_time, entry_price=0.0):
+    def open_position(self, symbol, entry_time, entry_price=0.0, qty=0):
         self._positions[symbol] = entry_time
     def close_position(self, symbol):
         self._positions.pop(symbol, None)

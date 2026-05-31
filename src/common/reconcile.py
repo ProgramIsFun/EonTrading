@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 async def reconcile(broker, store: PositionStore = None) -> dict:
     """Compare MongoDB positions vs broker account. Returns discrepancies."""
     store = store or PositionStore()
-    our_positions = store.get_positions()  # {symbol: entry_time}
+    our_positions = store.get_positions_with_prices()  # {symbol: {entryTime, entryPrice, qty}}
     broker_positions = await broker.get_positions()  # {symbol: qty}
     broker_cash = await broker.get_cash()
 
@@ -26,14 +26,21 @@ async def reconcile(broker, store: PositionStore = None) -> dict:
 
     issues = []
     for sym in missing_in_broker:
-        issues.append({"symbol": sym, "issue": "in system but not in broker", "severity": "high"})
+        issues.append({"symbol": sym, "issue": "in system but not in broker", "severity": "high",
+                        "system_qty": our_positions[sym].get("qty", 0)})
     for sym in missing_in_system:
         issues.append({"symbol": sym, "issue": "in broker but not in system", "severity": "high",
                         "broker_qty": broker_positions[sym]})
+    for sym in matched:
+        our_qty = our_positions[sym].get("qty", 0)
+        broker_qty = broker_positions[sym]
+        if our_qty != broker_qty:
+            issues.append({"symbol": sym, "issue": "qty mismatch", "severity": "medium",
+                            "system_qty": our_qty, "broker_qty": broker_qty})
 
     result = {
         "timestamp": utcnow().isoformat() + "Z",
-        "our_positions": list(our_symbols),
+        "our_positions": {s: our_positions[s] for s in our_symbols},
         "broker_positions": {s: q for s, q in broker_positions.items()},
         "broker_cash": broker_cash,
         "matched": list(matched),
