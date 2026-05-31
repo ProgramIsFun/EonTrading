@@ -5,160 +5,84 @@ from src.common.trading_logic import PositionState, TradingLogic
 
 
 class TestShouldBuy:
-    def test_low_confidence_returns_zero(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.5)
-        assert logic.should_buy(0.8, 0.2, "AAPL", {}, 10000, 150) == 0
-
-    def test_low_sentiment_returns_zero(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1)
-        assert logic.should_buy(0.1, 0.9, "AAPL", {}, 10000, 150) == 0
-
-    def test_already_holding_returns_zero(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1)
-        positions = {"AAPL": "2026-01-01T00:00:00"}
-        assert logic.should_buy(0.8, 0.9, "AAPL", positions, 10000, 150) == 0
-
-    def test_basic_buy_with_max_allocation(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1, max_allocation=0.2)
-        shares = logic.should_buy(0.5, 0.9, "AAPL", {}, 20000, 100)
-        # alloc = 20000 * 0.2 = 4000 → 40 shares @ $100
-        assert shares == 40
-
-    def test_buy_capped_by_max_allocation(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1, max_allocation=0.1)
-        shares = logic.should_buy(1.0, 0.9, "AAPL", {}, 20000, 100)
-        # max_alloc 0.1 → alloc 2000 → 20 shares
-        assert shares == 20
-
-    def test_risk_per_trade_limits_allocation(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1,
-                             max_allocation=1.0, risk_per_trade=0.02,
-                             stop_loss_pct=0.05)
-        shares = logic.should_buy(1.0, 0.9, "AAPL", {}, 20000, 100)
-        # risk_alloc = (20000 * 0.02) / 0.05 = 8000 → 80 shares
-        assert shares == 80
-
-    def test_insufficient_cash_returns_zero(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1, max_allocation=1.0)
-        shares = logic.should_buy(1.0, 0.9, "AAPL", {}, 100, 150)
-        assert shares == 0
-
-    def test_size_scales_when_max_allocation_is_zero(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1,
-                             max_allocation=0.0)
-        shares = logic.should_buy(0.5, 0.9, "AAPL", {}, 20000, 100)
-        # size=0.5 → alloc = 20000 * 0.5 = 10000 → 100 shares
-        assert shares == 100
-
-    def test_no_scale_by_sentiment_when_max_alloc_zero(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1,
-                             max_allocation=0.0, scale_by_sentiment=False)
-        shares = logic.should_buy(0.1, 0.9, "AAPL", {}, 20000, 100)
-        # size = 1.0 (no scaling) → alloc = 20000 → 200 shares
-        # 200 * 100 = 20000, 20000 < 20000 is False → 0
-        assert shares == 0
-
-    def test_full_allocation(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1, max_allocation=1.0)
-        shares = logic.should_buy(1.0, 0.9, "AAPL", {}, 20000, 100)
-        # alloc 20000 → 200 shares, but 200*100=20000 not < 20000 → 0
-        assert shares == 0
+    @pytest.mark.parametrize("desc,kwargs,sentiment,confidence,positions,cash,price,expected", [
+        ("low confidence",  dict(threshold=0.3, min_confidence=0.5), 0.8, 0.2, {}, 10000, 150, 0),
+        ("low sentiment",   dict(threshold=0.3, min_confidence=0.1), 0.1, 0.9, {}, 10000, 150, 0),
+        ("already holding", dict(threshold=0.3, min_confidence=0.1), 0.8, 0.9, {"AAPL": "..."}, 10000, 150, 0),
+        ("max alloc 20%",   dict(threshold=0.3, min_confidence=0.1, max_allocation=0.2), 0.5, 0.9, {}, 20000, 100, 40),
+        ("max alloc 10%",   dict(threshold=0.3, min_confidence=0.1, max_allocation=0.1), 1.0, 0.9, {}, 20000, 100, 20),
+        ("risk per trade",  dict(threshold=0.3, min_confidence=0.1, max_allocation=1.0,
+                                 risk_per_trade=0.02, stop_loss_pct=0.05), 1.0, 0.9, {}, 20000, 100, 80),
+        ("insufficient cash", dict(threshold=0.3, min_confidence=0.1, max_allocation=1.0), 1.0, 0.9, {}, 100, 150, 0),
+        ("max alloc zero scales", dict(threshold=0.3, min_confidence=0.1, max_allocation=0.0), 0.5, 0.9, {}, 20000, 100, 100),
+        ("no scale by sentiment", dict(threshold=0.3, min_confidence=0.1, max_allocation=0.0,
+                                       scale_by_sentiment=False), 0.1, 0.9, {}, 20000, 100, 0),
+        ("full allocation capped", dict(threshold=0.3, min_confidence=0.1, max_allocation=1.0), 1.0, 0.9, {}, 20000, 100, 0),
+    ])
+    def test_should_buy(self, desc, kwargs, sentiment, confidence, positions, cash, price, expected):
+        logic = TradingLogic(**kwargs)
+        assert logic.should_buy(sentiment, confidence, "AAPL", positions, cash, price) == expected, desc
 
 
 class TestShouldSellOnSentiment:
-    def test_low_confidence_no_sell(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.5)
-        assert logic.should_sell_on_sentiment(-0.8, 0.2, "AAPL", {"AAPL": "..."}) is False
-
-    def test_not_holding_no_sell(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1)
-        assert logic.should_sell_on_sentiment(-0.8, 0.9, "AAPL", {}) is False
-
-    def test_bullish_sentiment_no_sell(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1)
-        assert logic.should_sell_on_sentiment(0.8, 0.9, "AAPL", {"AAPL": "..."}) is False
-
-    def test_bearish_while_holding_triggers_sell(self):
-        logic = TradingLogic(threshold=0.3, min_confidence=0.1)
-        assert logic.should_sell_on_sentiment(-0.5, 0.9, "AAPL", {"AAPL": "..."}) is True
-
-    def test_sentiment_at_threshold_exact(self):
+    @pytest.mark.parametrize("desc,sentiment,confidence,positions,expected", [
+        ("low confidence no sell",     -0.8, 0.05, {"AAPL": "..."}, False),
+        ("not holding no sell",        -0.8, 0.9, {},               False),
+        ("bullish no sell",            0.8,  0.9, {"AAPL": "..."}, False),
+        ("bearish while holding sell", -0.5, 0.9, {"AAPL": "..."}, True),
+        ("at threshold exactly",       -0.5, 0.9, {"AAPL": "..."}, True),
+        ("below threshold no sell",    -0.4, 0.9, {"AAPL": "..."}, False),
+    ])
+    def test_should_sell_on_sentiment(self, desc, sentiment, confidence, positions, expected):
         logic = TradingLogic(threshold=0.5, min_confidence=0.1)
-        assert logic.should_sell_on_sentiment(-0.5, 0.9, "AAPL", {"AAPL": "..."}) is True
-
-    def test_sentiment_below_threshold_no_sell(self):
-        logic = TradingLogic(threshold=0.5, min_confidence=0.1)
-        assert logic.should_sell_on_sentiment(-0.4, 0.9, "AAPL", {"AAPL": "..."}) is False
+        assert logic.should_sell_on_sentiment(sentiment, confidence, "AAPL", positions) is expected
 
 
 class TestStopLoss:
-    def test_no_sl_returns_none(self):
-        logic = TradingLogic(stop_loss_pct=0)
-        pos = PositionState("AAPL", 10, 100)
-        assert logic.check_stop_loss(pos, 50) is None
-
-    def test_below_sl_returns_price(self):
-        logic = TradingLogic(stop_loss_pct=0.1)
-        pos = PositionState("AAPL", 10, 100)
-        price = logic.check_stop_loss(pos, 85)
-        assert price == 90  # 100 * (1 - 0.1)
-
-    def test_above_sl_returns_none(self):
-        logic = TradingLogic(stop_loss_pct=0.1)
-        pos = PositionState("AAPL", 10, 100)
-        assert logic.check_stop_loss(pos, 95) is None
-
-    def test_trailing_sl_uses_peak(self):
-        logic = TradingLogic(stop_loss_pct=0.1, trailing_sl=True)
-        pos = PositionState("AAPL", 10, 100)
-        pos.peak_price = 120
-        price = logic.check_stop_loss(pos, 105)
-        assert price == 108  # 120 * (1 - 0.1)
-
-    def test_trailing_sl_no_trigger_above_peak(self):
-        logic = TradingLogic(stop_loss_pct=0.1, trailing_sl=True)
-        pos = PositionState("AAPL", 10, 100)
-        pos.peak_price = 120
-        assert logic.check_stop_loss(pos, 115) is None
+    @pytest.mark.parametrize("desc,sl_pct,entry,low,trailing,peak,expected", [
+        ("no sl",           0,    100, 50,  False, None,  None),
+        ("below sl",        0.1,  100, 85,  False, None,  90.0),
+        ("above sl none",   0.1,  100, 95,  False, None,  None),
+        ("trailing uses peak", 0.1, 100, 105, True, 120,  108.0),
+        ("trailing above peak none", 0.1, 100, 115, True, 120,  None),
+    ])
+    def test_check_stop_loss(self, desc, sl_pct, entry, low, trailing, peak, expected):
+        logic = TradingLogic(stop_loss_pct=sl_pct, trailing_sl=trailing)
+        pos = PositionState("AAPL", 10, entry, peak_price=peak or entry)
+        result = logic.check_stop_loss(pos, low)
+        if expected is None:
+            assert result is None
+        else:
+            assert result == expected
 
 
 class TestTakeProfit:
-    def test_no_tp_returns_none(self):
-        logic = TradingLogic(take_profit_pct=0)
-        pos = PositionState("AAPL", 10, 100)
-        assert logic.check_take_profit(pos, 200) is None
-
-    def test_above_tp_returns_price(self):
-        logic = TradingLogic(take_profit_pct=0.1)
-        pos = PositionState("AAPL", 10, 100)
-        price = logic.check_take_profit(pos, 115)
-        assert price == pytest.approx(110)  # 100 * (1 + 0.1)
-
-    def test_below_tp_returns_none(self):
-        logic = TradingLogic(take_profit_pct=0.1)
-        pos = PositionState("AAPL", 10, 100)
-        assert logic.check_take_profit(pos, 105) is None
+    @pytest.mark.parametrize("desc,tp_pct,entry,high,expected", [
+        ("no tp",        0,   100, 200,  None),
+        ("above tp",     0.1, 100, 115,  110.0),
+        ("below tp",     0.1, 100, 105,  None),
+    ])
+    def test_check_take_profit(self, desc, tp_pct, entry, high, expected):
+        logic = TradingLogic(take_profit_pct=tp_pct)
+        pos = PositionState("AAPL", 10, entry)
+        result = logic.check_take_profit(pos, high)
+        if expected is None:
+            assert result is None
+        else:
+            assert result == pytest.approx(expected)
 
 
 class TestUpdatePeak:
-    def test_updates_peak_when_trailing(self):
-        logic = TradingLogic(trailing_sl=True)
-        pos = PositionState("AAPL", 10, 100)
-        logic.update_peak(pos, 150)
-        assert pos.peak_price == 150
-
-    def test_no_update_when_trailing_disabled(self):
-        logic = TradingLogic(trailing_sl=False)
-        pos = PositionState("AAPL", 10, 100)
-        logic.update_peak(pos, 150)
-        assert pos.peak_price == 100  # unchanged from entry
-
-    def test_does_not_decrease_peak(self):
-        logic = TradingLogic(trailing_sl=True)
-        pos = PositionState("AAPL", 10, 100)
-        pos.peak_price = 120
-        logic.update_peak(pos, 80)
-        assert pos.peak_price == 120  # peak only goes up
+    @pytest.mark.parametrize("desc,trailing,start_peak,new_price,expected", [
+        ("updates when trailing",   True,  100, 150, 150),
+        ("no update no trailing",   False, 100, 150, 100),
+        ("does not decrease peak",  True,  120, 80,  120),
+    ])
+    def test_update_peak(self, desc, trailing, start_peak, new_price, expected):
+        logic = TradingLogic(trailing_sl=trailing)
+        pos = PositionState("AAPL", 10, 100, peak_price=start_peak)
+        logic.update_peak(pos, new_price)
+        assert pos.peak_price == expected
 
 
 class TestPositionState:

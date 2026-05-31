@@ -225,6 +225,59 @@ class TestCheckPending:
         assert "next_check_at" in args["$set"]
         assert "retry_count" in args["$set"]
 
+    @pytest.mark.asyncio
+    async def test_failed_status_calls_mark_failed(self, mock_mongo):
+        tracker, orders, store = mock_mongo
+        doc = _make_doc()
+        orders.find.return_value = iter([doc])
+
+        tracker.broker.check_order = AsyncMock(return_value=("failed", "insufficient margin"))
+
+        with patch.object(tracker, "_mark_failed", new_callable=AsyncMock) as mock_fail:
+            await tracker._check_pending()
+            mock_fail.assert_called_once_with(doc, "insufficient margin")
+
+    @pytest.mark.asyncio
+    async def test_rejected_status_calls_mark_failed(self, mock_mongo):
+        tracker, orders, store = mock_mongo
+        doc = _make_doc()
+        orders.find.return_value = iter([doc])
+
+        tracker.broker.check_order = AsyncMock(return_value=("rejected", "risk limit"))
+
+        with patch.object(tracker, "_mark_failed", new_callable=AsyncMock) as mock_fail:
+            await tracker._check_pending()
+            mock_fail.assert_called_once_with(doc, "risk limit")
+
+    @pytest.mark.asyncio
+    async def test_multiple_orders_processed(self, mock_mongo):
+        tracker, orders, store = mock_mongo
+        docs = [_make_doc({"_id": f"id-{i}", "order_id": f"ord-{i}"}) for i in range(3)]
+        orders.find.return_value = iter(docs)
+
+        tracker.broker.check_order = AsyncMock(return_value=("filled", "ok"))
+
+        with patch.object(tracker, "_mark_filled", new_callable=AsyncMock) as mock_mark:
+            await tracker._check_pending()
+            assert mock_mark.call_count == 3
+
+
+class TestEnsureIndexes:
+    def test_indexes_created(self, mock_mongo):
+        tracker, orders, store = mock_mongo
+        # _ensure_indexes is called during OrderTracker.__init__
+        assert orders.create_index.call_count >= 2
+        # First call: compound index on [(status, 1), (next_check_at, 1)]
+        first_keys = orders.create_index.call_args_list[0][0][0]
+        assert isinstance(first_keys, list)
+        key_names = [k for k, _ in first_keys]
+        assert "status" in key_names
+        assert "next_check_at" in key_names
+        # Second call: single-field index on "placed_at" with TTL
+        second_key = orders.create_index.call_args_list[1][0][0]
+        assert second_key == "placed_at"
+        assert orders.create_index.call_args_list[1][1].get("expireAfterSeconds") == 604800
+
 
 # ---------------------------------------------------------------------------
 # Full lifecycle integration
