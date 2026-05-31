@@ -45,9 +45,8 @@ def mock_mongo():
         }[name])
         m.return_value.__getitem__ = MagicMock(return_value=mock_db)
 
-        tracker = _build_tracker()
+        tracker = _build_tracker(position_store=mock_stores)
         tracker._col = mock_orders
-        tracker._position_store = mock_stores
 
         yield tracker, mock_orders, mock_stores
 
@@ -240,7 +239,9 @@ class TestTrackerLifecycle:
         bus = MagicMock()
         broker = MagicMock()
         collection = MagicMock()
-        tracker = OrderTracker(bus, broker, check_interval=0.01, collection=collection)
+        position_store = MagicMock()
+        tracker = OrderTracker(bus, broker, check_interval=0.01, collection=collection,
+                               position_store=position_store)
 
         with patch.object(tracker, "_check_pending") as mock_check:
             task = asyncio.create_task(tracker.run())
