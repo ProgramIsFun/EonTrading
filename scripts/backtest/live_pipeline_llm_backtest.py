@@ -82,7 +82,7 @@ async def main():
     print(f"  {elapsed()} store cleared")
 
     monitor = PriceMonitor(bus, store, logic, interval_sec=0)
-    trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor, position_store=store)
+    trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
     executor = TradeExecutor(bus, broker)
 
     await trader.start()

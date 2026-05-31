@@ -1,7 +1,6 @@
 """Run NewsWatcher as its own process. Publishes to [news] channel."""
 import asyncio
 import logging
-import signal
 
 from src.common.log_handler import setup_logging
 setup_logging()

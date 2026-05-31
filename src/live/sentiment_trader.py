@@ -90,7 +90,11 @@ class SentimentTrader:
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
                 if price <= 0:
                     continue
-                cash = await self.broker.get_cash() if self.broker else 0.0
+                try:
+                    cash = await self.broker.get_cash() if self.broker else 0.0
+                except Exception:
+                    logger.warning("Failed to fetch cash from broker, using 0")
+                    cash = 0.0
                 if cash > 0:
                     shares = self.logic.should_buy(
                         event.sentiment, event.confidence, symbol,

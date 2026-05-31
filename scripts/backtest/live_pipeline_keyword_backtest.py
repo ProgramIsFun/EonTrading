@@ -47,7 +47,7 @@ async def main():
 
     monitor = PriceMonitor(bus, store, logic, interval_sec=0)
 
-    trader = SentimentTrader(bus, logic=logic, broker=broker, price_monitor=monitor, position_store=store)
+    trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
     executor = TradeExecutor(bus, broker)
 

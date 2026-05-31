@@ -39,12 +39,4 @@ def get_mongo_client():
         raise ConnectionError(f"Failed to connect to MongoDB: {e}") from e
 
 
-def get_symbols_list():
-    """Return all documents from the symbols collection."""
-    client = get_mongo_client()
-    db = client['EonTradingDB']
-    return list(db['symbols'].find({}))
 
-
-# Backward compat alias
-getSymbolsList = get_symbols_list

@@ -1,2 +1,1 @@
-from .base_provider import MarketDataProvider, MarketDataProviderError
-from .yfinance_provider import YFinanceProvider
+# Providers directory — yfinance/base providers removed (dead code from eontrading_datagrabber)
