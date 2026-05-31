@@ -123,9 +123,9 @@ class FutuBroker(Broker):
         self._ctx = None
 
     def _get_ctx(self):
-        from futu import OpenSecTradeContext
+        from futu import OpenSecTradeContext, TrdMarket
         if not self._ctx:
-            self._ctx = OpenSecTradeContext(host=self.host, port=self.port)
+            self._ctx = OpenSecTradeContext(filter_trdmarket=TrdMarket.US | TrdMarket.HK, host=self.host, port=self.port)
         return self._ctx
 
     async def execute(self, trade: TradeEvent) -> str | None:
@@ -173,13 +173,19 @@ class FutuBroker(Broker):
             return "pending", None
 
     async def cancel_order(self, order_id: str) -> bool:
-        from futu import TrdEnv
+        from futu import TrdEnv, ModifyOrderOp
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
             ctx = await asyncio.to_thread(self._get_ctx)
 
             def _cancel():
-                return ctx.undo_order(order_id=int(order_id), trd_env=trd_env)
+                return ctx.modify_order(
+                    ModifyOrderOp.CANCEL,
+                    order_id=int(order_id),
+                    qty=0,
+                    price=0,
+                    trd_env=trd_env,
+                )
             ret, _ = await asyncio.to_thread(_cancel)
             return ret == 0
         except Exception as e:
