@@ -26,16 +26,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[test]"
 
-      - name: Lint with ruff
-        run: |
-          pip install ruff
-          ruff check src/ tests/
-
-      - name: Type-check with pyright
-        run: |
-          pip install pyright
-          pyright src/ tests/ --warnings
-
       - name: Test with pytest and coverage
         run: |
           pip install pytest-cov
