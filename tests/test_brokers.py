@@ -196,7 +196,7 @@ class TestFutuBroker:
             from src.live.brokers.broker import FutuBroker
 
             mock_ctx = MagicMock()
-            mock_ctx.undo_order.return_value = (0, None)
+            mock_ctx.modify_order.return_value = (0, None)
 
             broker = FutuBroker()
             broker._ctx = mock_ctx
