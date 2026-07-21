@@ -19,12 +19,12 @@ export async function fetchLiveBacktest(
   // Start the job
   const startRes = await fetch(`${API_BASE}/api/live-backtest?${query}`, { method: "POST" });
   if (!startRes.ok) throw new Error(`API error: ${startRes.status}`);
-  const { job_id } = await startRes.json();
+  const { job_id: jobId } = await startRes.json();
 
   // Poll until done
   while (true) {
     await new Promise((r) => setTimeout(r, 1000));
-    const pollRes = await fetch(`${API_BASE}/api/live-backtest/${job_id}`);
+    const pollRes = await fetch(`${API_BASE}/api/live-backtest/${jobId}`);
     const data = await pollRes.json();
     if (data.status === "done") return data;
     if (data.status === "error") throw new Error(data.error || "Backtest failed");
