@@ -3,7 +3,7 @@ import asyncio
 import logging
 
 from src.common.log_handler import setup_logging
-setup_logging("watcher")
+setup_logging("newswatcher")
 logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus
@@ -31,14 +31,14 @@ async def main():
         "Sources": ", ".join(source_names),
     })
 
-    bus = RedisStreamBus(group="watcher")
+    bus = RedisStreamBus(group="newswatcher")
     await bus.start()
 
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
                           persist_news=persist,
                           publish=publish)
     logger.info("🟢 Started. Polling every 120s.")
-    Heartbeat.create_background("watcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"})
+    Heartbeat.create_background("newswatcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"})
 
     watcher_task = asyncio.create_task(watcher.run())
     await create_shutdown_event().wait()

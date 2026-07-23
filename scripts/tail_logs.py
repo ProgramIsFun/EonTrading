@@ -10,7 +10,7 @@ LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 
 # All known components — tail even if file doesn't exist yet
 COMPONENTS = [
-    "watcher", "analyzer", "trader", "executor",
+    "newswatcher", "analyzer", "trader", "executor",
     "monitor", "order_tracker", "api",
 ]
 

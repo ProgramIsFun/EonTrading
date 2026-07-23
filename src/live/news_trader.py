@@ -15,7 +15,7 @@ import logging
 import sys
 
 from src.common.log_handler import setup_logging
-for _comp in ["watcher", "analyzer", "trader", "executor", "monitor", "order_tracker"]:
+for _comp in ["newswatcher", "analyzer", "trader", "executor", "monitor", "order_tracker"]:
     setup_logging(_comp)
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ async def main_single():
     await executor.start()
     monitor_task = asyncio.create_task(monitor.run())
 
-    for name in ["watcher", "analyzer", "trader", "executor", "monitor"]:
+    for name in ["newswatcher", "analyzer", "trader", "executor", "monitor"]:
         Heartbeat.create_background(name, metadata={"mode": "single"})
 
     logger.info("🟢 All components started. Polling every 120s.")

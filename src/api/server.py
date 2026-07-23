@@ -35,7 +35,7 @@ async def _check_api_key(key: str = Depends(_api_key_header)):
 
 
 # --- Docker component allowlist ---
-_ALLOWED_DOCKER_NAMES = {"watcher", "analyzer", "trader", "executor", "redis", "all"}
+_ALLOWED_DOCKER_NAMES = {"newswatcher", "analyzer", "trader", "executor", "redis", "all"}
 
 
 def _validate_docker_name(name: str) -> str:
@@ -102,8 +102,8 @@ def docker_status():
     containers = container_status()
     # Attach watcher options from running container
     for c in containers:
-        if c["name"] == "watcher" and c["state"] == "running":
-            env = container_env("watcher")
+        if c["name"] == "newswatcher" and c["state"] == "running":
+            env = container_env("newswatcher")
             c["options"] = {
                 "persist_news": env.get("PERSIST_NEWS") == "1",
                 "publish_pipeline": env.get("PUBLISH_PIPELINE") == "1",
@@ -117,7 +117,7 @@ def docker_start(name: str, persist_news: bool = False, publish_pipeline: bool =
     _validate_docker_name(name)
     from src.common.docker_ctl import start_component
     env = {}
-    if name == "watcher":
+    if name == "newswatcher":
         env["PERSIST_NEWS"] = "1" if persist_news else "0"
         env["PUBLISH_PIPELINE"] = "1" if publish_pipeline else "0"
     result = start_component(name, env=env if env else None)

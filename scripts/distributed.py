@@ -18,7 +18,7 @@ PID_DIR = PROJECT_ROOT / "run" / ".pids"
 LOG_DIR = PROJECT_ROOT / "logs"
 
 COMPONENTS = {
-    "watcher": "src.live.runners.run_watcher",
+    "newswatcher": "src.live.runners.run_watcher",
     "analyzer": "src.live.runners.run_analyzer",
     "trader": "src.live.runners.run_trader",
     "executor": "src.live.runners.run_executor",

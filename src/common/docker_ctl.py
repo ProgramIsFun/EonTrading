@@ -5,7 +5,7 @@ import subprocess
 # Path to docker-compose.yml — same directory as the project root
 COMPOSE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-COMPONENTS = ["watcher", "analyzer", "trader", "executor", "redis"]
+COMPONENTS = ["newswatcher", "analyzer", "trader", "executor", "redis"]
 
 
 def _run(cmd: list[str], timeout: int = 30, env: dict = None) -> dict:

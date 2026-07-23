@@ -82,7 +82,7 @@ def setup_logging(component: str | None = None, log_dir: str = "logs"):
     mode). Duplicate calls for the same component are ignored.
 
     Args:
-        component: Component name (e.g. "watcher", "analyzer"). If given,
+        component: Component name (e.g. "newswatcher", "analyzer"). If given,
             creates a ``FileHandler`` writing to ``logs/{component}.log``.
             If ``None``, only console logging is set up (used by API server).
         log_dir: Directory for log files.

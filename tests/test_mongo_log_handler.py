@@ -25,7 +25,7 @@ class TestComponentFormatter:
         from src.common.log_handler import ComponentFormatter
         fmt = ComponentFormatter(log_format="both")
         record = logging.LogRecord("src.live.news_watcher", logging.INFO, "", 0, "msg", (), None)
-        record.component = "watcher"
+        record.component = "newswatcher"
         result = fmt.format(record)
         assert "watcher:src.live.news_watcher" in result
 
@@ -33,9 +33,9 @@ class TestComponentFormatter:
         from src.common.log_handler import ComponentFormatter
         fmt = ComponentFormatter(log_format="component")
         record = logging.LogRecord("src.live.news_watcher", logging.INFO, "", 0, "msg", (), None)
-        record.component = "watcher"
+        record.component = "newswatcher"
         result = fmt.format(record)
-        assert "[watcher]" in result
+        assert "[newswatcher]" in result
 
     def test_no_component_falls_back_to_name(self):
         from src.common.log_handler import ComponentFormatter
@@ -50,11 +50,11 @@ class TestJsonFormatter:
         from src.common.log_handler import JsonFormatter
         fmt = JsonFormatter()
         record = logging.LogRecord("test.logger", logging.WARNING, "test.py", 42, "hello world", (), None)
-        record.component = "watcher"
+        record.component = "newswatcher"
         result = fmt.format(record)
         doc = json.loads(result)
         assert doc["level"] == "WARNING"
-        assert doc["component"] == "watcher"
+        assert doc["component"] == "newswatcher"
         assert doc["message"] == "hello world"
         assert doc["logger"] == "test.logger"
         assert "timestamp" in doc
@@ -95,7 +95,7 @@ class TestSetupLogging:
         importlib.reload(lh)
         root = logging.getLogger()
         before = len(root.handlers)
-        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        lh.setup_logging("newswatcher", log_dir=str(tmp_path))
         assert (tmp_path / "watcher.log").exists() or len(root.handlers) > before
         # Restore
         root.handlers = root.handlers[:before]
@@ -109,7 +109,7 @@ class TestSetupLogging:
         importlib.reload(lh)
         root = logging.getLogger()
         before = len(root.handlers)
-        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        lh.setup_logging("newswatcher", log_dir=str(tmp_path))
         lh.setup_logging("trader", log_dir=str(tmp_path))
         # Two file handlers added (plus possibly console)
         assert len(root.handlers) > before + 1
@@ -124,9 +124,9 @@ class TestSetupLogging:
         importlib.reload(lh)
         root = logging.getLogger()
         before = len(root.handlers)
-        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        lh.setup_logging("newswatcher", log_dir=str(tmp_path))
         after_first = len(root.handlers)
-        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        lh.setup_logging("newswatcher", log_dir=str(tmp_path))
         after_second = len(root.handlers)
         # Second call adds nothing
         assert after_second == after_first
@@ -141,7 +141,7 @@ class TestSetupLogging:
         importlib.reload(lh)
         root = logging.getLogger()
         before = len(root.handlers)
-        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        lh.setup_logging("newswatcher", log_dir=str(tmp_path))
         lh.setup_logging("trader", log_dir=str(tmp_path))
         stream_handlers = [h for h in root.handlers[before:] if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)]
         assert len(stream_handlers) == 1

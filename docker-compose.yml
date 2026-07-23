@@ -47,7 +47,7 @@ services:
         limits:
           memory: 128M
 
-  watcher:
+  newswatcher:
     build: .
     command: python3 -m src.live.runners.run_watcher
     env_file: .env

@@ -11,7 +11,7 @@ from src.common.news_poller import NewsPoller
 from src.common.news_store import news_to_doc
 
 logger = logging.getLogger(__name__)
-logger.addFilter(ComponentFilter("watcher"))
+logger.addFilter(ComponentFilter("newswatcher"))
 
 
 class NewsWatcher:
