@@ -9,6 +9,8 @@ Usage:
     python run.py restart        # stop + start
 """
 import os
+import signal
+import subprocess
 import sys
 from pathlib import Path
 
@@ -48,8 +50,27 @@ def cmd_single():
 def cmd_start():
     _setup_path()
     _load_env()
+    _kill_single_process()
     from scripts.distributed import start_all
     start_all()
+
+
+def _kill_single_process():
+    """Kill single-process mode if running (psutil-free, cross-platform)."""
+    try:
+        out = subprocess.check_output(
+            ["pgrep", "-af", "news_trader"], text=True, stderr=True
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return
+    for line in out.strip().splitlines():
+        pid_str = line.split()[0]
+        try:
+            pid = int(pid_str)
+            print(f"  Killing single-process (pid {pid})...")
+            os.kill(pid, signal.SIGTERM)
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass
 
 
 def cmd_stop():
@@ -69,6 +90,7 @@ def cmd_status():
 def cmd_restart():
     _setup_path()
     _load_env()
+    _kill_single_process()
     from scripts.distributed import restart_all
     restart_all()
 
