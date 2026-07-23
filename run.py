@@ -9,6 +9,7 @@ Usage:
     python run.py restart        # stop + start
     python run.py clean          # delete all log files
     python run.py logs           # open terminal windows tailing each log file
+    python run.py unlogs         # close all tail terminals
 """
 import os
 import signal
@@ -117,6 +118,27 @@ def cmd_logs():
     tail_main()
 
 
+def cmd_unlogs():
+    """Kill all 'tail -f' processes on log files."""
+    import re
+    log_dir = PROJECT_ROOT / "logs"
+    try:
+        out = subprocess.check_output(["pgrep", "-af", "tail"], text=True, stderr=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        print("No tail processes found.")
+        return
+    killed = 0
+    for line in out.strip().splitlines():
+        if str(log_dir) in line or "/logs/" in line:
+            pid = int(line.split()[0])
+            try:
+                os.kill(pid, signal.SIGTERM)
+                killed += 1
+            except (ProcessLookupError, PermissionError):
+                pass
+    print(f"Closed {killed} tail terminals." if killed else "No tail processes found.")
+
+
 COMMANDS = {
     "single": cmd_single,
     "start": cmd_start,
@@ -125,6 +147,7 @@ COMMANDS = {
     "restart": cmd_restart,
     "clean": cmd_clean,
     "logs": cmd_logs,
+    "unlogs": cmd_unlogs,
 }
 
 
