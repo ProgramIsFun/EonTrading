@@ -8,6 +8,21 @@ from pathlib import Path
 
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 
+# All known components — tail even if file doesn't exist yet
+COMPONENTS = [
+    "watcher", "analyzer", "trader", "executor",
+    "monitor", "order_tracker", "api", "logtail",
+]
+
+
+def is_already_tailing(filepath: str) -> bool:
+    """Check if tail -f is already running on this file."""
+    try:
+        out = subprocess.check_output(["pgrep", "-af", "tail"], text=True, stderr=True)
+        return filepath in out
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
+
 
 def open_terminal(title: str, cmd: list[str]):
     if sys.platform == "darwin":
@@ -20,15 +35,19 @@ def open_terminal(title: str, cmd: list[str]):
 
 
 def main():
-    logs = sorted(LOG_DIR.glob("*.log"))
-    if not logs:
-        print(f"No log files in {LOG_DIR}")
-        return
-    for log in logs:
-        title = log.stem
-        open_terminal(title, ["tail", "-f", str(log)])
-        print(f"  [{title}] {log}")
-    print(f"Opened {len(logs)} terminals.")
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    opened = 0
+    skipped = 0
+    for name in COMPONENTS:
+        log = LOG_DIR / f"{name}.log"
+        if is_already_tailing(str(log)):
+            print(f"  [{name}] already running, skipping")
+            skipped += 1
+            continue
+        open_terminal(name, ["tail", "-f", str(log)])
+        print(f"  [{name}] {log}")
+        opened += 1
+    print(f"Opened {opened} terminals ({skipped} already running).")
 
 
 if __name__ == "__main__":
