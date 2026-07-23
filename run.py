@@ -8,6 +8,7 @@ Usage:
     python run.py status         # show running processes
     python run.py restart        # stop + start
     python run.py clean          # delete all log files
+    python run.py logs           # open terminal windows tailing each log file
 """
 import os
 import signal
@@ -111,6 +112,11 @@ def cmd_clean():
     print(f"Cleaned {len(logs)} log files.")
 
 
+def cmd_logs():
+    from scripts.tail_logs import main as tail_main
+    tail_main()
+
+
 COMMANDS = {
     "single": cmd_single,
     "start": cmd_start,
@@ -118,6 +124,7 @@ COMMANDS = {
     "status": cmd_status,
     "restart": cmd_restart,
     "clean": cmd_clean,
+    "logs": cmd_logs,
 }
 
 
