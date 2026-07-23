@@ -10,23 +10,25 @@ News-driven trading system: data collection, backtesting, and live execution.
 [news] → [sentiment] → [trade]
 ```
 
-Everything flows through event channels (LocalEventBus or RedisStreamBus). Fill confirmation is handled by OrderTracker (polls `orders` collection), not a channel. See the interactive architecture diagram in the dashboard About tab.
+Everything flows through event channels (LocalEventBus or RedisStreamBus). Fill confirmation is handled by OrderTracker (polls `orders` collection), not a channel.
 
 ## Quick Start
 
 ```bash
 # 1. Python 3.11 + venv
-python3.11 -m venv .venv && source .venv/bin/activate
+pyenv install 3.11.13 && pyenv global 3.11.13
+python3 -m venv .venv && source .venv/bin/activate
 
 # 2. Configure
 cp .env.example .env    # edit with your API keys
 pip install -e .
 
 # 3. Run
-PYTHONPATH=. python -m src.live.news_trader                # single process (default)
-./scripts/start_distributed.sh start                       # distributed — all 7 components
-./scripts/start_distributed.sh stop                        # stop all
-./scripts/start_distributed.sh status                      # check running processes
+python run.py                # single process (default)
+python run.py start          # distributed — all 7 components + log tailer
+python run.py stop           # stop all
+python run.py status         # check running processes
+python run.py restart        # stop + start
 ```
 
 ## Architecture
@@ -36,18 +38,6 @@ PYTHONPATH=. python -m src.live.news_trader                # single process (def
 **Deployment:**
 - **Single process** — all components in one process via LocalEventBus. Best for dev, replay, debugging.
 - **Distributed** — each component in its own process via Redis Streams. Best for production, isolation, scaling.
-
-```bash
-python -m src.live.runners.run_watcher          # news → [news]
-python -m src.live.runners.run_analyzer         # [news] → [sentiment]
-python -m src.live.runners.run_trader           # [sentiment] → [trade]
-python -m src.live.runners.run_executor          # [trade] → orders (MongoDB)
-python -m src.live.runners.run_monitor          # monitors SL/TP → [trade]
-python -m src.live.runners.run_order_tracker     # orders → positions on fill
-uvicorn src.api.server:app --port 8000           # REST API + dashboard
-```
-
-Or use `./scripts/start_distributed.sh start` to run all 7 at once.
 
 Same component code, all modes. Components don't know which transport they're on.
 
@@ -64,6 +54,18 @@ Sources → NewsWatcher → [news] → AnalyzerService → [sentiment]
 - TradeExecutor only submits trades to broker and writes to `orders` — never touches positions
 - PositionStore is source of truth for holdings (qty, entry price) — broker consulted only at startup for reconciliation
 - Graceful shutdown on SIGINT/SIGTERM
+
+## Logs
+
+Each component writes structured JSON to `logs/{component}.log`. Two ways to view:
+
+```bash
+python scripts/tail_logs.py          # open terminal per log file (tail -f)
+# or
+python scripts/logtail.py --port 8001  # web UI at http://localhost:8001
+```
+
+In distributed mode, the log tailer starts automatically on port 8001.
 
 ## Configuration
 
@@ -90,14 +92,14 @@ Copy `.env.example` to `.env`. All vars optional — default is PaperBroker + ke
 Same pipeline, historical data:
 
 ```bash
-PYTHONPATH=. python3 -m src.live.replay --start 2025-01-01 --end 2025-06-01
+python -m src.live.replay --start 2025-01-01 --end 2025-06-01
 ```
 
 ## Testing
 
 ```bash
-PYTHONPATH=. python -m pytest tests/ -q      # 263 tests
-PYTHONPATH=. python -m pytest tests/ -q --cov=src   # with coverage
+python -m pytest tests/ -q              # 269 tests
+python -m pytest tests/ -q --cov=src    # with coverage
 ```
 
 ## API Endpoints
@@ -108,6 +110,7 @@ PYTHONPATH=. python -m pytest tests/ -q --cov=src   # with coverage
 | `GET /api/reconcile` | Compare system vs broker |
 | `GET /api/trades` | Trade history |
 | `GET /api/news` | Recent articles |
+| `GET /api/logs` | Recent logs from MongoDB |
 | `GET /api/backtest` | Sentiment backtest (legacy) |
 | `GET /api/price-backtest` | Price backtest (SMA/RSI) |
 | `POST /api/live-backtest` | Start live pipeline backtest |
@@ -126,8 +129,8 @@ src/
 ├── live/                      # Watcher, analyzer, trader, monitor, brokers, runners
 └── strategies/                # Sentiment (keyword + LLM)
 frontend/                      # React + Vite dashboard
-scripts/                       # Data collection, startup, utils
-tests/                         # 263 tests
+scripts/                       # logtail.py, tail_logs.py, distributed.py, utils
+tests/                         # 269 tests
 ```
 
 ## Data Stores
@@ -137,7 +140,7 @@ tests/                         # 263 tests
 | `positions` | Current open positions (1 doc / symbol) with qty, entry price | OrderTracker (on fill) | SentimentTrader, PriceMonitor, Reconcile, API |
 | `orders` | Full order lifecycle (pending → filled / failed / timeout) | TradeExecutor (submit), OrderTracker (update) | OrderTracker (poll) |
 | `heartbeats` | Component health (updated every 30s) | All components | API |
-| `logs` | Structured logs from all components (via MongoBatchHandler) | All components | Log Viewer tab |
+| `logs` | Structured logs from all components | LogCollector | API, logtail |
 
 **Design rule:** PositionStore is the canonical source for current holdings. Never infer positions from `orders` — always use `positions`.
 
@@ -147,11 +150,11 @@ tests/                         # 263 tests
 ssh user@your-vps
 cd EonTrading
 git pull
-./scripts/start_distributed.sh restart    # stop all, start all with new code
-./scripts/start_distributed.sh status     # verify all 7 components are running
+python run.py restart        # stop all, start all with new code
+python run.py status         # verify all components are running
 ```
 
-Logs are in `logs/` — rotated automatically (10 MB each, 5 backups).
+Logs are in `logs/` — each component writes to its own file.
 
 ## Sentiment Analyzers
 
@@ -164,6 +167,6 @@ Supports OpenAI, Azure OpenAI, and local Ollama.
 
 ## Roadmap
 
-**Done:** Live pipeline (3 channels: [news], [sentiment], [trade]), 5 news sources, 4 brokers, single `orders` collection for order lifecycle, OrderTracker state machine (fill/fail/timeout), MongoDB persistence, dedup, 2 analyzers (keyword + LLM), SL/TP (trailing), backtesting (sentiment + price), React dashboard, single/distributed modes, Redis Streams, replay mode, price cache, transaction costs, Docker Compose deployment, heartbeats, graceful shutdown, 263 tests.
+**Done:** Live pipeline (3 channels: [news], [sentiment], [trade]), 5 news sources, 4 brokers, single `orders` collection for order lifecycle, OrderTracker state machine (fill/fail/timeout), MongoDB persistence, dedup, 2 analyzers (keyword + LLM), SL/TP (trailing), backtesting (sentiment + price), React dashboard, single/distributed modes, Redis Streams, replay mode, price cache, transaction costs, Docker Compose deployment, heartbeats, graceful shutdown, 269 tests.
 
 **To do:** Cross-source dedup, inverse ETF support, sector trading, real-news backtest, side-by-side comparison, live dashboard, Telegram alerts.
