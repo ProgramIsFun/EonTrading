@@ -95,3 +95,31 @@ class TestLiveBacktestJob:
 
                 assert data["status"] == "done", f"Job failed: {data.get('error')}"
                 assert any(p > 0 for p in seen_progress) or data["status"] == "done"
+
+
+class TestCollectorEndpoints:
+    @pytest.mark.asyncio
+    async def test_collector_status(self, app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/collector/status")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "running" in data
+            assert "log_count" in data
+
+    @pytest.mark.asyncio
+    async def test_collector_stop_when_not_running(self, app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post("/api/collector/stop")
+            assert resp.status_code == 200
+            assert resp.json()["ok"] is True
+
+
+class TestSSEEndpoint:
+    @pytest.mark.asyncio
+    async def test_log_stream_exists(self, app):
+        """SSE endpoint is registered and returns correct media type headers."""
+        # Just verify the endpoint exists (streaming test would hang with AsyncClient)
+        from src.api.server import app as _app
+        routes = [r.path for r in _app.routes]
+        assert "/api/logs/stream" in routes

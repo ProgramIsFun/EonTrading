@@ -132,3 +132,105 @@ class TestLogCollector:
         collector.start()  # should not raise
         assert collector.running
         collector.stop()
+
+    def test_file_rotation_detection(self, tmp_path):
+        """Collector handles file truncation (rotation) gracefully."""
+        log_file = tmp_path / "watcher.log"
+        received = []
+
+        collector = LogCollector(
+            log_dir=str(tmp_path),
+            on_log=lambda doc: received.append(doc),
+        )
+        collector.start()
+
+        # Write initial content
+        log_file.write_text('{"component":"watcher","message":"before","level":"INFO","timestamp":"","logger":"","module":"","func":"","line":0}\n')
+        time.sleep(1.0)
+
+        # Simulate rotation: truncate and write new content
+        log_file.write_text('{"component":"watcher","message":"after","level":"INFO","timestamp":"","logger":"","module":"","func":"","line":0}\n')
+        time.sleep(1.5)
+
+        collector.stop()
+
+        messages = [d["message"] for d in received]
+        assert "after" in messages
+
+    def test_on_log_error_doesnt_crash(self, tmp_path):
+        """Errors in on_log callback don't crash the collector."""
+        call_count = [0]
+
+        def bad_callback(doc):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("boom")
+
+        log_file = tmp_path / "watcher.log"
+        collector = LogCollector(
+            log_dir=str(tmp_path),
+            on_log=bad_callback,
+        )
+        collector.start()
+
+        # First line triggers error
+        with open(log_file, "a") as f:
+            f.write('{"component":"watcher","message":"m1","level":"INFO","timestamp":"","logger":"","module":"","func":"","line":0}\n')
+        time.sleep(1.0)
+
+        # Second line should succeed
+        with open(log_file, "a") as f:
+            f.write('{"component":"watcher","message":"m2","level":"INFO","timestamp":"","logger":"","module":"","func":"","line":0}\n')
+        time.sleep(1.0)
+
+        collector.stop()
+
+        assert call_count[0] >= 2
+
+    def test_ignores_non_log_files(self, tmp_path):
+        """Collector only processes .log files."""
+        received = []
+
+        collector = LogCollector(
+            log_dir=str(tmp_path),
+            on_log=lambda doc: received.append(doc),
+        )
+        collector.start()
+
+        (tmp_path / "watcher.log").write_text('{"component":"watcher","message":"ok","level":"INFO","timestamp":"","logger":"","module":"","func":"","line":0}\n')
+        (tmp_path / "readme.txt").write_text("not a log file\n")
+        (tmp_path / ".gitkeep").write_text("")
+
+        time.sleep(1.5)
+        collector.stop()
+
+        messages = [d["message"] for d in received]
+        assert "ok" in messages
+        assert len(received) == 1
+
+    def test_empty_directory(self, tmp_path):
+        """Collector handles empty log directory gracefully."""
+        collector = LogCollector(log_dir=str(tmp_path))
+        collector.start()
+        time.sleep(1.0)
+        collector.stop()
+        assert collector.log_count == 0
+
+    def test_mongo_flush_on_stop(self, tmp_path):
+        """Remaining buffered records are flushed to MongoDB on stop."""
+        mock_col = MagicMock()
+        log_file = tmp_path / "watcher.log"
+
+        collector = LogCollector(
+            log_dir=str(tmp_path),
+            get_mongo_fn=lambda: mock_col,
+        )
+        collector.start()
+
+        log_file.write_text('{"component":"watcher","message":"flush_me","level":"INFO","timestamp":"","logger":"","module":"","func":"","line":0}\n')
+        time.sleep(1.0)
+
+        # Don't wait for automatic flush — stop should trigger final flush
+        collector.stop()
+
+        assert mock_col.insert_many.called

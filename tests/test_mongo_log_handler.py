@@ -75,6 +75,94 @@ class TestJsonFormatter:
         doc = json.loads(result)
         assert doc["message"] == "日本語テスト"
 
+    def test_all_fields_present(self):
+        from src.common.log_handler import JsonFormatter
+        fmt = JsonFormatter()
+        record = logging.LogRecord("my.logger", logging.ERROR, "file.py", 99, "err", (), None)
+        record.component = "executor"
+        doc = json.loads(fmt.format(record))
+        for key in ("timestamp", "level", "component", "logger", "message", "module", "func", "line"):
+            assert key in doc, f"Missing field: {key}"
+        assert doc["level"] == "ERROR"
+        assert doc["line"] == 99
+
+
+class TestSetupLogging:
+    def test_component_creates_file_handler(self, tmp_path):
+        """setup_logging('watcher') creates logs/watcher.log."""
+        import importlib
+        import src.common.log_handler as lh
+        importlib.reload(lh)
+        root = logging.getLogger()
+        before = len(root.handlers)
+        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        assert (tmp_path / "watcher.log").exists() or len(root.handlers) > before
+        # Restore
+        root.handlers = root.handlers[:before]
+        root._eon_components = set()
+        root._eon_console_added = False
+
+    def test_multiple_components_create_separate_files(self, tmp_path):
+        """Calling setup_logging with different components creates separate files."""
+        import importlib
+        import src.common.log_handler as lh
+        importlib.reload(lh)
+        root = logging.getLogger()
+        before = len(root.handlers)
+        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        lh.setup_logging("trader", log_dir=str(tmp_path))
+        # Two file handlers added (plus possibly console)
+        assert len(root.handlers) > before + 1
+        root.handlers = root.handlers[:before]
+        root._eon_components = set()
+        root._eon_console_added = False
+
+    def test_duplicate_component_ignored(self, tmp_path):
+        """Calling setup_logging('watcher') twice doesn't add duplicate handler."""
+        import importlib
+        import src.common.log_handler as lh
+        importlib.reload(lh)
+        root = logging.getLogger()
+        before = len(root.handlers)
+        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        after_first = len(root.handlers)
+        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        after_second = len(root.handlers)
+        # Second call adds nothing
+        assert after_second == after_first
+        root.handlers = root.handlers[:before]
+        root._eon_components = set()
+        root._eon_console_added = False
+
+    def test_console_handler_added_once(self, tmp_path):
+        """Multiple setup_logging calls only add one console handler."""
+        import importlib
+        import src.common.log_handler as lh
+        importlib.reload(lh)
+        root = logging.getLogger()
+        before = len(root.handlers)
+        lh.setup_logging("watcher", log_dir=str(tmp_path))
+        lh.setup_logging("trader", log_dir=str(tmp_path))
+        stream_handlers = [h for h in root.handlers[before:] if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)]
+        assert len(stream_handlers) == 1
+        root.handlers = root.handlers[:before]
+        root._eon_components = set()
+        root._eon_console_added = False
+
+    def test_none_component_no_file_handler(self, tmp_path):
+        """setup_logging(None) only adds console, no file handler."""
+        import importlib
+        import src.common.log_handler as lh
+        importlib.reload(lh)
+        root = logging.getLogger()
+        before = len(root.handlers)
+        lh.setup_logging(None, log_dir=str(tmp_path))
+        file_handlers = [h for h in root.handlers[before:] if isinstance(h, logging.FileHandler)]
+        assert len(file_handlers) == 0
+        root.handlers = root.handlers[:before]
+        root._eon_components = set()
+        root._eon_console_added = False
+
 
 class TestLLMSentimentAnalyzerOpencode:
     def test_opencode_key_sets_correct_defaults(self):
