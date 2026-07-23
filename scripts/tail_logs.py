@@ -11,7 +11,7 @@ LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 # All known components — tail even if file doesn't exist yet
 COMPONENTS = [
     "watcher", "analyzer", "trader", "executor",
-    "monitor", "order_tracker", "api", "logtail",
+    "monitor", "order_tracker", "api",
 ]
 
 
@@ -40,6 +40,7 @@ def main():
     skipped = 0
     for name in COMPONENTS:
         log = LOG_DIR / f"{name}.log"
+        log.touch(exist_ok=True)
         if is_already_tailing(str(log)):
             print(f"  [{name}] already running, skipping")
             skipped += 1
