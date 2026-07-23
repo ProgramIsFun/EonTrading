@@ -57,8 +57,8 @@ class Settings(BaseSettings):
     sl_check_interval: int = 60
 
     # Logging
-    mongodb_log: bool = True
-    log_format: str = "both"  # "component", "module", or "both"
+    log_output: str = "json"  # "json" (structured) or "text" (human-readable)
+    log_format: str = "both"  # "component", "module", or "both" (text mode only)
 
     # API
     cors_origins: str = "http://localhost:5173,http://localhost:8000"

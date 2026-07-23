@@ -3,7 +3,7 @@ import asyncio
 import logging
 
 from src.common.log_handler import setup_logging
-setup_logging()
+setup_logging("watcher")
 logger = logging.getLogger(__name__)
 
 from src.common.event_bus import RedisStreamBus

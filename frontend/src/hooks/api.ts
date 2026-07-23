@@ -57,10 +57,9 @@ export async function fetchLogs(
   return res.json();
 }
 
-export async function getCollectorStatus(): Promise<boolean> {
+export async function getCollectorStatus(): Promise<{ running: boolean; log_count: number }> {
   const res = await fetch(`${API_BASE}/api/collector/status`);
-  const data = await res.json();
-  return data.running;
+  return res.json();
 }
 
 export async function toggleCollector(start: boolean): Promise<void> {

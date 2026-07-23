@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { fetchLogs } from "../hooks/api";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 interface LogEntry {
   timestamp: string;
   level: string;
+  component: string;
   logger: string;
   message: string;
 }
@@ -17,40 +17,62 @@ const LEVEL_COLORS: Record<string, string> = {
 };
 
 const PANELS = [
-  { label: "Watcher", prefix: "src.live.runners.run_watcher,src.live.news_watcher,src.data.news", color: "#22c55e" },
-  { label: "Trader", prefix: "src.live.runners.run_trader,src.live.sentiment_trader", color: "#818cf8" },
-  { label: "Analyzer", prefix: "src.live.runners.run_analyzer,src.live.analyzer_service", color: "#f59e0b" },
-  { label: "Executor", prefix: "src.live.runners.run_executor,src.live.brokers", color: "#ef4444" },
-  { label: "Monitor", prefix: "src.live.runners.run_monitor,src.live.price_monitor", color: "#ec4899" },
-  { label: "Others", prefix: "src.common,httpx,__main__", color: "#888" },
+  { label: "Watcher", component: "watcher", color: "#22c55e" },
+  { label: "Trader", component: "trader", color: "#818cf8" },
+  { label: "Analyzer", component: "analyzer", color: "#f59e0b" },
+  { label: "Executor", component: "executor", color: "#ef4444" },
+  { label: "Monitor", component: "monitor", color: "#ec4899" },
+  { label: "Others", component: "", color: "#888" },
 ];
+
+const MAX_BUFFER = 200;
 
 export default function LogViewer() {
   const [allLogs, setAllLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [level, setLevel] = useState("");
+  const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
+  const esRef = useRef<EventSource | null>(null);
+  const bufferRef = useRef<LogEntry[]>([]);
 
-  const load = () => {
-    setLoading(true);
-    fetchLogs(undefined, undefined, 500)
-      .then((r) => setAllLogs(r.logs || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  };
+  const connect = useCallback(() => {
+    const API_BASE = import.meta.env.VITE_API_BASE || "";
+    const url = `${API_BASE}/api/logs/stream`;
+    const es = new EventSource(url);
+    esRef.current = es;
 
-  useEffect(() => {
-    load();
-    const interval = setInterval(load, 10000);
-    return () => clearInterval(interval);
+    es.onopen = () => setStatus("connected");
+
+    es.addEventListener("log", (e) => {
+      try {
+        const log: LogEntry = JSON.parse(e.data);
+        bufferRef.current = [...bufferRef.current.slice(-(MAX_BUFFER - 1)), log];
+        setAllLogs([...bufferRef.current]);
+      } catch {}
+    });
+
+    es.onerror = () => {
+      setStatus("disconnected");
+      es.close();
+      setTimeout(connect, 3000);
+    };
   }, []);
 
-  const matches = (l: LogEntry, prefixes: string) => {
+  useEffect(() => {
+    connect();
+    return () => esRef.current?.close();
+  }, [connect]);
+
+  const matches = (l: LogEntry, component: string) => {
     if (level && l.level !== level) return false;
-    return prefixes.split(",").some((p) => l.logger.startsWith(p));
+    if (!component) {
+      const known = PANELS.filter((p) => p.component).map((p) => p.component);
+      return !known.includes(l.component);
+    }
+    return l.component === component;
   };
 
   const renderLogLines = (logs: LogEntry[]) =>
-    logs.slice(0, 50).map((l, i) => {
+    logs.slice(-50).map((l, i) => {
       const ts = l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : "";
       return (
         <div key={i} style={{
@@ -64,10 +86,22 @@ export default function LogViewer() {
       );
     });
 
+  const statusColor = status === "connected" ? "#22c55e" : status === "connecting" ? "#f59e0b" : "#ef4444";
+  const statusLabel = status === "connected" ? "Live" : status === "connecting" ? "Connecting..." : "Disconnected";
+
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <span style={{ fontSize: 13, color: "#888" }}>Component Logs</span>
+        <span style={{
+          fontSize: 10, color: statusColor, display: "flex", alignItems: "center", gap: 4,
+        }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: "50%", background: statusColor,
+            display: "inline-block",
+          }} />
+          {statusLabel}
+        </span>
         <select value={level} onChange={(e) => setLevel(e.target.value)} style={{
           padding: "4px 8px", background: "#2a2a3e", color: "#888",
           border: "none", borderRadius: 4, fontSize: 12, cursor: "pointer",
@@ -78,15 +112,11 @@ export default function LogViewer() {
           <option value="WARNING">WARNING</option>
           <option value="ERROR">ERROR</option>
         </select>
-        <button onClick={load} style={{
-          padding: "4px 12px", background: "#2a2a3e", color: "#888",
-          border: "none", borderRadius: 4, cursor: "pointer", fontSize: 12,
-        }}>Refresh</button>
-        {loading && <span style={{ fontSize: 11, color: "#555" }}>Loading...</span>}
+        <span style={{ fontSize: 11, color: "#555" }}>{allLogs.length} logs</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
         {PANELS.map((p) => {
-          const panelLogs = allLogs.filter((l) => matches(l, p.prefix));
+          const panelLogs = allLogs.filter((l) => matches(l, p.component));
           return (
             <div key={p.label} style={{ background: "#1e1e2e", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column" }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: p.color, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>

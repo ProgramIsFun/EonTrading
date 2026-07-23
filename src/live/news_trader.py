@@ -15,7 +15,8 @@ import logging
 import sys
 
 from src.common.log_handler import setup_logging
-setup_logging()
+for _comp in ["watcher", "analyzer", "trader", "executor", "monitor", "order_tracker"]:
+    setup_logging(_comp)
 logger = logging.getLogger(__name__)
 
 

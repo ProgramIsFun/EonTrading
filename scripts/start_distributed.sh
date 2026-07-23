@@ -37,7 +37,6 @@ _log_file() { echo "$LOG_DIR/$1.log"; }
 start_component() {
     local name="$1" module="$2"
     local pid_file="$PID_DIR/$name.pid"
-    local log_file="$LOG_DIR/$name.log"
     if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
         echo "  [$name] already running (pid $(cat "$pid_file"))"
         return
@@ -47,10 +46,8 @@ start_component() {
         cd '$PWD'
         export PYTHONPATH='$PYTHONPATH'
         while true; do
-            echo \"\$ (date -Iseconds) Starting $name...\" >> '$log_file'
-            .venv/bin/python -m '$module' >> '$log_file' 2>&1
+            .venv/bin/python -m '$module'
             rc=\$?
-            echo \"\$ (date -Iseconds) $name exited with code \$rc, restarting in 3s...\" >> '$log_file'
             sleep 3
         done
     " > /dev/null 2>&1 &
