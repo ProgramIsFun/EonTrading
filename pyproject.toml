@@ -22,6 +22,9 @@ dependencies = [
     "sse-starlette>=2.0.0",
 ]
 
+[project.scripts]
+eon = "run:main"
+
 [project.optional-dependencies]
 futu = ["futu-api>=9.1"]
 dev = ["ipykernel>=7.1.0", "jupyter>=1.0.0"]
