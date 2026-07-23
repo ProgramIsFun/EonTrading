@@ -43,10 +43,16 @@ Same component code, all modes. Components don't know which transport they're on
 
 ## Live Pipeline
 
-```
-Sources → NewsWatcher → [news] → AnalyzerService → [sentiment]
-  → SentimentTrader → [trade] ← PriceMonitor
-    → TradeExecutor → orders (MongoDB) ← OrderTracker (polls) → PositionStore
+```mermaid
+graph LR
+    Sources --> NewsWatcher
+    NewsWatcher -->|"[news]"| AnalyzerService
+    AnalyzerService -->|"[sentiment]"| SentimentTrader
+    PriceMonitor -->|"[trade]"| SentimentTrader
+    SentimentTrader --> TradeExecutor
+    TradeExecutor --> Orders[(orders)]
+    OrderTracker -->|polls| Orders
+    OrderTracker --> PositionStore[(positions)]
 ```
 
 - SL/TP self-managed by PriceMonitor — same behavior in backtest and live
