@@ -56,7 +56,10 @@ class TestGetPrice:
 
     @patch("src.common.price._from_yfinance", return_value=300.0)
     @patch("src.common.price.PRICE_SOURCE", "yfinance")
-    def test_historical_price_cached(self, mock_yf):
+    @patch("src.common.price._get_redis", return_value=False)
+    def test_historical_price_cached(self, mock_redis, mock_yf):
+        from src.common.price import _price_cache
+        _price_cache.clear()
         # First call — fetches and caches
         t = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
         p1 = get_price("AAPL", as_of=t)
