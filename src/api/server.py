@@ -10,7 +10,6 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from starlette.requests import Request
-from starlette.responses import StreamingResponse
 
 from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.costs import US_STOCKS
@@ -24,45 +23,6 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="EonTrading API")
 
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins.split(","), allow_methods=["*"], allow_headers=["*"])
-
-# --- Log Collector + SSE ---
-_log_subscribers: list[asyncio.Queue] = []
-_log_pipeline = None
-
-
-def _broadcast_log(doc: dict):
-    """Called by LogCollector for each new log line. Pushes to all SSE queues."""
-    dead = []
-    for q in _log_subscribers:
-        try:
-            q.put_nowait(doc)
-        except asyncio.QueueFull:
-            dead.append(q)
-    for q in dead:
-        _log_subscribers.remove(q)
-
-
-@app.on_event("startup")
-async def _start_log_pipeline():
-    global _log_pipeline
-    from src.common.log_collector import LogCollector
-
-    def _get_col():
-        client = get_mongo_client()
-        return client["EonTradingDB"]["logs"]
-
-    _log_pipeline = LogCollector(
-        log_dir="logs",
-        get_mongo_fn=_get_col,
-        on_log=_broadcast_log,
-    )
-    _log_pipeline.start()
-
-
-@app.on_event("shutdown")
-async def _stop_log_pipeline():
-    if _log_pipeline:
-        _log_pipeline.stop()
 
 # --- API key auth (optional — set API_KEY env var to enable) ---
 _api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
@@ -565,66 +525,3 @@ def get_logs(
     except Exception as e:
         logger.warning("Failed to fetch logs: %s", e)
         return {"logs": [], "error": str(e)}
-
-
-@app.get("/api/logs/stream")
-async def log_stream(
-    component: str = Query(default="", description="Filter by component name"),
-    level: str = Query(default="", description="Filter by level"),
-):
-    """SSE endpoint — streams logs in real-time from the collector."""
-    queue: asyncio.Queue = asyncio.Queue(maxsize=500)
-    _log_subscribers.append(queue)
-
-    async def event_generator():
-        try:
-            while True:
-                doc = await queue.get()
-                if component and doc.get("component") != component:
-                    continue
-                if level and doc.get("level", "").upper() != level.upper():
-                    continue
-                yield {"event": "log", "data": json.dumps(doc, default=str)}
-        except asyncio.CancelledError:
-            pass
-        finally:
-            if queue in _log_subscribers:
-                _log_subscribers.remove(queue)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.get("/api/collector/status")
-def collector_status():
-    """Return log collector status."""
-    if _log_pipeline is None:
-        return {"running": False, "log_count": 0}
-    return {
-        "running": _log_pipeline.running,
-        "log_count": _log_pipeline.log_count,
-        "subscribers": len(_log_subscribers),
-    }
-
-
-@app.post("/api/collector/start")
-def collector_start():
-    """Start the log collector."""
-    if _log_pipeline and _log_pipeline.running:
-        return {"ok": True, "message": "Already running"}
-    if _log_pipeline:
-        _log_pipeline.start()
-        return {"ok": True, "message": "Started"}
-    return {"ok": False, "message": "No collector instance"}
-
-
-@app.post("/api/collector/stop")
-def collector_stop():
-    """Stop the log collector."""
-    if _log_pipeline and _log_pipeline.running:
-        _log_pipeline.stop()
-        return {"ok": True, "message": "Stopped"}
-    return {"ok": True, "message": "Not running"}

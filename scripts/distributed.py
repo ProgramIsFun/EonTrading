@@ -26,6 +26,8 @@ COMPONENTS = {
     "order_tracker": "src.live.runners.run_order_tracker",
 }
 
+LOGTAIL_PORT = 8001
+
 VENV_PYTHON = PROJECT_ROOT / ".venv" / "bin" / "python"
 if not VENV_PYTHON.exists():
     VENV_PYTHON = Path(sys.executable)
@@ -127,6 +129,33 @@ def _start_api():
     print(f"  [{name}] started (pid {proc.pid})")
 
 
+def _start_logtail():
+    name = "logtail"
+    pid = _read_pid(name)
+    if pid and _is_alive(pid):
+        print(f"  [{name}] already running (pid {pid})")
+        return
+
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = open(LOG_DIR / "logtail.log", "a")
+
+    env = os.environ.copy()
+
+    cmd = [_python(), str(PROJECT_ROOT / "scripts" / "logtail.py"),
+           "--port", str(LOGTAIL_PORT), "--dir", str(LOG_DIR)]
+
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(PROJECT_ROOT),
+        env=env,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    _write_pid(name, proc.pid)
+    print(f"  [{name}] started (pid {proc.pid}) — http://localhost:{LOGTAIL_PORT}")
+
+
 def _stop_process(name: str):
     pid = _read_pid(name)
     if not pid:
@@ -171,6 +200,7 @@ def start_all():
     for name, module in COMPONENTS.items():
         _start_component(name, module)
     _start_api()
+    _start_logtail()
     print("Done. Use 'python run.py status' to check, 'python run.py stop' to stop.")
 
 
@@ -178,7 +208,7 @@ def stop_all():
     """Stop all distributed components."""
     print("Stopping all components...")
     any_running = False
-    for name in list(COMPONENTS.keys()) + ["api"]:
+    for name in list(COMPONENTS.keys()) + ["api", "logtail"]:
         if _stop_process(name):
             any_running = True
     if not any_running:
@@ -205,6 +235,14 @@ def status_all():
     else:
         print(f"  [api] stopped")
         _remove_pid("api")
+
+    pid = _read_pid("logtail")
+    if pid and _is_alive(pid):
+        print(f"  [logtail] running (pid {pid})")
+        running += 1
+    else:
+        print(f"  [logtail] stopped")
+        _remove_pid("logtail")
 
     if running == 0:
         print("  No components running.")

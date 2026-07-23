@@ -56,12 +56,3 @@ export async function fetchLogs(
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
-
-export async function getCollectorStatus(): Promise<{ running: boolean; log_count: number }> {
-  const res = await fetch(`${API_BASE}/api/collector/status`);
-  return res.json();
-}
-
-export async function toggleCollector(start: boolean): Promise<void> {
-  await fetch(`${API_BASE}/api/collector/${start ? "start" : "stop"}`, { method: "POST" });
-}
