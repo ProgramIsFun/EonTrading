@@ -48,8 +48,8 @@ graph LR
     Sources --> NewsWatcher
     NewsWatcher -->|"[news]"| AnalyzerService
     AnalyzerService -->|"[sentiment]"| SentimentTrader
-    PriceMonitor -->|"[trade]"| SentimentTrader
-    SentimentTrader --> TradeExecutor
+    SentimentTrader -->|"[trade]"| TradeExecutor
+    PriceMonitor -->|"[trade]"| TradeExecutor
     TradeExecutor --> Orders[(orders)]
     OrderTracker -->|polls| Orders
     OrderTracker --> PositionStore[(positions)]
