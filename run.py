@@ -7,6 +7,7 @@ Usage:
     python run.py stop           # kill all distributed processes
     python run.py status         # show running processes
     python run.py restart        # stop + start
+    python run.py clean          # delete all log files
 """
 import os
 import signal
@@ -95,12 +96,28 @@ def cmd_restart():
     restart_all()
 
 
+def cmd_clean():
+    log_dir = PROJECT_ROOT / "logs"
+    if not log_dir.exists():
+        print("No logs/ directory.")
+        return
+    logs = list(log_dir.glob("*.log"))
+    if not logs:
+        print("No log files to clean.")
+        return
+    for f in logs:
+        f.unlink()
+        print(f"  deleted {f.name}")
+    print(f"Cleaned {len(logs)} log files.")
+
+
 COMMANDS = {
     "single": cmd_single,
     "start": cmd_start,
     "stop": cmd_stop,
     "status": cmd_status,
     "restart": cmd_restart,
+    "clean": cmd_clean,
 }
 
 
