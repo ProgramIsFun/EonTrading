@@ -64,6 +64,7 @@ class SentimentTrader:
     async def _on_sentiment(self, msg: dict):
         event = SentimentEvent.from_dict(msg)
         if not event.symbols:
+            logger.info("Skipping sentiment (no symbols): %s", event.headline[:60])
             return
 
         event_ts = event.timestamp
