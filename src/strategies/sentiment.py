@@ -106,9 +106,11 @@ Rules:
 - We trade CASH ONLY — no margin, no short selling, no borrowing.
 - We can only trade stocks on these markets: {markets}
 - Only return symbols that are well-known, actively traded stocks with a valid Yahoo Finance ticker. For example: 00700.HK (Tencent), 9988.HK (Alibaba HK), 00005.HK (HSBC HK), 0388.HK (HKEX).
-- If the headline does NOT directly mention or clearly relate to a specific stock we can trade, return an empty symbols list. Do NOT guess or infer stocks from vague references.
 - Do NOT return US tickers like AAPL, TSLA, NVDA unless we can trade US stocks.
-- If the news is macro (Fed, tariffs, recession) with no clear stock link, return empty symbols.
+- Always try to find indirect links to Hong Kong stocks, even if the news is not directly about HK. For example: negative US tech news (e.g. chip restrictions, AI regulation, big tech earnings miss) may also impact HK-listed tech stocks like Tencent, Alibaba, or Semiconductor Manufacturing International (0981.HK). News about US-China trade tensions, tariffs, or sanctions directly affects HK stocks. Global macro events (Fed decisions, oil prices, recession fears) have spillover effects on HK markets.
+- When you identify an indirect link, use lower confidence (0.3-0.6) to reflect the indirect nature of the connection. Use higher confidence (0.7-1.0) only for direct mentions.
+- Even if the news mentions only US or global events, if there is a plausible connection to HK stocks, return those HK tickers with appropriate sentiment and confidence.
+- Only return empty symbols if there is truly no meaningful connection to any HK stock.
 - Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
 
 Return:
@@ -131,10 +133,12 @@ Rules:
 - We trade CASH ONLY — no margin, no short selling, no borrowing.
 - We can only trade stocks on these markets: {markets}
 - Only return symbols that are well-known, actively traded stocks with a valid Yahoo Finance ticker. For example: 00700.HK (Tencent), 9988.HK (Alibaba HK), 00005.HK (HSBC HK), 0388.HK (HKEX).
-- If the headline does NOT directly mention or clearly relate to a specific stock we can trade, return an empty symbols list. Do NOT guess or infer stocks from vague references.
 - Do NOT return US tickers like AAPL, TSLA, NVDA unless we can trade US stocks.
-- If the news is macro (Fed, tariffs, recession) with no clear stock link, return empty symbols.
-- If we hold a stock and the news is bad for it, return that stock with negative sentiment so we sell it.
+- Always try to find indirect links to Hong Kong stocks, even if the news is not directly about HK. For example: negative US tech news (e.g. chip restrictions, AI regulation, big tech earnings miss) may also impact HK-listed tech stocks like Tencent, Alibaba, or Semiconductor Manufacturing International (0981.HK). News about US-China trade tensions, tariffs, or sanctions directly affects HK stocks. Global macro events (Fed decisions, oil prices, recession fears) have spillover effects on HK markets.
+- If we hold a stock and the news is bad for it (directly or indirectly), return that stock with negative sentiment so we sell it.
+- When you identify an indirect link, use lower confidence (0.3-0.6) to reflect the indirect nature of the connection. Use higher confidence (0.7-1.0) only for direct mentions.
+- Even if the news mentions only US or global events, if there is a plausible connection to our HK holdings or other HK stocks, return those tickers with appropriate sentiment and confidence.
+- Only return empty symbols if there is truly no meaningful connection to any HK stock.
 - Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
 - Higher confidence if the news directly impacts our holdings.
 
