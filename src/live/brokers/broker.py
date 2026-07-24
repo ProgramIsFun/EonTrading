@@ -133,10 +133,27 @@ class FutuBroker(Broker):
             self._ctx = OpenSecTradeContext(host=self.host, port=self.port)
         return self._ctx
 
+    @staticmethod
+    def _to_futu_code(symbol: str) -> str:
+        """Convert standard format to Futu native: '00700.HK' → 'HK.00700'."""
+        if "." in symbol:
+            ticker, exchange = symbol.split(".", 1)
+            return f"{exchange}.{ticker}"
+        return symbol
+
+    @staticmethod
+    def _from_futu_code(code: str) -> str:
+        """Convert Futu native to standard format: 'HK.00700' → '00700.HK'."""
+        if "." in code:
+            exchange, ticker = code.split(".", 1)
+            return f"{ticker}.{exchange}"
+        return code
+
     async def execute(self, trade: TradeEvent) -> str | None:
         from futu import TrdEnv, TrdSide, OrderType
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         trd_side = TrdSide.BUY if trade.action == "buy" else TrdSide.SELL
+        futu_code = self._to_futu_code(trade.symbol)
         try:
             ctx = await asyncio.to_thread(self._get_ctx)
 
@@ -144,12 +161,12 @@ class FutuBroker(Broker):
                 if trade.action == "sell":
                     return ctx.place_order(
                         price=trade.price, qty=int(trade.size),
-                        code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
+                        code=futu_code, trd_side=trd_side, trd_env=trd_env,
                         order_type=OrderType.MARKET,
                     )
                 return ctx.place_order(
                     price=trade.price, qty=int(trade.size),
-                    code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
+                    code=futu_code, trd_side=trd_side, trd_env=trd_env,
                 )
             ret, data = await asyncio.to_thread(_place)
             if ret != 0:
@@ -218,7 +235,7 @@ class FutuBroker(Broker):
             if ret != 0:
                 logger.warning("Futu get_positions failed: %s", data)
                 return {}
-            return {row["code"]: int(row["qty"]) for _, row in data.iterrows() if int(row["qty"]) > 0}
+            return {self._from_futu_code(row["code"]): int(row["qty"]) for _, row in data.iterrows() if int(row["qty"]) > 0}
         except Exception as e:
             logger.error("Futu get_positions error: %s", e)
             return {}

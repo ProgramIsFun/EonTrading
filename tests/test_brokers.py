@@ -70,6 +70,24 @@ def _remove_futu_mock():
 
 class TestFutuBroker:
 
+    def test_to_futu_code_hk(self):
+        from src.live.brokers.broker import FutuBroker
+        assert FutuBroker._to_futu_code("00700.HK") == "HK.00700"
+        assert FutuBroker._to_futu_code("9988.HK") == "HK.9988"
+
+    def test_to_futu_code_us_no_change(self):
+        from src.live.brokers.broker import FutuBroker
+        assert FutuBroker._to_futu_code("AAPL") == "AAPL"
+
+    def test_from_futu_code_hk(self):
+        from src.live.brokers.broker import FutuBroker
+        assert FutuBroker._from_futu_code("HK.00700") == "00700.HK"
+        assert FutuBroker._from_futu_code("HK.9988") == "9988.HK"
+
+    def test_from_futu_code_us_no_change(self):
+        from src.live.brokers.broker import FutuBroker
+        assert FutuBroker._from_futu_code("AAPL") == "AAPL"
+
     @pytest.mark.asyncio
     async def test_execute_places_order_and_returns_id(self, event_bus):
         _install_futu_mock()

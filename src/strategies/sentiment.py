@@ -103,20 +103,21 @@ LLM_PROMPT = """Analyze this financial news headline. Return JSON only, no expla
 Headline: "{headline}"
 
 Rules:
-- We trade CASH ONLY — no margin, no leverage, no short selling, no borrowing. Maximum loss is capped at initial capital.
-- Because we cannot short, use inverse ETFs to profit from market drops: SQQQ (inverse Nasdaq), SH (inverse S&P 500), SDOW (inverse Dow). These are regular stocks we buy with cash.
-- If the news is bearish for the broad market (e.g. tariffs, recession, war), return inverse ETFs with POSITIVE sentiment (they go up when market drops).
-- For individual stock news, return the affected tickers.
+- We trade CASH ONLY — no margin, no short selling, no borrowing.
+- We can only trade stocks on these markets: {markets}
+- Only return symbols that are well-known, actively traded stocks with a valid Yahoo Finance ticker. For example: 00700.HK (Tencent), 9988.HK (Alibaba HK), 00005.HK (HSBC HK), 0388.HK (HKEX).
+- If the headline does NOT directly mention or clearly relate to a specific stock we can trade, return an empty symbols list. Do NOT guess or infer stocks from vague references.
+- Do NOT return US tickers like AAPL, TSLA, NVDA unless we can trade US stocks.
+- If the news is macro (Fed, tariffs, recession) with no clear stock link, return empty symbols.
 - Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
-- Only output symbols for the following markets: {markets}. Use the format TICKER.EXCHANGE (e.g. 00700.HK for Hong Kong, AAPL for US).
 
 Return:
 {{
-  "symbols": ["00700.HK"],     // affected stock tickers (market format: TICKER.EXCHANGE)
-  "sector": "technology",    // affected sector or empty
-  "sentiment": 0.5,          // -1.0 (very bearish) to +1.0 (very bullish) for the returned symbols
-  "confidence": 0.8,         // 0.0 to 1.0
-  "urgency": "normal"        // "low", "normal", "high"
+  "symbols": ["00700.HK"],
+  "sector": "technology",
+  "sentiment": 0.5,
+  "confidence": 0.8,
+  "urgency": "normal"
 }}"""
 
 LLM_PROMPT_WITH_POSITIONS = """Analyze this financial news headline considering the current portfolio. Return JSON only, no explanation.
@@ -127,20 +128,23 @@ Current holdings:
 {positions}
 
 Rules:
-- We trade CASH ONLY — no margin, no leverage, no short selling, no borrowing. Maximum loss is capped at initial capital.
-- Because we cannot short, use inverse ETFs to profit from market drops: SQQQ (inverse Nasdaq), SH (inverse S&P 500), SDOW (inverse Dow). These are regular stocks we buy with cash.
-- If the news is bearish for the broad market (e.g. tariffs, recession, war), return inverse ETFs with POSITIVE sentiment + return held stocks with NEGATIVE sentiment (so we sell them).
+- We trade CASH ONLY — no margin, no short selling, no borrowing.
+- We can only trade stocks on these markets: {markets}
+- Only return symbols that are well-known, actively traded stocks with a valid Yahoo Finance ticker. For example: 00700.HK (Tencent), 9988.HK (Alibaba HK), 00005.HK (HSBC HK), 0388.HK (HKEX).
+- If the headline does NOT directly mention or clearly relate to a specific stock we can trade, return an empty symbols list. Do NOT guess or infer stocks from vague references.
+- Do NOT return US tickers like AAPL, TSLA, NVDA unless we can trade US stocks.
+- If the news is macro (Fed, tariffs, recession) with no clear stock link, return empty symbols.
+- If we hold a stock and the news is bad for it, return that stock with negative sentiment so we sell it.
 - Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
 - Higher confidence if the news directly impacts our holdings.
-- Only output symbols for the following markets: {markets}. Use the format TICKER.EXCHANGE (e.g. 00700.HK for Hong Kong, AAPL for US).
 
 Return:
 {{
-  "symbols": ["00700.HK"],     // ALL affected tickers + inverse ETFs if applicable (market format: TICKER.EXCHANGE)
-  "sector": "technology",    // affected sector or empty
-  "sentiment": 0.5,          // -1.0 to +1.0 for the returned symbols
-  "confidence": 0.8,         // 0.0 to 1.0, higher if it affects our holdings
-  "urgency": "normal"        // "low", "normal", "high"
+  "symbols": ["00700.HK"],
+  "sector": "technology",
+  "sentiment": 0.5,
+  "confidence": 0.8,
+  "urgency": "normal"
 }}"""
 
 

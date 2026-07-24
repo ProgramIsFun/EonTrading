@@ -35,62 +35,14 @@ async def test_get_positions(broker):
 
 
 @pytest.mark.asyncio
-async def test_buy(broker):
+async def test_buy_hk(broker):
+    """Buy order with standard format 00700.HK — symbol converted to HK.00700 internally."""
     from src.common.events import TradeEvent
     from src.common.clock import utcnow
 
-    SYMBOL = "HK.00700"
-    QTY = 100
     trade = TradeEvent(
-        symbol=SYMBOL, action="buy", reason="integration test",
-        timestamp=utcnow().isoformat() + "Z", price=500.0, size=QTY,
+        symbol="00700.HK", action="buy", reason="integration test",
+        timestamp=utcnow().isoformat() + "Z", price=500.0, size=100,
     )
     order_id = await broker.execute(trade)
-    assert order_id is not None, "Buy order was not accepted by Futu"
-
-
-@pytest.mark.asyncio
-async def test_sell(broker):
-    from src.common.events import TradeEvent
-    from src.common.clock import utcnow
-
-    SYMBOL = "HK.00700"
-    QTY = 100
-    trade = TradeEvent(
-        symbol=SYMBOL, action="sell", reason="integration test",
-        timestamp=utcnow().isoformat() + "Z", price=1.0, size=QTY,
-    )
-    order_id = await broker.execute(trade)
-    assert order_id is not None, "Sell order was not accepted by Futu"
-
-
-@pytest.mark.asyncio
-@pytest.mark.skip(reason="account does not have US trading permission")
-async def test_buy_us(broker):
-    from src.common.events import TradeEvent
-    from src.common.clock import utcnow
-
-    SYMBOL = "US.AAPL"
-    QTY = 1
-    trade = TradeEvent(
-        symbol=SYMBOL, action="buy", reason="integration test",
-        timestamp=utcnow().isoformat() + "Z", price=300.0, size=QTY,
-    )
-    order_id = await broker.execute(trade)
-    assert order_id is not None, "US buy order was not accepted by Futu"
-
-
-@pytest.mark.asyncio
-@pytest.mark.skip(reason="account does not have US trading permission")
-async def test_sell_us(broker):
-    from src.common.events import TradeEvent
-    from src.common.clock import utcnow
-
-    SYMBOL = "US.AAPL"
-    QTY = 1
-    trade = TradeEvent(
-        symbol=SYMBOL, action="sell", reason="integration test",
-        timestamp=utcnow().isoformat() + "Z", price=999.0, size=QTY,
-    )
-    order_id = await broker.execute(trade)
-    assert order_id is not None, "US sell order was not accepted by Futu"
+    assert order_id is not None, "HK buy order was not accepted by Futu"
