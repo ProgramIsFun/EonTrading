@@ -417,23 +417,26 @@ class TradeExecutor:
         if order_id is None:
             logger.error("Order submission failed: %s %s", trade.action.upper(), trade.symbol)
             return
-        col = get_mongo_client()["EonTradingDB"]["orders"]
-        doc = {
-            "order_id": order_id,
-            "broker_type": self.broker.__class__.__name__,
-            "symbol": trade.symbol,
-            "action": trade.action,
-            "price": trade.price,
-            "shares": trade.size,
-            "reason": trade.reason,
-            "timestamp": trade.timestamp,
-            "status": "pending",
-            "placed_at": utcnow(),
-            "checked_at": None,
-            "filled_at": None,
-            "cancelled_at": None,
-            "next_check_at": utcnow(),
-            "retry_count": 0,
-            "error": None,
-        }
-        await asyncio.to_thread(col.insert_one, doc)
+        try:
+            col = get_mongo_client()["EonTradingDB"]["orders"]
+            doc = {
+                "order_id": order_id,
+                "broker_type": self.broker.__class__.__name__,
+                "symbol": trade.symbol,
+                "action": trade.action,
+                "price": trade.price,
+                "shares": trade.size,
+                "reason": trade.reason,
+                "timestamp": trade.timestamp,
+                "status": "pending",
+                "placed_at": utcnow(),
+                "checked_at": None,
+                "filled_at": None,
+                "cancelled_at": None,
+                "next_check_at": utcnow(),
+                "retry_count": 0,
+                "error": None,
+            }
+            await asyncio.to_thread(col.insert_one, doc)
+        except Exception:
+            logger.debug("MongoDB unavailable, skipping order log")
