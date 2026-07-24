@@ -125,7 +125,7 @@ class PriceMonitor:
                     symbol=symbol, action="sell",
                     reason=f"stop loss @ ${sl_price:.2f}",
                     timestamp=ts,
-                    price=sl_price, size=float(shares),
+                    price=0.0, size=float(shares),
                 )
                 logger.info("🛑 SL triggered: SELL %s %dsh @ $%.2f", symbol, shares, sl_price)
                 await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
@@ -139,7 +139,7 @@ class PriceMonitor:
                     symbol=symbol, action="sell",
                     reason=f"take profit @ ${tp_price:.2f}",
                     timestamp=ts,
-                    price=tp_price, size=float(shares),
+                    price=0.0, size=float(shares),
                 )
                 logger.info("🎯 TP triggered: SELL %s %dsh @ $%.2f", symbol, shares, tp_price)
                 await self.bus.publish(CHANNEL_TRADE, trade.to_dict())

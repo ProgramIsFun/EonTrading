@@ -33,6 +33,7 @@ from src.strategies.sentiment import KeywordSentimentAnalyzer
 def mock_get_price():
     with patch("src.live.sentiment_trader.get_price", return_value=150.0), \
          patch("src.live.price_monitor.get_price", return_value=150.0), \
+         patch("src.live.brokers.broker.get_price", return_value=150.0), \
          patch("src.common.price.get_price", return_value=150.0):
         yield
 
@@ -286,6 +287,7 @@ class TestPriceMonitorIntegration:
 
         assert "AAPL" in sold
         assert trades.items[0].action == "sell"
+        assert trades.items[0].price == 0.0
         assert "stop loss" in trades.items[0].reason
 
     @pytest.mark.asyncio
@@ -310,6 +312,7 @@ class TestPriceMonitorIntegration:
 
         assert "NVDA" in sold
         assert trades.items[0].action == "sell"
+        assert trades.items[0].price == 0.0
         assert "take profit" in trades.items[0].reason
 
     @pytest.mark.asyncio
@@ -393,6 +396,7 @@ class TestSLTPFullCycle:
         assert "AAPL" in broker_pos
 
         with patch("src.live.price_monitor.get_price", return_value=140.0), \
+             patch("src.live.brokers.broker.get_price", return_value=140.0), \
              patch("src.common.price.get_price", return_value=140.0):
             sold = await monitor.check_once(as_of="2026-04-22T14:00:00Z")
             ok = await trades.wait_for_count(2)
@@ -498,3 +502,88 @@ class TestPositionSizing:
         positions = await broker.get_positions()
         assert positions["AAPL"] <= 100
         assert positions["AAPL"] > 0
+
+
+# ---------------------------------------------------------------------------
+# 8. PaperBroker market order (price=0 → fetches current price)
+# ---------------------------------------------------------------------------
+
+class TestPaperBrokerMarketOrder:
+
+    @pytest.mark.asyncio
+    async def test_sell_at_market_price_when_price_zero(self):
+        bus = LocalEventBus()
+        await bus.start()
+
+        broker = PaperBroker(initial_cash=50000)
+        # Manually add a position
+        broker._positions["AAPL"] = 100
+
+        trade = TradeEvent(
+            symbol="AAPL", action="sell", reason="test market order",
+            timestamp="2026-04-22T10:00:00Z", price=0.0, size=100,
+        )
+
+        with patch("src.live.brokers.broker.get_price", return_value=200.0):
+            order_id = await broker.execute(trade)
+
+        assert order_id is not None
+        assert "AAPL" not in broker._positions
+        cash = await broker.get_cash()
+        assert cash == 50000 + (200.0 * 100)  # initial + proceeds
+
+    @pytest.mark.asyncio
+    async def test_sell_at_specified_price_when_nonzero(self):
+        bus = LocalEventBus()
+        await bus.start()
+
+        broker = PaperBroker(initial_cash=50000)
+        broker._positions["AAPL"] = 100
+
+        trade = TradeEvent(
+            symbol="AAPL", action="sell", reason="test limit order",
+            timestamp="2026-04-22T10:00:00Z", price=250.0, size=100,
+        )
+
+        order_id = await broker.execute(trade)
+        assert order_id is not None
+        assert "AAPL" not in broker._positions
+        cash = await broker.get_cash()
+        assert cash == 50000 + (250.0 * 100)
+
+    @pytest.mark.asyncio
+    async def test_buy_at_market_price_when_price_zero(self):
+        bus = LocalEventBus()
+        await bus.start()
+
+        broker = PaperBroker(initial_cash=50000)
+
+        trade = TradeEvent(
+            symbol="AAPL", action="buy", reason="test market order",
+            timestamp="2026-04-22T10:00:00Z", price=0.0, size=10,
+        )
+
+        with patch("src.live.brokers.broker.get_price", return_value=200.0):
+            order_id = await broker.execute(trade)
+
+        assert order_id is not None
+        assert broker._positions["AAPL"] == 10
+        cash = await broker.get_cash()
+        assert cash == 50000 - (200.0 * 10)
+
+    @pytest.mark.asyncio
+    async def test_market_order_fails_when_price_unavailable(self):
+        bus = LocalEventBus()
+        await bus.start()
+
+        broker = PaperBroker(initial_cash=50000)
+
+        trade = TradeEvent(
+            symbol="AAPL", action="sell", reason="test",
+            timestamp="2026-04-22T10:00:00Z", price=0.0, size=10,
+        )
+
+        with patch("src.live.brokers.broker.get_price", return_value=0):
+            order_id = await broker.execute(trade)
+
+        assert order_id is None

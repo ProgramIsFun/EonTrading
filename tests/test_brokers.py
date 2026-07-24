@@ -54,6 +54,7 @@ def _install_futu_mock(**attrs):
     mock_futu.OrderStatus.CANCELLED_ALL = "FilledStatus_CANCELLED_ALL"
     mock_futu.OrderStatus.FAILED = "FilledStatus_FAILED"
     mock_futu.OrderStatus.DELETED = "FilledStatus_DELETED"
+    mock_futu.OrderType.MARKET = "MARKET"
     mock_futu.TradeOrderHandlerBase = type("HandlerBase", (), {"on_recv_rsp": lambda self, rsp: (0, pd.DataFrame())})
 
     for k, v in attrs.items():
@@ -84,6 +85,27 @@ class TestFutuBroker:
 
             order_id = await broker.execute(_make_trade())
             assert order_id == "12345"
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_sell_uses_market_order(self, event_bus):
+        _install_futu_mock()
+        try:
+            from src.live.brokers.broker import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["67890"]}))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            trade = _make_trade(action="sell", price=0.0)
+            order_id = await broker.execute(trade)
+
+            assert order_id == "67890"
+            call_kwargs = mock_ctx.place_order.call_args
+            assert call_kwargs[1].get("order_type") == "MARKET" or call_kwargs.kwargs.get("order_type") == "MARKET"
         finally:
             _remove_futu_mock()
 

@@ -14,6 +14,7 @@ from src.common.clock import utcnow
 from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
+from src.common.price import get_price
 from src.data.utils.db_helper import get_mongo_client
 from src.settings import settings
 
@@ -74,20 +75,25 @@ class PaperBroker(Broker):
 
     async def execute(self, trade: TradeEvent) -> str | None:
         qty = int(trade.size)
+        price = trade.price
+        if price <= 0:
+            price = await asyncio.to_thread(get_price, trade.symbol)
+            if price <= 0:
+                logger.error("Could not fetch price for %s, aborting", trade.symbol)
+                return None
         if trade.action == "buy":
-            cost = trade.price * qty
-            fees = self.cost_model.buy_cost(trade.price, qty) if self.cost_model else 0
+            cost = price * qty
+            fees = self.cost_model.buy_cost(price, qty) if self.cost_model else 0
             total = cost + fees
             self._cash -= total
             self._positions[trade.symbol] = self._positions.get(trade.symbol, 0) + qty
-            logger.info("📝 [DRY RUN] BUY %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, trade.price, fees, trade.reason)
+            logger.info("📝 [DRY RUN] BUY %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, price, fees, trade.reason)
         elif trade.action == "sell":
-            qty = int(trade.size)
             self._positions.pop(trade.symbol, None)
-            proceeds = trade.price * qty
-            fees = self.cost_model.sell_cost(trade.price, qty) if self.cost_model else 0
+            proceeds = price * qty
+            fees = self.cost_model.sell_cost(price, qty) if self.cost_model else 0
             self._cash += proceeds - fees
-            logger.info("📝 [DRY RUN] SELL %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, trade.price, fees, trade.reason)
+            logger.info("📝 [DRY RUN] SELL %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, price, fees, trade.reason)
         return f"paper-{trade.symbol}-{uuid4().hex[:8]}"
 
     async def check_order(self, order_id: str) -> tuple[str, str | None]:
@@ -130,13 +136,19 @@ class FutuBroker(Broker):
         return self._ctx
 
     async def execute(self, trade: TradeEvent) -> str | None:
-        from futu import TrdEnv, TrdSide
+        from futu import TrdEnv, TrdSide, OrderType
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         trd_side = TrdSide.BUY if trade.action == "buy" else TrdSide.SELL
         try:
             ctx = await asyncio.to_thread(self._get_ctx)
 
             def _place():
+                if trade.action == "sell":
+                    return ctx.place_order(
+                        price=trade.price, qty=int(trade.size),
+                        code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
+                        order_type=OrderType.MARKET,
+                    )
                 return ctx.place_order(
                     price=trade.price, qty=int(trade.size),
                     code=trade.symbol, trd_side=trd_side, trd_env=trd_env,
