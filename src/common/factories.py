@@ -4,7 +4,7 @@ from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnaly
 
 
 def build_analyzer() -> tuple:
-    if settings.openai_api_key or settings.opencode_api_key:
+    if settings.analyzer == "llm":
         analyzer = LLMSentimentAnalyzer()
         return analyzer, f"LLM ({analyzer.model})"
     return KeywordSentimentAnalyzer(), "Keyword (free)"

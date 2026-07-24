@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     publish_pipeline: bool = True
 
     # Sentiment
+    analyzer: str = "keyword"  # "keyword" or "llm"
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
