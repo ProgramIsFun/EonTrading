@@ -9,8 +9,13 @@ from src.settings import settings
 
 
 def build_news_sources() -> tuple[list, list[str]]:
-    sources: list = [RSSSource(), RedditSource()]
-    source_names: list[str] = ["RSS", "Reddit"]
+    sources: list = [RSSSource()]
+    source_names: list[str] = ["RSS"]
+
+    reddit = RedditSource()
+    if reddit.available:
+        sources.append(reddit)
+        source_names.append("Reddit")
 
     if settings.newsapi_key:
         sources.append(NewsAPISource())

@@ -1,6 +1,7 @@
 """Tests for NewsWatcher concurrent polling and timeout."""
 import asyncio
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -98,3 +99,43 @@ async def test_publishes_to_bus():
 
     assert len(received) == 1
     assert received[0]["headline"] == "Fast news"
+
+
+# ---------------------------------------------------------------------------
+# Reddit source: only loaded when credentials exist
+# ---------------------------------------------------------------------------
+
+class TestRedditSourceAvailability:
+
+    def test_not_available_without_credentials(self):
+        from src.data.news.reddit_source import RedditSource
+        with patch.dict("os.environ", {}, clear=True):
+            source = RedditSource()
+            assert source.available is False
+
+    def test_available_with_credentials(self):
+        from src.data.news.reddit_source import RedditSource
+        with patch.dict("os.environ", {"REDDIT_CLIENT_ID": "id", "REDDIT_CLIENT_SECRET": "secret"}):
+            source = RedditSource()
+            assert source.available is True
+
+    def test_fetch_latest_returns_empty_when_no_credentials(self):
+        from src.data.news.reddit_source import RedditSource
+        with patch.dict("os.environ", {}, clear=True):
+            source = RedditSource()
+            events = asyncio.run(source.fetch_latest())
+            assert events == []
+
+    def test_loader_skips_reddit_without_credentials(self):
+        from src.data.news.loader import build_news_sources
+        with patch.dict("os.environ", {}, clear=True):
+            sources, names = build_news_sources()
+            assert "Reddit" not in names
+            assert not any("reddit" in getattr(s, "_client_id", "") or
+                          hasattr(s, "subreddits") for s in sources)
+
+    def test_loader_includes_reddit_with_credentials(self):
+        from src.data.news.loader import build_news_sources
+        with patch.dict("os.environ", {"REDDIT_CLIENT_ID": "id", "REDDIT_CLIENT_SECRET": "secret"}):
+            sources, names = build_news_sources()
+            assert "Reddit" in names
