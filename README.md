@@ -61,6 +61,28 @@ graph LR
 - PositionStore is source of truth for holdings (qty, entry price) — broker consulted only at startup for reconciliation
 - Graceful shutdown on SIGINT/SIGTERM
 
+## Components
+
+| Component | File | Role |
+|-----------|------|------|
+| **NewsWatcher** | `src/live/news_watcher.py` | Polls news sources (RSS, Reddit, NewsAPI, Finnhub, Twitter), publishes `[news]` events |
+| **AnalyzerService** | `src/live/analyzer_service.py` | Subscribes `[news]`, runs sentiment analysis (keyword or LLM), publishes `[sentiment]` |
+| **SentimentTrader** | `src/live/sentiment_trader.py` | Subscribes `[sentiment]`, decides buy/sell based on thresholds and position state, publishes `[trade]` |
+| **PriceMonitor** | `src/live/price_monitor.py` | Polls prices for open positions, publishes `[trade]` on SL/TP hit |
+| **TradeExecutor** | `src/live/brokers/broker.py` | Subscribes `[trade]`, submits orders to broker, writes to `orders` collection |
+| **OrderTracker** | `src/common/order_tracker.py` | Polls pending orders in MongoDB, confirms fills with broker, updates `positions` on fill |
+| **PositionStore** | `src/common/position_store.py` | MongoDB-backed position state — source of truth for holdings |
+
+### NewsWatcher
+
+Polls configured news sources every 120s. Deduplicates by URL using MongoDB `seen_urls` collection.
+
+To re-fetch all articles from scratch (e.g. after changing sources or testing):
+
+```bash
+python scripts/clear_seen_urls.py
+```
+
 ## Logs
 
 Each component writes structured JSON to `logs/{component}.log`. Two ways to view:
