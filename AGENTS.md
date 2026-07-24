@@ -16,16 +16,28 @@ python -m pytest tests/ -v
 
 ## Symbol Format
 
-No single format is universal across all markets. US tickers (`AAPL`, `TSLA`) are the only truly universal ones — same across every provider and broker.
+Standard format: `TICKER.EXCHANGE` (Yahoo Finance convention).
 
-For non-US stocks, every provider uses its own convention (Yahoo: `0700.HK`, Bloomberg: `700 HK`, Futu: `HK.00700`). Don't assume one format fits all.
+| Market | Format | Example |
+|--------|--------|---------|
+| US | `TICKER` | `AAPL`, `TSLA` |
+| Hong Kong | `TICKER.HK` | `0700.HK` |
+| Japan | `TICKER.T` | `6758.T` |
+| Shanghai | `TICKER.SS` | `600519.SS` |
+| Shenzhen | `TICKER.SZ` | `000001.SZ` |
+
+US stocks use plain tickers — no suffix. Everyone recognizes `AAPL`.
 
 **Rules:**
-- US stocks: use plain ticker (`AAPL`, `TSLA`) everywhere — events, logs, APIs, prompts
-- Non-US stocks: use the data source's native format internally, map to broker format at execution time
-- Event channels carry the symbol as-is from the analyzer — no forced normalization
-- Each broker has its own `SYMBOL_MAP` to translate from internal format to broker-native format
-- When adding a new broker or data source, document its symbol convention in the broker class docstring
+- Analyzers output standard `TICKER.EXCHANGE` format in events
+- Event channels (news, sentiment, trade) carry this format as-is
+- Logs and API responses use this format
+- Each broker maps to its native format at execution time via `SYMBOL_MAP`:
+  - `FutuBroker`: `0700.HK` → `HK.00700`
+  - `IBKRBroker`: `0700.HK` → `0700.HK` (pass-through)
+  - `AlpacaBroker`: `0700.HK` → `0700.HK` (pass-through)
+- Analyzer and event channels never care about broker specifics
+- When adding a new broker, implement `SYMBOL_MAP` for its native format
 
 ## Tests
 
