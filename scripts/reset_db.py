@@ -1,8 +1,8 @@
 """Reset MongoDB to a clean state. Drops all EonTradingDB collections.
 
 Usage:
-  PYTHONPATH=. python scripts/reset_db.py           # interactive confirmation
-  PYTHONPATH=. python scripts/reset_db.py --yes     # skip confirmation
+  python scripts/reset_db.py           # interactive confirmation
+  python scripts/reset_db.py --yes     # skip confirmation
 """
 import os
 import sys
@@ -29,15 +29,15 @@ COLLECTIONS = [
 ]
 
 
-def main():
-    force = "--yes" in sys.argv
+def reset_db(force=False):
+    """Drop all known collections. Returns count of dropped collections."""
     client = get_mongo_client()
     db = client["EonTradingDB"]
 
     existing = [c for c in COLLECTIONS if c in db.list_collection_names()]
     if not existing:
         print("Nothing to reset — all collections empty.")
-        return
+        return 0
 
     print(f"Will drop {len(existing)} collections from EonTradingDB:")
     for c in existing:
@@ -48,13 +48,19 @@ def main():
         answer = input("\nProceed? [y/N] ").strip().lower()
         if answer != "y":
             print("Aborted.")
-            return
+            return 0
 
     for c in existing:
         db[c].drop()
         print(f"  Dropped {c}")
 
     print("Done — fresh state.")
+    return len(existing)
+
+
+def main():
+    force = "--yes" in sys.argv
+    reset_db(force=force)
 
 
 if __name__ == "__main__":

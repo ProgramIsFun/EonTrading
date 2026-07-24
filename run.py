@@ -11,6 +11,7 @@ Usage:
     python run.py logs           # open terminal windows tailing each log file
     python run.py unlogs         # close all tail terminals
     python run.py reset          # full reset: stop + clean + start + open logs
+    python run.py resetdb        # drop all MongoDB collections (fresh state)
 """
 import os
 import signal
@@ -155,6 +156,14 @@ def cmd_reset():
     cmd_logs()
 
 
+def cmd_resetdb():
+    """Drop all MongoDB collections for a fresh state."""
+    _setup_path()
+    _load_env()
+    from scripts.reset_db import reset_db
+    reset_db(force=True)
+
+
 COMMANDS = {
     "single": cmd_single,
     "start": cmd_start,
@@ -165,6 +174,7 @@ COMMANDS = {
     "logs": cmd_logs,
     "unlogs": cmd_unlogs,
     "reset": cmd_reset,
+    "resetdb": cmd_resetdb,
 }
 
 
