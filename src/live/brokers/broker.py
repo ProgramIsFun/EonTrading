@@ -82,7 +82,8 @@ class PaperBroker(Broker):
             self._positions[trade.symbol] = self._positions.get(trade.symbol, 0) + qty
             logger.info("📝 [DRY RUN] BUY %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, trade.price, fees, trade.reason)
         elif trade.action == "sell":
-            qty = self._positions.pop(trade.symbol, 0)
+            qty = int(trade.size)
+            self._positions.pop(trade.symbol, None)
             proceeds = trade.price * qty
             fees = self.cost_model.sell_cost(trade.price, qty) if self.cost_model else 0
             self._cash += proceeds - fees
