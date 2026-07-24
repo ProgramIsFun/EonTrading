@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     alpaca_secret_key: str = ""
     futu_real: bool = False
     futu_confirm: str = "poll"
+    tradable_markets: str = "HK"  # comma-separated: HK, US, etc.
 
     # Trading params
     threshold: float = 0.4

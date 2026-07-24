@@ -62,3 +62,35 @@ async def test_sell(broker):
     )
     order_id = await broker.execute(trade)
     assert order_id is not None, "Sell order was not accepted by Futu"
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="account does not have US trading permission")
+async def test_buy_us(broker):
+    from src.common.events import TradeEvent
+    from src.common.clock import utcnow
+
+    SYMBOL = "US.AAPL"
+    QTY = 1
+    trade = TradeEvent(
+        symbol=SYMBOL, action="buy", reason="integration test",
+        timestamp=utcnow().isoformat() + "Z", price=300.0, size=QTY,
+    )
+    order_id = await broker.execute(trade)
+    assert order_id is not None, "US buy order was not accepted by Futu"
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="account does not have US trading permission")
+async def test_sell_us(broker):
+    from src.common.events import TradeEvent
+    from src.common.clock import utcnow
+
+    SYMBOL = "US.AAPL"
+    QTY = 1
+    trade = TradeEvent(
+        symbol=SYMBOL, action="sell", reason="integration test",
+        timestamp=utcnow().isoformat() + "Z", price=999.0, size=QTY,
+    )
+    order_id = await broker.execute(trade)
+    assert order_id is not None, "US sell order was not accepted by Futu"

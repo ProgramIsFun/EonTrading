@@ -108,10 +108,11 @@ Rules:
 - If the news is bearish for the broad market (e.g. tariffs, recession, war), return inverse ETFs with POSITIVE sentiment (they go up when market drops).
 - For individual stock news, return the affected tickers.
 - Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
+- Only output symbols for the following markets: {markets}. Use the format TICKER.EXCHANGE (e.g. 00700.HK for Hong Kong, AAPL for US).
 
 Return:
 {{
-  "symbols": ["AAPL"],       // affected stock tickers or inverse ETFs
+  "symbols": ["00700.HK"],     // affected stock tickers (market format: TICKER.EXCHANGE)
   "sector": "technology",    // affected sector or empty
   "sentiment": 0.5,          // -1.0 (very bearish) to +1.0 (very bullish) for the returned symbols
   "confidence": 0.8,         // 0.0 to 1.0
@@ -128,13 +129,14 @@ Current holdings:
 Rules:
 - We trade CASH ONLY — no margin, no leverage, no short selling, no borrowing. Maximum loss is capped at initial capital.
 - Because we cannot short, use inverse ETFs to profit from market drops: SQQQ (inverse Nasdaq), SH (inverse S&P 500), SDOW (inverse Dow). These are regular stocks we buy with cash.
-- If the news is bearish for the broad market, return inverse ETFs with POSITIVE sentiment + return held stocks with NEGATIVE sentiment (so we sell them).
+- If the news is bearish for the broad market (e.g. tariffs, recession, war), return inverse ETFs with POSITIVE sentiment + return held stocks with NEGATIVE sentiment (so we sell them).
 - Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
 - Higher confidence if the news directly impacts our holdings.
+- Only output symbols for the following markets: {markets}. Use the format TICKER.EXCHANGE (e.g. 00700.HK for Hong Kong, AAPL for US).
 
 Return:
 {{
-  "symbols": ["AAPL"],       // ALL affected tickers + inverse ETFs if applicable
+  "symbols": ["00700.HK"],     // ALL affected tickers + inverse ETFs if applicable (market format: TICKER.EXCHANGE)
   "sector": "technology",    // affected sector or empty
   "sentiment": 0.5,          // -1.0 to +1.0 for the returned symbols
   "confidence": 0.8,         // 0.0 to 1.0, higher if it affects our holdings
@@ -169,12 +171,14 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
 
     def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         import requests
+        from src.settings import settings
 
+        markets = settings.tradable_markets
         if positions:
             pos_str = "\n".join(f"- {sym}" for sym in positions.keys()) or "None"
-            prompt = LLM_PROMPT_WITH_POSITIONS.format(headline=event.headline, positions=pos_str)
+            prompt = LLM_PROMPT_WITH_POSITIONS.format(headline=event.headline, positions=pos_str, markets=markets)
         else:
-            prompt = LLM_PROMPT.format(headline=event.headline)
+            prompt = LLM_PROMPT.format(headline=event.headline, markets=markets)
         try:
             content = self._call_llm(prompt)
             # Extract JSON from response (handle markdown code blocks)
