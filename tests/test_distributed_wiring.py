@@ -34,9 +34,9 @@ class TestDistributedWiring:
         assert "position_store=" in src, "run_trader.py must pass position_store to SentimentTrader"
 
     def test_executor_uses_bus_and_broker(self):
-        """run_executor must pass bus and broker to TradeExecutor (no extra DB args)."""
+        """run_executor must pass bus, broker, and log_order to TradeExecutor."""
         src = _get_function_source("src/live/runners/run_executor.py", "main")
-        assert "TradeExecutor(bus, broker)" in src, "run_executor uses simplified TradeExecutor signature"
+        assert "TradeExecutor(bus, broker," in src, "run_executor uses TradeExecutor with log_order"
 
     def test_executor_has_dedup(self):
         """TradeExecutor must deduplicate trades (at-least-once delivery protection)."""

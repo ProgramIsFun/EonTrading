@@ -10,12 +10,10 @@ import logging
 from abc import ABC, abstractmethod
 from uuid import uuid4
 
-from src.common.clock import utcnow
 from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
 from src.common.price import get_price
-from src.data.utils.db_helper import get_mongo_client
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -390,14 +388,24 @@ class AlpacaBroker(Broker):
 # TradeExecutor — routes [trade] events to the configured broker
 # ---------------------------------------------------------------------------
 class TradeExecutor:
-    """Listens to trade events, submits orders via broker, writes to orders collection.
+    """Listens to trade events, submits orders via broker, logs via injected callable.
 
     Does NOT track fill results — OrderTracker handles confirmation via polling.
+
+    Parameters
+    ----------
+    bus : EventBus
+    broker : Broker
+    log_order : async callable (trade, order_id, broker_name) -> None
+        Called after each successful order submission.  Pass ``noop_log_order``
+        (or omit) to disable audit logging.  Default implementation is a no-op.
     """
 
-    def __init__(self, bus: EventBus, broker: Broker):
+    def __init__(self, bus: EventBus, broker: Broker, log_order=None):
+        from src.live.order_logger import noop_log_order
         self.bus = bus
         self.broker = broker
+        self._log_order = log_order or noop_log_order
         self._seen: set[str] = set()
 
     async def start(self):
@@ -417,26 +425,4 @@ class TradeExecutor:
         if order_id is None:
             logger.error("Order submission failed: %s %s", trade.action.upper(), trade.symbol)
             return
-        try:
-            col = get_mongo_client()["EonTradingDB"]["orders"]
-            doc = {
-                "order_id": order_id,
-                "broker_type": self.broker.__class__.__name__,
-                "symbol": trade.symbol,
-                "action": trade.action,
-                "price": trade.price,
-                "shares": trade.size,
-                "reason": trade.reason,
-                "timestamp": trade.timestamp,
-                "status": "pending",
-                "placed_at": utcnow(),
-                "checked_at": None,
-                "filled_at": None,
-                "cancelled_at": None,
-                "next_check_at": utcnow(),
-                "retry_count": 0,
-                "error": None,
-            }
-            await asyncio.to_thread(col.insert_one, doc)
-        except Exception:
-            logger.debug("MongoDB unavailable, skipping order log")
+        await self._log_order(trade, order_id, self.broker.__class__.__name__)

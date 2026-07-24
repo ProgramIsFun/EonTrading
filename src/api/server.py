@@ -16,6 +16,7 @@ from src.common.costs import US_STOCKS
 from src.common.position_store import InMemoryPositionStore
 from src.common.reconcile import reconcile
 from src.data.utils.db_helper import get_mongo_client
+from src.live.order_logger import noop_log_order
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -333,7 +334,7 @@ async def _run_live_backtest(job_id: str, params: dict):
         monitor = PriceMonitor(bus, store, logic, interval_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
         analyzer_svc = AnalyzerService(bus, analyzer=anlzr, get_positions=store.get_positions)
-        executor = TradeExecutor(bus, broker)
+        executor = TradeExecutor(bus, broker, log_order=noop_log_order)
 
         trades = []
 

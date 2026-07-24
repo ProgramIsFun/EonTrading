@@ -12,6 +12,7 @@ from src.common.heartbeat import Heartbeat
 from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
 from src.live.brokers.broker import TradeExecutor
+from src.live.order_logger import mongo_log_order
 
 
 async def main():
@@ -26,7 +27,7 @@ async def main():
     bus = RedisStreamBus(group="executor")
     await bus.start()
 
-    executor = TradeExecutor(bus, broker)
+    executor = TradeExecutor(bus, broker, log_order=mongo_log_order)
     await executor.start()
     logger.info("🟢 Started. Waiting for [trade] events.")
     Heartbeat.create_background("executor", metadata={"broker": broker.__class__.__name__, "mode": "distributed"})

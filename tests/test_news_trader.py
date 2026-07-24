@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from tests.helpers import MockBroker
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from src.common.clock import utcnow
 from src.common.event_bus import LocalEventBus
@@ -239,13 +239,10 @@ class RejectingBroker(Broker):
 # --- Trade confirmation & orders tests ---
 
 @pytest.fixture
-def _mock_orders():
-    with patch("src.live.brokers.broker.get_mongo_client") as m:
-        mock_db = MagicMock()
-        mock_orders = MagicMock()
-        mock_db.__getitem__.return_value = mock_orders
-        m.return_value.__getitem__.return_value = mock_db
-        yield mock_orders
+def _mock_log_order():
+    """Provide a mock log_order callable for TradeExecutor."""
+    mock = AsyncMock()
+    return mock
 
 
 class TestTradeExecution:
@@ -266,9 +263,10 @@ class TestTradeExecution:
         return bus, trader, executor, broker
 
     @pytest.mark.asyncio
-    async def test_buy_writes_order(self, setup_with_mock, _mock_orders):
-        """Executor writes order to MongoDB when broker confirms."""
+    async def test_buy_writes_order(self, setup_with_mock, _mock_log_order):
+        """Executor calls log_order when broker confirms."""
         bus, trader, executor, broker = setup_with_mock
+        executor._log_order = _mock_log_order
         await bus.start()
         await trader.start()
         await executor.start()
@@ -281,12 +279,13 @@ class TestTradeExecution:
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
         await asyncio.sleep(0.2)
 
-        _mock_orders.insert_one.assert_called_once()
+        _mock_log_order.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_buy_rejected_skips_order(self, setup_with_rejecting, _mock_orders):
-        """Executor skips order when broker rejects."""
+    async def test_buy_rejected_skips_order(self, setup_with_rejecting, _mock_log_order):
+        """Executor skips log_order when broker rejects."""
         bus, trader, executor, broker = setup_with_rejecting
+        executor._log_order = _mock_log_order
         await bus.start()
         await trader.start()
         await executor.start()
@@ -299,7 +298,7 @@ class TestTradeExecution:
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
         await asyncio.sleep(0.2)
 
-        _mock_orders.insert_one.assert_not_called()
+        _mock_log_order.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ttl_dedup_blocks_duplicate_orders(self, setup_with_mock):

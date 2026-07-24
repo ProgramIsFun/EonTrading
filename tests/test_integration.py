@@ -51,7 +51,7 @@ def track_position(store):
     """Return a callback that maintains the FakePositionStore from trade events."""
     def _(trade):
         if trade.action == "buy":
-            store.open_position(trade.symbol, datetime.utcnow(), trade.price)
+            store.open_position(trade.symbol, datetime.utcnow(), trade.price, qty=trade.size)
         elif trade.action == "sell":
             store.close_position(trade.symbol)
     return _
@@ -401,6 +401,9 @@ class TestSLTPFullCycle:
             sold = await monitor.check_once(as_of="2026-04-22T14:00:00Z")
             ok = await trades.wait_for_count(2)
             assert ok, f"Expected 2 trades after SL, got {len(trades.items)}"
+            # publish() fires handlers as create_task — executor is a separate
+            # concurrent task.  Yield so it can finish before we check the broker.
+            await asyncio.sleep(0.05)
 
         assert "AAPL" in sold
         broker_pos = await broker.get_positions()
