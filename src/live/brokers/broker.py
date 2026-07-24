@@ -132,7 +132,7 @@ class FutuBroker(Broker):
     def _get_ctx(self):
         from futu import OpenSecTradeContext, TrdMarket
         if not self._ctx:
-            self._ctx = OpenSecTradeContext(filter_trdmarket=[TrdMarket.US, TrdMarket.HK], host=self.host, port=self.port)
+            self._ctx = OpenSecTradeContext(host=self.host, port=self.port)
         return self._ctx
 
     async def execute(self, trade: TradeEvent) -> str | None:
@@ -155,7 +155,7 @@ class FutuBroker(Broker):
                 )
             ret, data = await asyncio.to_thread(_place)
             if ret != 0:
-                logger.error("Futu order rejected: %s %s", trade.action.upper(), trade.symbol)
+                logger.error("Futu order rejected: %s %s — %s", trade.action.upper(), trade.symbol, data)
                 return None
             order_id = str(data["order_id"].iloc[0])
             logger.info("📤 Futu order placed: %s %s (id=%s)", trade.action.upper(), trade.symbol, order_id)
@@ -174,6 +174,7 @@ class FutuBroker(Broker):
                 return ctx.order_list_query(order_id=int(order_id), trd_env=trd_env)
             ret, orders = await asyncio.to_thread(_query)
             if ret != 0:
+                logger.warning("Futu check_order query failed: %s", orders)
                 return "pending", None
             status = orders["order_status"].iloc[0]
             if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
@@ -199,7 +200,9 @@ class FutuBroker(Broker):
                     price=0,
                     trd_env=trd_env,
                 )
-            ret, _ = await asyncio.to_thread(_cancel)
+            ret, msg = await asyncio.to_thread(_cancel)
+            if ret != 0:
+                logger.warning("Futu cancel_order failed: %s", msg)
             return ret == 0
         except Exception as e:
             logger.error("Futu cancel_order error: %s", e)
@@ -215,6 +218,7 @@ class FutuBroker(Broker):
                 return ctx.position_list_query(trd_env=trd_env)
             ret, data = await asyncio.to_thread(_query)
             if ret != 0:
+                logger.warning("Futu get_positions failed: %s", data)
                 return {}
             return {row["code"]: int(row["qty"]) for _, row in data.iterrows() if int(row["qty"]) > 0}
         except Exception as e:
@@ -232,6 +236,7 @@ class FutuBroker(Broker):
             ret, data = await asyncio.to_thread(_query)
             if ret == 0:
                 return float(data["cash"].iloc[0])
+            logger.warning("Futu get_cash failed: %s", data)
         except Exception as e:
             logger.error("Futu get_cash error: %s", e)
         return 0.0
