@@ -37,20 +37,6 @@ def _python():
     return str(VENV_PYTHON)
 
 
-def _load_env():
-    env_file = PROJECT_ROOT / ".env"
-    if not env_file.exists():
-        return
-    for line in env_file.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.split("#")[0].strip().strip("\"'")
-        os.environ.setdefault(key, value)
-
-
 def _write_pid(name: str, pid: int):
     PID_DIR.mkdir(parents=True, exist_ok=True)
     (PID_DIR / f"{name}.pid").write_text(str(pid))
@@ -195,7 +181,6 @@ def _stop_process(name: str):
 
 def start_all():
     """Start all distributed components."""
-    _load_env()
     print("Starting distributed components...")
     for name, module in COMPONENTS.items():
         _start_component(name, module)
