@@ -106,8 +106,11 @@ class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
 _LLM_COMMON_RULES = """\
 - We trade CASH ONLY — no margin, no short selling, no borrowing.
 - We can only trade stocks on these markets: {markets}
-- Only return symbols that are well-known, actively traded stocks with a valid Yahoo Finance ticker. For example: 00700.HK (Tencent), 9988.HK (Alibaba HK), 00005.HK (HSBC HK), 0388.HK (HKEX).
-- HK tickers MUST be 4 digits with leading zeros: 0883.HK is valid, 883.HK is NOT. 0981.HK is valid, 981.HK is NOT.
+- Only return symbols that are well-known, actively traded stocks with a valid Yahoo Finance ticker.
+- SYMBOL FORMAT (Yahoo Finance convention — CRITICAL):
+  - HK stocks: exactly 4 digits + .HK → 0700.HK (Tencent), 9988.HK (Alibaba), 0005.HK (HSBC), 0388.HK (HKEX), 0981.HK (SMIC), 0883.HK (CNOOC)
+  - WRONG examples — these will fail: 00700.HK ✗, 00005.HK ✗, 00002.HK ✗, 883.HK ✗, 981.HK ✗
+  - The ticker must match what Yahoo Finance recognizes. 5-digit HK codes (00700, 00005) do NOT exist on Yahoo Finance.
 - Do NOT return US tickers like AAPL, TSLA, NVDA unless we can trade US stocks.
 - Always try to find indirect links to Hong Kong stocks, even if the news is not directly about HK. For example: negative US tech news (e.g. chip restrictions, AI regulation, big tech earnings miss) may also impact HK-listed tech stocks like Tencent, Alibaba, or Semiconductor Manufacturing International (0981.HK). News about US-China trade tensions, tariffs, or sanctions directly affects HK stocks. Global macro events (Fed decisions, oil prices, recession fears) have spillover effects on HK markets.
 - When you identify an indirect link, use lower confidence (0.3-0.6) to reflect the indirect nature of the connection. Use higher confidence (0.7-1.0) only for direct mentions.
@@ -122,7 +125,7 @@ If we hold a stock and the news is bad for it (directly or indirectly), return t
 _LLM_RETURN_EXAMPLE = """
 Return:
 {{
-  "symbols": ["00700.HK"],
+  "symbols": ["0700.HK"],
   "sector": "technology",
   "sentiment": 0.5,
   "confidence": 0.8,

@@ -65,3 +65,41 @@ def test_rsi_overbought_generates_sell():
 
 def test_rsi_name():
     assert RSIMeanReversion().name() == "RSI(14,30,70)"
+
+
+# --- LLM prompt symbol format ---
+
+def test_llm_prompt_uses_yahoo_finance_format():
+    """LLM prompt must show 4-digit HK tickers (Yahoo format), not 5-digit Futu format."""
+    from src.strategies.sentiment import _LLM_COMMON_RULES, _LLM_RETURN_EXAMPLE
+
+    rules = _LLM_COMMON_RULES.format(markets="HK")
+
+    # Correct 4-digit examples must be present
+    for sym in ["0700.HK", "9988.HK", "0005.HK", "0388.HK", "0981.HK", "0883.HK"]:
+        assert sym in rules, f"Missing correct example: {sym}"
+
+    # Wrong 5-digit examples must NOT appear (except in the explicit WRONG list)
+    # Split at "WRONG" to separate correct section from wrong section
+    correct_section = rules.split("WRONG")[0]
+    for bad_sym in ["00700.HK", "00005.HK", "00002.HK"]:
+        assert bad_sym not in correct_section, (
+            f"Wrong format {bad_sym} appears in correct examples section"
+        )
+
+    # Return example must use 4-digit format
+    assert '"0700.HK"' in _LLM_RETURN_EXAMPLE
+    assert "00700.HK" not in _LLM_RETURN_EXAMPLE
+
+
+def test_llm_prompt_builder_includes_correct_format():
+    """_build_llm_prompt should produce a prompt with valid Yahoo Finance tickers."""
+    from src.strategies.sentiment import _build_llm_prompt
+
+    prompt = _build_llm_prompt("Tencent beats earnings", "HK")
+    assert "0700.HK" in prompt
+    assert "WRONG" in prompt  # Wrong examples section exists
+    # 00700.HK may appear in the "WRONG" section — that's fine
+    # but it must NOT appear before the "WRONG" marker (i.e. not in correct examples)
+    correct_section = prompt.split("WRONG")[0]
+    assert "00700.HK" not in correct_section
