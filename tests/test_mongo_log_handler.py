@@ -181,7 +181,7 @@ class TestLLMSentimentAnalyzerOpencode:
         os.environ["OPENCODE_API_KEY"] = "sk-test-key"
         try:
             a = LLMSentimentAnalyzer()
-            assert not a._is_azure
+            assert "opencode.ai" in a.base_url
         finally:
             del os.environ["OPENCODE_API_KEY"]
 
@@ -223,11 +223,13 @@ class TestLLMSentimentAnalyzerOpencode:
         os.environ["OPENCODE_API_KEY"] = "sk-test"
         try:
             a = LLMSentimentAnalyzer()
-            with patch("requests.post") as mock_post:
-                mock_post.return_value = MagicMock(status_code=200, json=lambda: {"choices": [{"message": {"content": '{"symbols":[],"sentiment":0,"confidence":0}'}}]})
+            with patch.object(a, "_get_client") as mock_get_client:
+                mock_client = MagicMock()
+                mock_resp = MagicMock()
+                mock_resp.choices = [MagicMock(message=MagicMock(content="{}"))]
+                mock_client.chat.completions.create.return_value = mock_resp
+                mock_get_client.return_value = mock_client
                 a._call_llm("test prompt")
-                called_url = mock_post.call_args[0][0]
-                assert called_url.endswith("/chat/completions")
-                assert "opencode.ai" in called_url
+                mock_client.chat.completions.create.assert_called_once()
         finally:
             del os.environ["OPENCODE_API_KEY"]

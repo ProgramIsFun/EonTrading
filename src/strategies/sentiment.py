@@ -160,7 +160,7 @@ Return:
 class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
     """LLM-based scorer. More accurate, needs API key.
 
-    Supports any OpenAI-compatible API (OpenAI, opencode Zen, Ollama, local LLMs).
+    Supports any OpenAI-compatible API (OpenAI, Azure, opencode Zen, Ollama, local LLMs).
     Set OPENCODE_API_KEY to use opencode Zen (free big-pickle model by default).
     """
 
@@ -179,11 +179,12 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
             self.api_key = api_key or os.getenv("OPENAI_API_KEY")
             self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
             self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        self.api_version = os.getenv("OPENAI_API_VERSION", "")
-        self._is_azure = "azure" in self.base_url
+
+    def _get_client(self):
+        from openai import OpenAI
+        return OpenAI(base_url=self.base_url, api_key=self.api_key)
 
     def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
-        import requests
         from src.settings import settings
 
         markets = settings.tradable_markets
@@ -221,14 +222,9 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
 
     @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
     def _call_llm(self, prompt: str) -> str:
-        import requests
-        url = f"{self.base_url}/chat/completions"
-        headers = {"api-key": self.api_key} if self._is_azure else {"Authorization": f"Bearer {self.api_key}"}
-        params = {"api-version": self.api_version} if self._is_azure and self.api_version else {}
-        resp = requests.post(
-            url, headers=headers, params=params,
-            json={"model": self.model, "messages": [{"role": "user", "content": prompt}], "temperature": 0},
-            timeout=15,
+        client = self._get_client()
+        resp = client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
         )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        return resp.choices[0].message.content

@@ -18,6 +18,14 @@ TARIFF_NEWS = NewsEvent(
 HOLDINGS = {"AAPL": True, "NVDA": True}
 
 
+def _mock_llm_response(content: str):
+    mock_client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock(message=MagicMock(content=content))]
+    mock_client.chat.completions.create.return_value = mock_resp
+    return mock_client
+
+
 class TestKeywordWithPositions:
     def test_ignores_positions(self):
         analyzer = KeywordSentimentAnalyzer()
@@ -35,47 +43,39 @@ class TestKeywordWithPositions:
 
 
 class TestLLMPromptSelection:
-    @patch("requests.post")
-    def test_uses_position_prompt_when_holdings_provided(self, mock_post):
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": '{"symbols":["AAPL"],"sector":"technology","sentiment":-0.8,"confidence":0.95,"urgency":"high"}'}}]
-        }
-        mock_post.return_value = mock_resp
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_uses_position_prompt_when_holdings_provided(self, mock_get_client):
+        mock_get_client.return_value = _mock_llm_response(
+            '{"symbols":["AAPL"],"sector":"technology","sentiment":-0.8,"confidence":0.95,"urgency":"high"}'
+        )
 
         analyzer = LLMSentimentAnalyzer(api_key="test-key")
         analyzer.analyze(TARIFF_NEWS, positions=HOLDINGS)
 
-        call_args = mock_post.call_args
-        messages = call_args[1]["json"]["messages"]
-        prompt = messages[0]["content"]
+        call_args = mock_get_client.return_value.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][0]["content"]
         assert "Current holdings" in prompt
         assert "AAPL" in prompt
         assert "NVDA" in prompt
 
-    @patch("requests.post")
-    def test_uses_basic_prompt_without_holdings(self, mock_post):
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": '{"symbols":["AAPL"],"sector":"technology","sentiment":-0.5,"confidence":0.7,"urgency":"normal"}'}}]
-        }
-        mock_post.return_value = mock_resp
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_uses_basic_prompt_without_holdings(self, mock_get_client):
+        mock_get_client.return_value = _mock_llm_response(
+            '{"symbols":["AAPL"],"sector":"technology","sentiment":-0.5,"confidence":0.7,"urgency":"normal"}'
+        )
 
         analyzer = LLMSentimentAnalyzer(api_key="test-key")
         analyzer.analyze(TARIFF_NEWS)
 
-        call_args = mock_post.call_args
-        messages = call_args[1]["json"]["messages"]
-        prompt = messages[0]["content"]
+        call_args = mock_get_client.return_value.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][0]["content"]
         assert "Current holdings" not in prompt
 
-    @patch("requests.post")
-    def test_llm_returns_valid_sentiment_event(self, mock_post):
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": '{"symbols":["AAPL","NVDA"],"sector":"technology","sentiment":-0.9,"confidence":0.95,"urgency":"high"}'}}]
-        }
-        mock_post.return_value = mock_resp
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_llm_returns_valid_sentiment_event(self, mock_get_client):
+        mock_get_client.return_value = _mock_llm_response(
+            '{"symbols":["AAPL","NVDA"],"sector":"technology","sentiment":-0.9,"confidence":0.95,"urgency":"high"}'
+        )
 
         analyzer = LLMSentimentAnalyzer(api_key="test-key")
         result = analyzer.analyze(TARIFF_NEWS, positions=HOLDINGS)
@@ -85,25 +85,23 @@ class TestLLMPromptSelection:
         assert result.confidence == 0.95
         assert result.urgency == "high"
 
-    @patch("requests.post")
-    def test_llm_handles_empty_positions(self, mock_post):
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": '{"symbols":["AAPL"],"sector":"","sentiment":-0.5,"confidence":0.7,"urgency":"normal"}'}}]
-        }
-        mock_post.return_value = mock_resp
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_llm_handles_empty_positions(self, mock_get_client):
+        mock_get_client.return_value = _mock_llm_response(
+            '{"symbols":["AAPL"],"sector":"","sentiment":-0.5,"confidence":0.7,"urgency":"normal"}'
+        )
 
         analyzer = LLMSentimentAnalyzer(api_key="test-key")
         analyzer.analyze(TARIFF_NEWS, positions={})
 
         # Empty dict is falsy — uses basic prompt (no positions to report)
-        call_args = mock_post.call_args
-        prompt = call_args[1]["json"]["messages"][0]["content"]
+        call_args = mock_get_client.return_value.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][0]["content"]
         assert "Current holdings" not in prompt
 
-    @patch("requests.post")
-    def test_llm_graceful_failure(self, mock_post):
-        mock_post.side_effect = Exception("API down")
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_llm_graceful_failure(self, mock_get_client):
+        mock_get_client.return_value.chat.completions.create.side_effect = Exception("API down")
 
         analyzer = LLMSentimentAnalyzer(api_key="test-key")
         with pytest.raises(Exception, match="API down"):
