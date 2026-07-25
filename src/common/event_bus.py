@@ -97,6 +97,7 @@ class RedisStreamBus(EventBus):
             await self._redis.aclose()
 
     async def publish(self, channel: str, message: dict):
+        logger.info("Publishing to [%s]: %s", channel, json.dumps(message, default=str)[:200])
         await self._redis.xadd(f"stream:{channel}", {"data": json.dumps(message)})
 
     async def subscribe(self, channel: str, handler: Callable):
@@ -125,6 +126,7 @@ class RedisStreamBus(EventBus):
                 )
                 for stream_key, messages in results:
                     channel = stream_key.replace("stream:", "", 1)
+                    logger.info("Received %d message(s) from [%s]", len(messages), channel)
                     for msg_id, fields in messages:
                         data = json.loads(fields["data"])
                         for handler in self._subscribers.get(channel, []):

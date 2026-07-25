@@ -10,8 +10,9 @@ Usage:
     python run.py clean          # delete all log files
     python run.py logs           # open terminal windows tailing each log file
     python run.py unlogs         # close all tail terminals
-    python run.py reset          # stop + resetdb + clean + unlogs (no restart)
+    python run.py reset          # stop + resetdb + flushredis + clean + unlogs (no restart)
     python run.py resetdb        # drop all MongoDB collections (fresh state)
+    python run.py flushredis     # flush all Redis keys (streams + consumer groups)
     python run.py venv           # copy venv activation command to clipboard
 """
 import os
@@ -122,12 +123,43 @@ def cmd_unlogs():
     print(f"Closed {killed} tail terminals." if killed else "No tail processes found.")
 
 
+def cmd_flushredis():
+    """Flush all Redis keys (streams + consumer groups)."""
+    _setup_path()
+    import redis
+    from src.settings import settings
+    r = redis.Redis(host=settings.redis_host, port=settings.redis_port)
+    keys = r.keys("*")
+    if keys:
+        print(f"  Redis keys ({len(keys)}):")
+        for k in sorted(keys):
+            t = r.type(k).decode()
+            if t == "stream":
+                length = r.xlen(k)
+                print(f"    - {k} (stream, {length} messages)")
+            elif t == "hash":
+                print(f"    - {k} (hash, {r.hlen(k)} fields)")
+            elif t == "list":
+                print(f"    - {k} (list, {r.llen(k)} items)")
+            elif t == "set":
+                print(f"    - {k} (set, {r.scard(k)} members)")
+            elif t == "zset":
+                print(f"    - {k} (zset, {r.zcard(k)} members)")
+            else:
+                print(f"    - {k} ({t})")
+    else:
+        print("  Redis is empty.")
+    r.flushdb()
+    print(f"Flushed Redis ({settings.redis_host}:{settings.redis_port}).")
+
+
 def cmd_reset():
-    """Stop all, reset database, clean logs, close tail terminals."""
+    """Stop all, reset database, flush Redis, clean logs, close tail terminals."""
     _setup_path()
     from scripts.distributed import stop_all
     stop_all()
     cmd_resetdb()
+    cmd_flushredis()
     cmd_clean()
     cmd_unlogs()
 
@@ -161,6 +193,7 @@ COMMANDS = {
     "unlogs": cmd_unlogs,
     "reset": cmd_reset,
     "resetdb": cmd_resetdb,
+    "flushredis": cmd_flushredis,
     "venv": cmd_venv,
 }
 
