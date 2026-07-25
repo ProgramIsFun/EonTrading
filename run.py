@@ -12,6 +12,7 @@ Usage:
     python run.py unlogs         # close all tail terminals
     python run.py reset          # stop + resetdb + unlogs (no restart)
     python run.py resetdb        # drop all MongoDB collections (fresh state)
+    python run.py venv           # copy venv activation command to clipboard
 """
 import os
 import signal
@@ -158,6 +159,17 @@ def cmd_resetdb():
     reset_db(force=True)
 
 
+def cmd_venv():
+    """Copy venv activation command to clipboard."""
+    venv_path = PROJECT_ROOT / ".venv" / "bin" / "activate"
+    if not venv_path.exists():
+        print("No .venv found. Run 'python -m venv .venv' first.")
+        return
+    cmd = f"source {venv_path}"
+    subprocess.run(["wl-copy"], input=cmd.encode(), check=True)
+    print(f"Copied to clipboard: {cmd}")
+
+
 COMMANDS = {
     "single": cmd_single,
     "start": cmd_start,
@@ -169,6 +181,7 @@ COMMANDS = {
     "unlogs": cmd_unlogs,
     "reset": cmd_reset,
     "resetdb": cmd_resetdb,
+    "venv": cmd_venv,
 }
 
 
