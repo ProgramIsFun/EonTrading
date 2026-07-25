@@ -3,7 +3,19 @@ from dataclasses import asdict, dataclass, field
 
 
 @dataclass
-class NewsEvent:
+class Event:
+    """Base class for all events — provides shared serialization."""
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
+class NewsEvent(Event):
     """Published by news watchers, consumed by sentiment analyzer."""
     source: str                    # "newsapi", "truthsocial", "reddit", "finnhub"
     headline: str
@@ -11,16 +23,9 @@ class NewsEvent:
     url: str = ""
     body: str = ""                 # full text if available
 
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-    @staticmethod
-    def from_dict(d: dict) -> "NewsEvent":
-        return NewsEvent(**{k: v for k, v in d.items() if k in NewsEvent.__dataclass_fields__})
-
 
 @dataclass
-class SentimentEvent:
+class SentimentEvent(Event):
     """Published by sentiment analyzer, consumed by traders."""
     source: str                    # original news source
     headline: str
@@ -32,16 +37,9 @@ class SentimentEvent:
     confidence: float = 0.0        # 0.0 to 1.0, how sure the model is
     urgency: str = "normal"        # "low", "normal", "high"
 
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-    @staticmethod
-    def from_dict(d: dict) -> "SentimentEvent":
-        return SentimentEvent(**{k: v for k, v in d.items() if k in SentimentEvent.__dataclass_fields__})
-
 
 @dataclass
-class TradeEvent:
+class TradeEvent(Event):
     """Published by traders, consumed by execution engine or logger."""
     symbol: str
     action: str                    # "buy", "sell"
@@ -49,13 +47,6 @@ class TradeEvent:
     timestamp: str
     price: float = 0.0             # target or market price
     size: float = 1.0              # fraction of capital
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-    @staticmethod
-    def from_dict(d: dict) -> "TradeEvent":
-        return TradeEvent(**{k: v for k, v in d.items() if k in TradeEvent.__dataclass_fields__})
 
 
 # Channel names
