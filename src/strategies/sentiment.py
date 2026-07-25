@@ -103,11 +103,7 @@ class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
 
 # --- LLM-based (accurate, needs API key) ---
 
-LLM_PROMPT = """Analyze this financial news headline. Return JSON only, no explanation.
-
-Headline: "{headline}"
-
-Rules:
+_LLM_COMMON_RULES = """\
 - We trade CASH ONLY — no margin, no short selling, no borrowing.
 - We can only trade stocks on these markets: {markets}
 - Only return symbols that are well-known, actively traded stocks with a valid Yahoo Finance ticker. For example: 00700.HK (Tencent), 9988.HK (Alibaba HK), 00005.HK (HSBC HK), 0388.HK (HKEX).
@@ -117,8 +113,13 @@ Rules:
 - When you identify an indirect link, use lower confidence (0.3-0.6) to reflect the indirect nature of the connection. Use higher confidence (0.7-1.0) only for direct mentions.
 - Even if the news mentions only US or global events, if there is a plausible connection to HK stocks, return those HK tickers with appropriate sentiment and confidence.
 - Only return empty symbols if there is truly no meaningful connection to any HK stock.
-- Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
+- Sentiment is from the perspective of the returned symbols (positive = those symbols go up)."""
 
+_LLM_POSITION_EXTRA = """\
+If we hold a stock and the news is bad for it (directly or indirectly), return that stock with negative sentiment so we sell it.
+- Higher confidence if the news directly impacts our holdings."""
+
+_LLM_RETURN_EXAMPLE = """
 Return:
 {{
   "symbols": ["00700.HK"],
@@ -128,35 +129,21 @@ Return:
   "urgency": "normal"
 }}"""
 
-LLM_PROMPT_WITH_POSITIONS = """Analyze this financial news headline considering the current portfolio. Return JSON only, no explanation.
 
-Headline: "{headline}"
-
-Current holdings:
-{positions}
-
-Rules:
-- We trade CASH ONLY — no margin, no short selling, no borrowing.
-- We can only trade stocks on these markets: {markets}
-- Only return symbols that are well-known, actively traded stocks with a valid Yahoo Finance ticker. For example: 00700.HK (Tencent), 9988.HK (Alibaba HK), 00005.HK (HSBC HK), 0388.HK (HKEX).
-- HK tickers MUST be 4 digits with leading zeros: 0883.HK is valid, 883.HK is NOT. 0981.HK is valid, 981.HK is NOT.
-- Do NOT return US tickers like AAPL, TSLA, NVDA unless we can trade US stocks.
-- Always try to find indirect links to Hong Kong stocks, even if the news is not directly about HK. For example: negative US tech news (e.g. chip restrictions, AI regulation, big tech earnings miss) may also impact HK-listed tech stocks like Tencent, Alibaba, or Semiconductor Manufacturing International (0981.HK). News about US-China trade tensions, tariffs, or sanctions directly affects HK stocks. Global macro events (Fed decisions, oil prices, recession fears) have spillover effects on HK markets.
-- If we hold a stock and the news is bad for it (directly or indirectly), return that stock with negative sentiment so we sell it.
-- When you identify an indirect link, use lower confidence (0.3-0.6) to reflect the indirect nature of the connection. Use higher confidence (0.7-1.0) only for direct mentions.
-- Even if the news mentions only US or global events, if there is a plausible connection to our HK holdings or other HK stocks, return those HK tickers with appropriate sentiment and confidence.
-- Only return empty symbols if there is truly no meaningful connection to any HK stock.
-- Sentiment is from the perspective of the returned symbols (positive = those symbols go up).
-- Higher confidence if the news directly impacts our holdings.
-
-Return:
-{{
-  "symbols": ["00700.HK"],
-  "sector": "technology",
-  "sentiment": 0.5,
-  "confidence": 0.8,
-  "urgency": "normal"
-}}"""
+def _build_llm_prompt(headline: str, markets: str, positions: dict = None) -> str:
+    parts = ["Analyze this financial news headline" +
+             (" considering the current portfolio" if positions else "") +
+             ". Return JSON only, no explanation.",
+             f'\nHeadline: "{headline}"']
+    if positions:
+        pos_str = "\n".join(f"- {sym}" for sym in positions.keys()) or "None"
+        parts.append(f"\nCurrent holdings:\n{pos_str}")
+    parts.append("\nRules:")
+    parts.append(_LLM_COMMON_RULES.format(markets=markets))
+    if positions:
+        parts.append(_LLM_POSITION_EXTRA)
+    parts.append(_LLM_RETURN_EXAMPLE)
+    return "\n".join(parts)
 
 
 class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
@@ -189,12 +176,7 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
     def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
         from src.settings import settings
 
-        markets = settings.tradable_markets
-        if positions:
-            pos_str = "\n".join(f"- {sym}" for sym in positions.keys()) or "None"
-            prompt = LLM_PROMPT_WITH_POSITIONS.format(headline=event.headline, positions=pos_str, markets=markets)
-        else:
-            prompt = LLM_PROMPT.format(headline=event.headline, markets=markets)
+        prompt = _build_llm_prompt(event.headline, settings.tradable_markets, positions)
         t0 = time.perf_counter()
         try:
             content = self._call_llm(prompt)

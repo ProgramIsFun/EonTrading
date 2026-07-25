@@ -4,8 +4,6 @@ from unittest.mock import MagicMock, patch
 
 from src.common.events import NewsEvent
 from src.strategies.sentiment import (
-    LLM_PROMPT,
-    LLM_PROMPT_WITH_POSITIONS,
     KeywordSentimentAnalyzer,
     LLMSentimentAnalyzer,
 )
