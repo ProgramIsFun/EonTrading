@@ -443,3 +443,6 @@ class TradeExecutor:
             logger.error("Order submission failed: %s %s", trade.action.upper(), trade.symbol)
             return
         await self._log_order(trade, order_id, self.broker.__class__.__name__)
+        logger.info("✅ %s %s qty=%d @ $%.2f (order_id=%s, broker=%s)",
+                     trade.action.upper(), trade.symbol, int(trade.size),
+                     trade.price, order_id, self.broker.__class__.__name__)
