@@ -1,4 +1,5 @@
 """Tests for position-aware sentiment analysis."""
+import pytest
 from unittest.mock import MagicMock, patch
 
 from src.common.events import NewsEvent
@@ -105,7 +106,5 @@ class TestLLMPromptSelection:
         mock_post.side_effect = Exception("API down")
 
         analyzer = LLMSentimentAnalyzer(api_key="test-key")
-        result = analyzer.analyze(TARIFF_NEWS, positions=HOLDINGS)
-
-        assert result.sentiment == 0.0
-        assert result.confidence == 0.0
+        with pytest.raises(Exception, match="API down"):
+            analyzer.analyze(TARIFF_NEWS, positions=HOLDINGS)

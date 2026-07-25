@@ -47,7 +47,11 @@ class AnalyzerService:
             return
         # Run synchronous MongoDB + LLM calls off the event loop
         positions = await asyncio.to_thread(self.get_positions) if self.get_positions else None
-        sentiment = await asyncio.to_thread(self.analyzer.analyze, event, positions)
+        try:
+            sentiment = await asyncio.to_thread(self.analyzer.analyze, event, positions)
+        except Exception as e:
+            logger.error("Analysis failed for %s: %s", event.headline[:60], e)
+            return
         if sentiment.confidence > 0:
             await self.bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
             logger.info("[%+.2f] %s", sentiment.sentiment, sentiment.headline[:80])

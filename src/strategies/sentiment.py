@@ -193,7 +193,6 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         else:
             prompt = LLM_PROMPT.format(headline=event.headline, markets=markets)
         t0 = time.perf_counter()
-        elapsed_ms = 0.0
         try:
             content = self._call_llm(prompt)
             elapsed_ms = (time.perf_counter() - t0) * 1000
@@ -218,11 +217,7 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         except Exception as e:
             elapsed_ms = (time.perf_counter() - t0) * 1000
             logger.error("LLM analysis failed after %.0fms: %s", elapsed_ms, e)
-            return SentimentEvent(
-                source=event.source, headline=event.headline,
-                timestamp=event.timestamp,
-                analyzed_at=utcnow().isoformat() + "Z",
-            )
+            raise
 
     @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
     def _call_llm(self, prompt: str) -> str:
