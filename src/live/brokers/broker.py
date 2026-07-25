@@ -135,9 +135,11 @@ class FutuBroker(Broker):
 
     @staticmethod
     def _to_futu_code(symbol: str) -> str:
-        """Convert standard format to Futu native: '00700.HK' → 'HK.00700'."""
+        """Convert standard format to Futu native: '0700.HK' → 'HK.00700'."""
         if "." in symbol:
             ticker, exchange = symbol.split(".", 1)
+            if exchange == "HK":
+                ticker = ticker.zfill(5)
             return f"{exchange}.{ticker}"
         return symbol
 
