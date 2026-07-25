@@ -36,14 +36,20 @@ class NewsPoller:
             except Exception:
                 pass  # duplicate key — already seen
 
+    def filter_unseen(self, events: list[NewsEvent]) -> list[NewsEvent]:
+        """Deduplicate events against seen URLs. Marks seen URLs as processed."""
+        out = []
+        for event in events:
+            if self._seen_col is not None:
+                if self._is_seen(event.url):
+                    continue
+                self._mark_seen(event.url)
+            out.append(event)
+        return out
+
     async def poll_once(self) -> list[NewsEvent]:
         """Fetch new articles from all sources. Dedup handled by each source's _seen set + optional MongoDB."""
-        events = []
+        raw = []
         for source in self.sources:
-            for event in await source.fetch_latest():
-                if self._seen_col is not None:
-                    if self._is_seen(event.url):
-                        continue
-                    self._mark_seen(event.url)
-                events.append(event)
-        return events
+            raw.extend(await source.fetch_latest())
+        return self.filter_unseen(raw)

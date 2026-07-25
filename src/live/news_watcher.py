@@ -95,14 +95,8 @@ class NewsWatcher:
             except Exception as e:
                 logger.error("Source %s failed: %s", source.__class__.__name__, e)
                 continue
-            count = 0
-            for event in result:
-                if self.poller._seen_col is not None:
-                    if self.poller._is_seen(event.url):
-                        continue
-                    self.poller._mark_seen(event.url)
-                events.append(event)
-                count += 1
+            events.extend(self.poller.filter_unseen(result))
+            count = len(result)
             if count:
                 logger.info("  %s: %d articles", source.__class__.__name__, count)
         return events
