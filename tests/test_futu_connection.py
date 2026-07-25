@@ -12,7 +12,7 @@ pytestmark = pytest.mark.futu
 
 @pytest.fixture
 def broker():
-    from src.live.brokers.broker import FutuBroker
+    from src.live.brokers import FutuBroker
 
     return FutuBroker(host="127.0.0.1", port=11111, simulate=True, confirm_mode="poll")
 

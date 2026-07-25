@@ -3,7 +3,7 @@ import asyncio
 from uuid import uuid4
 
 from src.common.events import TradeEvent
-from src.live.brokers.broker import Broker
+from src.live.brokers import Broker
 
 
 class MockBroker(Broker):

@@ -40,7 +40,7 @@ class TestDistributedWiring:
 
     def test_executor_has_dedup(self):
         """TradeExecutor must deduplicate trades (at-least-once delivery protection)."""
-        from src.live.brokers.broker import TradeExecutor
+        from src.live.brokers import TradeExecutor
         src = inspect.getsource(TradeExecutor)
         assert "_seen" in src, "TradeExecutor must have dedup tracking"
 

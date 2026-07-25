@@ -19,7 +19,7 @@ async def main():
     from src.common.events import CHANNEL_NEWS, NewsEvent
     from src.common.trading_logic import TradingLogic
     from src.live.analyzer_service import AnalyzerService
-    from src.live.brokers.broker import PaperBroker, TradeExecutor
+    from src.live.brokers import PaperBroker, TradeExecutor
     from src.live.sentiment_trader import SentimentTrader
     from src.strategies.sentiment import KeywordSentimentAnalyzer
 

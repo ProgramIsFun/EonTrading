@@ -1,0 +1,87 @@
+"""IBKRBroker — Interactive Brokers via ib_insync, confirms via callback."""
+import asyncio
+import logging
+
+from src.common.events import TradeEvent
+from src.common.log_handler import ComponentFilter
+
+from .broker import Broker
+
+logger = logging.getLogger(__name__)
+logger.addFilter(ComponentFilter("executor"))
+
+
+class IBKRBroker(Broker):
+    """pip install ib_insync
+
+    Connects to TWS or IB Gateway. Confirmation via orderStatusEvent callback.
+    """
+
+    def __init__(self, host: str = "127.0.0.1", port: int = 7497, client_id: int = 1):
+        self.host = host
+        self.port = port
+        self.client_id = client_id
+        self._ib = None
+
+    def _connect(self):
+        if self._ib and self._ib.isConnected():
+            return
+        from ib_insync import IB
+        self._ib = IB()
+        self._ib.connect(self.host, self.port, clientId=self.client_id)
+
+    async def execute(self, trade: TradeEvent) -> str | None:
+        from ib_insync import MarketOrder, Stock
+        try:
+            self._connect()
+            contract = Stock(trade.symbol, "SMART", "USD")
+            self._ib.qualifyContracts(contract)
+            action = "BUY" if trade.action == "buy" else "SELL"
+            order = MarketOrder(action, int(trade.size))
+            ib_trade = self._ib.placeOrder(contract, order)
+
+            # Wait for fill confirmation
+            while not ib_trade.isDone():
+                await asyncio.sleep(0.5)
+                self._ib.sleep(0)
+
+            order_id = str(ib_trade.order.orderId)
+            return order_id
+        except Exception as e:
+            logger.error("IBKR order failed: %s — %s", trade.symbol, e)
+            return None
+
+    async def check_order(self, order_id: str) -> tuple[str, str | None]:
+        try:
+            self._connect()
+            trades = self._ib.trades()
+            for t in trades:
+                if str(t.order.orderId) == order_id:
+                    status = t.orderStatus.status
+                    if status == "Filled":
+                        return ("filled", None)
+                    if status in ("Cancelled", "Inactive", "ApiCancelled"):
+                        return ("cancelled", status)
+                    return ("pending", None)
+            return ("pending", None)
+        except Exception as e:
+            logger.error("IBKR check_order error: %s", e)
+            return ("pending", None)
+
+    async def get_positions(self) -> dict[str, int]:
+        try:
+            self._connect()
+            return {p.contract.symbol: int(p.position) for p in self._ib.positions() if p.position > 0}
+        except Exception as e:
+            logger.error("IBKR get_positions error: %s", e)
+            return {}
+
+    async def get_cash(self) -> float:
+        try:
+            self._connect()
+            for av in self._ib.accountValues():
+                if av.tag == "CashBalance" and av.currency == "USD":
+                    return float(av.value)
+        except Exception as e:
+            logger.error("IBKR get_cash error: %s", e)
+        return 0.0

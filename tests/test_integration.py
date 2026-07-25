@@ -23,7 +23,7 @@ from src.common.events import (
 )
 from src.common.trading_logic import TradingLogic
 from src.live.analyzer_service import AnalyzerService
-from src.live.brokers.broker import PaperBroker, TradeExecutor
+from src.live.brokers import PaperBroker, TradeExecutor
 from src.live.price_monitor import PriceMonitor
 from src.live.sentiment_trader import SentimentTrader
 from src.strategies.sentiment import KeywordSentimentAnalyzer
@@ -33,7 +33,7 @@ from src.strategies.sentiment import KeywordSentimentAnalyzer
 def mock_get_price():
     with patch("src.live.sentiment_trader.get_price", return_value=150.0), \
          patch("src.live.price_monitor.get_price", return_value=150.0), \
-         patch("src.live.brokers.broker.get_price", return_value=150.0), \
+         patch("src.live.brokers.paper.get_price", return_value=150.0), \
          patch("src.common.price.get_price", return_value=150.0):
         yield
 
@@ -395,8 +395,8 @@ class TestSLTPFullCycle:
         broker_pos = await broker.get_positions()
         assert "AAPL" in broker_pos
 
-        with patch("src.live.price_monitor.get_price", return_value=140.0), \
-             patch("src.live.brokers.broker.get_price", return_value=140.0), \
+        with          patch("src.live.price_monitor.get_price", return_value=140.0), \
+             patch("src.live.brokers.paper.get_price", return_value=140.0), \
              patch("src.common.price.get_price", return_value=140.0):
             sold = await monitor.check_once(as_of="2026-04-22T14:00:00Z")
             ok = await trades.wait_for_count(2)
@@ -527,7 +527,7 @@ class TestPaperBrokerMarketOrder:
             timestamp="2026-04-22T10:00:00Z", price=0.0, size=100,
         )
 
-        with patch("src.live.brokers.broker.get_price", return_value=200.0):
+        with patch("src.live.brokers.paper.get_price", return_value=200.0):
             order_id = await broker.execute(trade)
 
         assert order_id is not None
@@ -566,7 +566,7 @@ class TestPaperBrokerMarketOrder:
             timestamp="2026-04-22T10:00:00Z", price=0.0, size=10,
         )
 
-        with patch("src.live.brokers.broker.get_price", return_value=200.0):
+        with patch("src.live.brokers.paper.get_price", return_value=200.0):
             order_id = await broker.execute(trade)
 
         assert order_id is not None
@@ -586,7 +586,7 @@ class TestPaperBrokerMarketOrder:
             timestamp="2026-04-22T10:00:00Z", price=0.0, size=10,
         )
 
-        with patch("src.live.brokers.broker.get_price", return_value=0):
+        with patch("src.live.brokers.paper.get_price", return_value=0):
             order_id = await broker.execute(trade)
 
         assert order_id is None

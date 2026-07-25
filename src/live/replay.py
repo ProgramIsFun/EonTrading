@@ -25,7 +25,7 @@ async def main(start: str, end: str):
     from src.common.trading_logic import TradingLogic
     from src.data.utils.db_helper import get_db
     from src.live.analyzer_service import AnalyzerService
-    from src.live.brokers.broker import PaperBroker, TradeExecutor
+    from src.live.brokers import PaperBroker, TradeExecutor
     from src.live.order_logger import mongo_log_order
     from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader

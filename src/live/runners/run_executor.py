@@ -11,7 +11,7 @@ from src.common.factories import build_broker
 from src.common.heartbeat import Heartbeat
 from src.common.shutdown import create_shutdown_event
 from src.common.startup import banner
-from src.live.brokers.broker import TradeExecutor
+from src.live.brokers import TradeExecutor
 from src.live.order_logger import mongo_log_order
 
 

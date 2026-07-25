@@ -1,4 +1,4 @@
-from src.live.brokers.broker import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker
+from src.live.brokers import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker
 from src.settings import settings
 from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 

@@ -71,29 +71,29 @@ def _remove_futu_mock():
 class TestFutuBroker:
 
     def test_to_futu_code_hk(self):
-        from src.live.brokers.broker import FutuBroker
+        from src.live.brokers import FutuBroker
         assert FutuBroker._to_futu_code("00700.HK") == "HK.00700"
         assert FutuBroker._to_futu_code("0700.HK") == "HK.00700"
         assert FutuBroker._to_futu_code("9988.HK") == "HK.09988"
 
     def test_to_futu_code_us_no_change(self):
-        from src.live.brokers.broker import FutuBroker
+        from src.live.brokers import FutuBroker
         assert FutuBroker._to_futu_code("AAPL") == "AAPL"
 
     def test_from_futu_code_hk(self):
-        from src.live.brokers.broker import FutuBroker
+        from src.live.brokers import FutuBroker
         assert FutuBroker._from_futu_code("HK.00700") == "00700.HK"
         assert FutuBroker._from_futu_code("HK.09988") == "09988.HK"
 
     def test_from_futu_code_us_no_change(self):
-        from src.live.brokers.broker import FutuBroker
+        from src.live.brokers import FutuBroker
         assert FutuBroker._from_futu_code("AAPL") == "AAPL"
 
     @pytest.mark.asyncio
     async def test_execute_places_order_and_returns_id(self, event_bus):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["12345"]}))
@@ -111,7 +111,7 @@ class TestFutuBroker:
     async def test_sell_uses_market_order(self, event_bus):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["67890"]}))
@@ -132,7 +132,7 @@ class TestFutuBroker:
     async def test_execute_rejected_returns_none(self, event_bus):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.place_order.return_value = (1, None)
@@ -149,7 +149,7 @@ class TestFutuBroker:
     async def test_execute_exception_returns_none(self, event_bus):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.place_order.side_effect = RuntimeError("connection lost")
@@ -166,7 +166,7 @@ class TestFutuBroker:
     async def test_check_order_filled(self):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_FILLED_ALL"]}))
@@ -183,7 +183,7 @@ class TestFutuBroker:
     async def test_check_order_cancelled(self):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_FAILED"]}))
@@ -200,7 +200,7 @@ class TestFutuBroker:
     async def test_check_order_pending(self):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_NEW"]}))
@@ -217,7 +217,7 @@ class TestFutuBroker:
     async def test_check_order_query_error_returns_pending(self):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.order_list_query.return_value = (1, None)
@@ -234,7 +234,7 @@ class TestFutuBroker:
     async def test_cancel_order(self):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.modify_order.return_value = (0, None)
@@ -253,7 +253,7 @@ class TestFutuBroker:
         _install_futu_mock(TrdMarket=MagicMock(US="US", HK="HK"))
         try:
             from futu import OpenSecTradeContext
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             broker = FutuBroker()
             ctx = broker._get_ctx()
@@ -270,7 +270,7 @@ class TestFutuBroker:
     async def test_get_positions(self):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.position_list_query.return_value = (0, pd.DataFrame({
@@ -290,7 +290,7 @@ class TestFutuBroker:
     async def test_get_positions_error_returns_empty(self):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.position_list_query.side_effect = RuntimeError("API error")
@@ -307,7 +307,7 @@ class TestFutuBroker:
     async def test_get_cash(self):
         _install_futu_mock()
         try:
-            from src.live.brokers.broker import FutuBroker
+            from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
             mock_ctx.accinfo_query.return_value = (0, pd.DataFrame({"cash": [50000.0]}))
@@ -346,7 +346,7 @@ class TestIBKRBroker:
     async def test_buy_returns_order_id(self, event_bus):
         _install_ibkr_mock()
         try:
-            from src.live.brokers.broker import IBKRBroker
+            from src.live.brokers import IBKRBroker
 
             mock_order = MagicMock()
             mock_order.orderId = 12345
@@ -371,7 +371,7 @@ class TestIBKRBroker:
     async def test_check_order_filled(self, event_bus):
         _install_ibkr_mock()
         try:
-            from src.live.brokers.broker import IBKRBroker
+            from src.live.brokers import IBKRBroker
 
             mock_trade = MagicMock()
             mock_trade.order.orderId = 12345
@@ -393,7 +393,7 @@ class TestIBKRBroker:
     async def test_check_order_cancelled(self, event_bus):
         _install_ibkr_mock()
         try:
-            from src.live.brokers.broker import IBKRBroker
+            from src.live.brokers import IBKRBroker
 
             mock_trade = MagicMock()
             mock_trade.order.orderId = 12345
@@ -415,7 +415,7 @@ class TestIBKRBroker:
     async def test_execute_exception_returns_none(self, event_bus):
         _install_ibkr_mock()
         try:
-            from src.live.brokers.broker import IBKRBroker
+            from src.live.brokers import IBKRBroker
 
             mock_ib = MagicMock()
             mock_ib.isConnected.side_effect = ConnectionError("TWS not running")
@@ -433,7 +433,7 @@ class TestIBKRBroker:
     async def test_get_positions(self):
         _install_ibkr_mock()
         try:
-            from src.live.brokers.broker import IBKRBroker
+            from src.live.brokers import IBKRBroker
 
             mock_pos1 = MagicMock()
             mock_pos1.contract.symbol = "AAPL"
@@ -458,7 +458,7 @@ class TestIBKRBroker:
     async def test_get_positions_error_returns_empty(self):
         _install_ibkr_mock()
         try:
-            from src.live.brokers.broker import IBKRBroker
+            from src.live.brokers import IBKRBroker
 
             mock_ib = MagicMock()
             mock_ib.isConnected.return_value = True
@@ -476,7 +476,7 @@ class TestIBKRBroker:
     async def test_get_cash(self):
         _install_ibkr_mock()
         try:
-            from src.live.brokers.broker import IBKRBroker
+            from src.live.brokers import IBKRBroker
 
             mock_av1 = MagicMock()
             mock_av1.tag = "CashBalance"
@@ -503,7 +503,7 @@ class TestIBKRBroker:
     async def test_get_cash_error_returns_zero(self):
         _install_ibkr_mock()
         try:
-            from src.live.brokers.broker import IBKRBroker
+            from src.live.brokers import IBKRBroker
 
             mock_ib = MagicMock()
             mock_ib.isConnected.return_value = True
@@ -538,7 +538,7 @@ class TestAlpacaBroker:
     async def test_buy_returns_order_id(self, event_bus):
         _install_alpaca_mock()
         try:
-            from src.live.brokers.broker import AlpacaBroker
+            from src.live.brokers import AlpacaBroker
 
             mock_order = MagicMock()
             mock_order.id = "order-123"
@@ -558,7 +558,7 @@ class TestAlpacaBroker:
     async def test_check_order_filled(self, event_bus):
         _install_alpaca_mock()
         try:
-            from src.live.brokers.broker import AlpacaBroker
+            from src.live.brokers import AlpacaBroker
 
             mock_order = MagicMock()
             mock_order.status = "filled"
@@ -578,7 +578,7 @@ class TestAlpacaBroker:
     async def test_check_order_cancelled(self, event_bus):
         _install_alpaca_mock()
         try:
-            from src.live.brokers.broker import AlpacaBroker
+            from src.live.brokers import AlpacaBroker
 
             mock_order = MagicMock()
             mock_order.status = "canceled"
@@ -598,7 +598,7 @@ class TestAlpacaBroker:
     async def test_execute_exception_returns_none(self, event_bus):
         _install_alpaca_mock()
         try:
-            from src.live.brokers.broker import AlpacaBroker
+            from src.live.brokers import AlpacaBroker
 
             mock_api = MagicMock()
             mock_api.submit_order.side_effect = RuntimeError("API rate limited")
@@ -615,7 +615,7 @@ class TestAlpacaBroker:
     async def test_get_positions(self):
         _install_alpaca_mock()
         try:
-            from src.live.brokers.broker import AlpacaBroker
+            from src.live.brokers import AlpacaBroker
 
             mock_pos1 = MagicMock()
             mock_pos1.symbol = "AAPL"
@@ -639,7 +639,7 @@ class TestAlpacaBroker:
     async def test_get_positions_error_returns_empty(self):
         _install_alpaca_mock()
         try:
-            from src.live.brokers.broker import AlpacaBroker
+            from src.live.brokers import AlpacaBroker
 
             mock_api = MagicMock()
             mock_api.list_positions.side_effect = RuntimeError("API error")
@@ -656,7 +656,7 @@ class TestAlpacaBroker:
     async def test_get_cash(self):
         _install_alpaca_mock()
         try:
-            from src.live.brokers.broker import AlpacaBroker
+            from src.live.brokers import AlpacaBroker
 
             mock_api = MagicMock()
             mock_api.get_account.return_value = MagicMock(cash="100000.25")
@@ -673,7 +673,7 @@ class TestAlpacaBroker:
     async def test_get_cash_error_returns_zero(self):
         _install_alpaca_mock()
         try:
-            from src.live.brokers.broker import AlpacaBroker
+            from src.live.brokers import AlpacaBroker
 
             mock_api = MagicMock()
             mock_api.get_account.side_effect = RuntimeError("API error")

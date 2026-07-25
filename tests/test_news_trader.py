@@ -18,7 +18,7 @@ from src.common.events import (
     SentimentEvent,
     TradeEvent,
 )
-from src.live.brokers.broker import Broker, TradeExecutor
+from src.live.brokers import Broker, TradeExecutor
 from src.live.news_watcher import NewsWatcher
 from src.live.sentiment_trader import SentimentTrader
 from src.strategies.sentiment import KeywordSentimentAnalyzer

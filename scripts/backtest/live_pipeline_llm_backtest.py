@@ -61,7 +61,7 @@ async def main():
     from src.common.events import CHANNEL_SENTIMENT, SentimentEvent
     from src.common.position_store import PositionStore
     from src.common.trading_logic import TradingLogic
-    from src.live.brokers.broker import PaperBroker, TradeExecutor
+    from src.live.brokers import PaperBroker, TradeExecutor
     from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
 

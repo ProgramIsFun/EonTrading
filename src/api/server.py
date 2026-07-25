@@ -288,7 +288,7 @@ async def _run_live_backtest(job_id: str, params: dict):
     from src.common.price import get_price
     from src.common.trading_logic import TradingLogic
     from src.live.analyzer_service import AnalyzerService
-    from src.live.brokers.broker import PaperBroker, TradeExecutor
+    from src.live.brokers import PaperBroker, TradeExecutor
     from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer

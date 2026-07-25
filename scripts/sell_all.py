@@ -21,7 +21,7 @@ async def main():
     from futu import TrdEnv, Market, SecurityType
     from src.common.factories import build_broker
     from src.settings import settings
-    from src.live.brokers.broker import TradeEvent
+    from src.common.events import TradeEvent
 
     real = "--real" in sys.argv
     if real:

@@ -31,7 +31,7 @@ async def main_single():
     from src.common.trading_logic import TradingLogic
     from src.data.news.loader import build_news_sources
     from src.live.analyzer_service import AnalyzerService
-    from src.live.brokers.broker import TradeExecutor
+    from src.live.brokers import TradeExecutor
     from src.live.order_logger import mongo_log_order
     from src.live.news_watcher import NewsWatcher
     from src.live.price_monitor import PriceMonitor
