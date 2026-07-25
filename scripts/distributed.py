@@ -47,7 +47,7 @@ def _load_env():
             continue
         key, _, value = line.partition("=")
         key = key.strip()
-        value = value.strip().strip("\"'")
+        value = value.split("#")[0].strip().strip("\"'")
         os.environ.setdefault(key, value)
 
 
