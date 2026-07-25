@@ -1,11 +1,40 @@
-"""Position state backed by MongoDB — works in both single-process and distributed mode."""
+"""Position state storage.
+
+BasePositionStore defines the interface; PositionStore uses MongoDB,
+InMemoryPositionStore uses a plain dict (for backtest/replay).
+"""
 import logging
+from abc import ABC, abstractmethod
 from datetime import datetime
 
 from src.common.clock import utcnow
 
 
-class PositionStore:
+class BasePositionStore(ABC):
+    """Interface for position storage backends."""
+
+    @abstractmethod
+    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None):
+        pass
+
+    @abstractmethod
+    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0):
+        pass
+
+    @abstractmethod
+    def close_position(self, symbol: str):
+        pass
+
+    @abstractmethod
+    def get_positions(self) -> dict[str, datetime]:
+        pass
+
+    @abstractmethod
+    def get_positions_with_prices(self) -> dict[str, dict]:
+        pass
+
+
+class PositionStore(BasePositionStore):
     """Read/write positions via MongoDB. One document per symbol."""
 
     def __init__(self, collection: str = "positions", db=None):
@@ -67,7 +96,7 @@ class PositionStore:
         }
 
 
-class InMemoryPositionStore:
+class InMemoryPositionStore(BasePositionStore):
     """Positions backed by a plain dict — no MongoDB. For replay/backtest use."""
 
     def __init__(self):

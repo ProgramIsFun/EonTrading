@@ -10,7 +10,7 @@ from src.common.clock import utcnow
 from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_TRADE, TradeEvent
-from src.common.position_store import PositionStore
+from src.common.position_store import BasePositionStore
 from src.common.price import get_price
 from src.common.trading_logic import PositionState, TradingLogic
 
@@ -21,7 +21,7 @@ logger.addFilter(ComponentFilter("monitor"))
 class PriceMonitor:
     """Polls prices for open positions, publishes sell trades when SL/TP hit."""
 
-    def __init__(self, bus: EventBus, store: PositionStore, logic: TradingLogic,
+    def __init__(self, bus: EventBus, store: BasePositionStore, logic: TradingLogic,
                  interval_sec: int = 60, entry_prices: dict = None):
         self.bus = bus
         self.store = store
