@@ -128,7 +128,7 @@ async def main(start: str, end: str):
     print(f"\n{'═' * 50}")
     print(f"  Replay complete — {day_count} trading days, {event_count} news events")
     print(f"  Final holdings: {list(holdings.keys()) or 'none'}")
-    print("  Trades logged to: EonTradingDB.replay_trades")
+    print(f"  Trades logged to: {db.name}.replay_trades")
     print(f"{'═' * 50}\n")
 
 
