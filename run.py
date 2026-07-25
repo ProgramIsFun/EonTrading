@@ -10,7 +10,7 @@ Usage:
     python run.py clean          # delete all log files
     python run.py logs           # open terminal windows tailing each log file
     python run.py unlogs         # close all tail terminals
-    python run.py reset          # stop + resetdb + unlogs (no restart)
+    python run.py reset          # stop + resetdb + clean + unlogs (no restart)
     python run.py resetdb        # drop all MongoDB collections (fresh state)
     python run.py venv           # copy venv activation command to clipboard
 """
@@ -142,12 +142,13 @@ def cmd_unlogs():
 
 
 def cmd_reset():
-    """Stop all, reset database, close tail terminals."""
+    """Stop all, reset database, clean logs, close tail terminals."""
     _setup_path()
     _load_env()
     from scripts.distributed import stop_all
     stop_all()
     cmd_resetdb()
+    cmd_clean()
     cmd_unlogs()
 
 
