@@ -31,23 +31,8 @@ def _setup_path():
     os.environ["PYTHONPATH"] = root + os.pathsep + os.environ.get("PYTHONPATH", "")
 
 
-def _load_env():
-    env_file = PROJECT_ROOT / ".env"
-    if not env_file.exists():
-        return
-    for line in env_file.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.split("#")[0].strip().strip("\"'")
-        os.environ.setdefault(key, value)
-
-
 def cmd_single():
     _setup_path()
-    _load_env()
     from src.live.news_trader import main_single
     import asyncio
     asyncio.run(main_single())
@@ -55,7 +40,6 @@ def cmd_single():
 
 def cmd_start():
     _setup_path()
-    _load_env()
     _kill_single_process()
     from scripts.distributed import start_all
     start_all()
@@ -81,21 +65,18 @@ def _kill_single_process():
 
 def cmd_stop():
     _setup_path()
-    _load_env()
     from scripts.distributed import stop_all
     stop_all()
 
 
 def cmd_status():
     _setup_path()
-    _load_env()
     from scripts.distributed import status_all
     status_all()
 
 
 def cmd_restart():
     _setup_path()
-    _load_env()
     _kill_single_process()
     from scripts.distributed import restart_all
     restart_all()
@@ -144,7 +125,6 @@ def cmd_unlogs():
 def cmd_reset():
     """Stop all, reset database, clean logs, close tail terminals."""
     _setup_path()
-    _load_env()
     from scripts.distributed import stop_all
     stop_all()
     cmd_resetdb()
@@ -155,7 +135,6 @@ def cmd_reset():
 def cmd_resetdb():
     """Drop all MongoDB collections for a fresh state."""
     _setup_path()
-    _load_env()
     from scripts.reset_db import reset_db
     reset_db(force=True)
 
