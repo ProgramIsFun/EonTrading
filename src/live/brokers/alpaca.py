@@ -5,7 +5,7 @@ from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
 from src.settings import settings
 
-from .broker import Broker
+from .broker import Broker, FillStatus
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
@@ -41,18 +41,20 @@ class AlpacaBroker(Broker):
             logger.error("Alpaca order failed: %s — %s", trade.symbol, e)
             return None
 
-    async def check_order(self, order_id: str) -> tuple[str, str | None]:
+    async def check_order(self, order_id: str) -> FillStatus:
         try:
             self._connect()
             order = self._api.get_order(order_id)
             if order.status == "filled":
-                return ("filled", None)
+                return FillStatus(status="filled",
+                                  filled_qty=int(float(order.filled_qty)),
+                                  filled_price=float(order.filled_avg_price))
             if order.status in ("canceled", "expired", "rejected"):
-                return ("cancelled", order.status)
-            return ("pending", None)
+                return FillStatus(status="cancelled", reason=order.status)
+            return FillStatus(status="pending")
         except Exception as e:
             logger.error("Alpaca check_order error: %s", e)
-            return ("pending", None)
+            return FillStatus(status="pending")
 
     async def get_positions(self) -> dict[str, int]:
         try:

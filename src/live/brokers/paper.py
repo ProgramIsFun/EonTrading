@@ -7,7 +7,7 @@ from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
 from src.common.price import get_price
 
-from .broker import Broker
+from .broker import Broker, FillStatus
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
@@ -44,8 +44,8 @@ class PaperBroker(Broker):
             logger.info("📝 [DRY RUN] SELL %s %dsh @ $%.2f (fees: $%.2f) | %s", trade.symbol, qty, price, fees, trade.reason)
         return f"paper-{trade.symbol}-{uuid4().hex[:8]}"
 
-    async def check_order(self, order_id: str) -> tuple[str, str | None]:
-        return ("filled", None)
+    async def check_order(self, order_id: str) -> FillStatus:
+        return FillStatus(status="filled", filled_qty=0, filled_price=0.0)
 
     async def get_positions(self) -> dict[str, int]:
         return dict(self._positions)

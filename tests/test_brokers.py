@@ -11,6 +11,7 @@ import pytest
 from src.common.clock import utcnow
 from src.common.event_bus import LocalEventBus
 from src.common.events import TradeEvent
+from src.live.brokers.broker import FillStatus
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -169,13 +170,20 @@ class TestFutuBroker:
             from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
-            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_FILLED_ALL"]}))
+            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({
+                "order_status": ["FilledStatus_FILLED_ALL"],
+                "dealt_qty": [10],
+                "dealt_avg_price": [150.0],
+            }))
 
             broker = FutuBroker()
             broker._ctx = mock_ctx
 
-            status, reason = await broker.check_order("12345")
-            assert status == "filled"
+            result = await broker.check_order("12345")
+            assert isinstance(result, FillStatus)
+            assert result.status == "filled"
+            assert result.filled_qty == 10
+            assert result.filled_price == 150.0
         finally:
             _remove_futu_mock()
 
@@ -186,13 +194,18 @@ class TestFutuBroker:
             from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
-            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_FAILED"]}))
+            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({
+                "order_status": ["FilledStatus_FAILED"],
+                "dealt_qty": [0],
+                "dealt_avg_price": [0.0],
+            }))
 
             broker = FutuBroker()
             broker._ctx = mock_ctx
 
-            status, reason = await broker.check_order("12345")
-            assert status == "cancelled"
+            result = await broker.check_order("12345")
+            assert isinstance(result, FillStatus)
+            assert result.status == "cancelled"
         finally:
             _remove_futu_mock()
 
@@ -203,13 +216,18 @@ class TestFutuBroker:
             from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
-            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({"order_status": ["FilledStatus_NEW"]}))
+            mock_ctx.order_list_query.return_value = (0, pd.DataFrame({
+                "order_status": ["FilledStatus_NEW"],
+                "dealt_qty": [0],
+                "dealt_avg_price": [0.0],
+            }))
 
             broker = FutuBroker()
             broker._ctx = mock_ctx
 
-            status, reason = await broker.check_order("12345")
-            assert status == "pending"
+            result = await broker.check_order("12345")
+            assert isinstance(result, FillStatus)
+            assert result.status == "pending"
         finally:
             _remove_futu_mock()
 
@@ -225,8 +243,9 @@ class TestFutuBroker:
             broker = FutuBroker()
             broker._ctx = mock_ctx
 
-            status, reason = await broker.check_order("12345")
-            assert status == "pending"
+            result = await broker.check_order("12345")
+            assert isinstance(result, FillStatus)
+            assert result.status == "pending"
         finally:
             _remove_futu_mock()
 
@@ -376,6 +395,8 @@ class TestIBKRBroker:
             mock_trade = MagicMock()
             mock_trade.order.orderId = 12345
             mock_trade.orderStatus.status = "Filled"
+            mock_trade.orderStatus.filled = 10
+            mock_trade.orderStatus.avgFillPrice = 150.0
 
             mock_ib = MagicMock()
             mock_ib.isConnected.return_value = True
@@ -384,8 +405,11 @@ class TestIBKRBroker:
             broker = IBKRBroker()
             broker._ib = mock_ib
 
-            status, reason = await broker.check_order("12345")
-            assert status == "filled"
+            result = await broker.check_order("12345")
+            assert isinstance(result, FillStatus)
+            assert result.status == "filled"
+            assert result.filled_qty == 10
+            assert result.filled_price == 150.0
         finally:
             _remove_ibkr_mock()
 
@@ -406,8 +430,9 @@ class TestIBKRBroker:
             broker = IBKRBroker()
             broker._ib = mock_ib
 
-            status, reason = await broker.check_order("12345")
-            assert status == "cancelled"
+            result = await broker.check_order("12345")
+            assert isinstance(result, FillStatus)
+            assert result.status == "cancelled"
         finally:
             _remove_ibkr_mock()
 
@@ -562,6 +587,8 @@ class TestAlpacaBroker:
 
             mock_order = MagicMock()
             mock_order.status = "filled"
+            mock_order.filled_qty = "10"
+            mock_order.filled_avg_price = "150.0"
 
             mock_api = MagicMock()
             mock_api.get_order.return_value = mock_order
@@ -569,8 +596,11 @@ class TestAlpacaBroker:
             broker = AlpacaBroker(api_key="test", secret_key="test", paper=True)
             broker._api = mock_api
 
-            status, reason = await broker.check_order("order-123")
-            assert status == "filled"
+            result = await broker.check_order("order-123")
+            assert isinstance(result, FillStatus)
+            assert result.status == "filled"
+            assert result.filled_qty == 10
+            assert result.filled_price == 150.0
         finally:
             _remove_alpaca_mock()
 
@@ -589,8 +619,9 @@ class TestAlpacaBroker:
             broker = AlpacaBroker(api_key="test", secret_key="test", paper=True)
             broker._api = mock_api
 
-            status, reason = await broker.check_order("order-123")
-            assert status == "cancelled"
+            result = await broker.check_order("order-123")
+            assert isinstance(result, FillStatus)
+            assert result.status == "cancelled"
         finally:
             _remove_alpaca_mock()
 

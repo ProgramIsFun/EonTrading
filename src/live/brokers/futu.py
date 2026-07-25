@@ -9,7 +9,7 @@ import logging
 from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
 
-from .broker import Broker
+from .broker import Broker, FillStatus
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
@@ -87,7 +87,7 @@ class FutuBroker(Broker):
             logger.error("Futu order failed: %s — %s", trade.symbol, e)
             return None
 
-    async def check_order(self, order_id: str) -> tuple[str, str | None]:
+    async def check_order(self, order_id: str) -> FillStatus:
         from futu import OrderStatus, TrdEnv
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
@@ -98,16 +98,19 @@ class FutuBroker(Broker):
             ret, orders = await asyncio.to_thread(_query)
             if ret != 0:
                 logger.warning("Futu check_order query failed: %s", orders)
-                return "pending", None
-            status = orders["order_status"].iloc[0]
+                return FillStatus(status="pending")
+            row = orders.iloc[0]
+            status = row["order_status"]
+            dealt_qty = int(row.get("dealt_qty", 0))
+            dealt_price = float(row.get("dealt_avg_price", 0.0))
             if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
-                return "filled", None
+                return FillStatus(status="filled", filled_qty=dealt_qty, filled_price=dealt_price)
             if status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
-                return "cancelled", f"status: {status}"
-            return "pending", None
+                return FillStatus(status="cancelled", reason=f"status: {status}")
+            return FillStatus(status="pending")
         except Exception as e:
             logger.error("Futu check_order error: %s", e)
-            return "pending", None
+            return FillStatus(status="pending")
 
     async def cancel_order(self, order_id: str) -> bool:
         from futu import TrdEnv, ModifyOrderOp

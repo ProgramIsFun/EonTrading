@@ -7,6 +7,7 @@ import pytest
 
 from src.common.clock import utcnow
 from src.common.events import TradeEvent
+from src.live.brokers.broker import FillStatus
 
 
 def _make_doc(overrides=None):
@@ -68,7 +69,8 @@ class TestMarkFilled:
     async def test_buy_updates_order_and_upserts_position_with_qty(self, mock_mongo):
         tracker, orders, store = mock_mongo
         doc = _make_doc({"action": "buy", "price": 150.0, "shares": 10})
-        await tracker._mark_filled(doc)
+        fill = FillStatus(status="filled", filled_qty=10, filled_price=150.0)
+        await tracker._mark_filled(doc, fill)
 
         orders.update_one.assert_called_once()
 
@@ -82,10 +84,31 @@ class TestMarkFilled:
     async def test_sell_deletes_position(self, mock_mongo):
         tracker, orders, store = mock_mongo
         doc = _make_doc({"action": "sell"})
-        await tracker._mark_filled(doc)
+        fill = FillStatus(status="filled", filled_qty=10, filled_price=150.0)
+        await tracker._mark_filled(doc, fill)
 
         orders.update_one.assert_called_once()
         store.close_position.assert_called_once_with("AAPL")
+
+    @pytest.mark.asyncio
+    async def test_uses_fill_price_over_order_price(self, mock_mongo):
+        tracker, orders, store = mock_mongo
+        doc = _make_doc({"action": "buy", "price": 150.0, "shares": 10})
+        fill = FillStatus(status="filled", filled_qty=10, filled_price=155.0)
+        await tracker._mark_filled(doc, fill)
+
+        open_args = store.open_position.call_args[0]
+        assert open_args[2] == 155.0  # fill_price wins over doc price
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_doc_price_when_fill_price_zero(self, mock_mongo):
+        tracker, orders, store = mock_mongo
+        doc = _make_doc({"action": "buy", "price": 150.0, "shares": 10})
+        fill = FillStatus(status="filled", filled_qty=10, filled_price=0.0)
+        await tracker._mark_filled(doc, fill)
+
+        open_args = store.open_position.call_args[0]
+        assert open_args[2] == 150.0  # falls back to doc price
 
 
 
@@ -148,11 +171,13 @@ class TestCheckPending:
         doc = _make_doc()
         orders.find.return_value = iter([doc])
 
-        tracker.broker.check_order = AsyncMock(return_value=("filled", "filled"))
+        tracker.broker.check_order = AsyncMock(return_value=FillStatus(status="filled", filled_qty=10, filled_price=150.0))
 
         with patch.object(tracker, "_mark_filled", new_callable=AsyncMock) as mock_mark:
             await tracker._check_pending()
-            mock_mark.assert_called_once_with(doc)
+            mock_mark.assert_called_once()
+            assert mock_mark.call_args[0][0] == doc
+            assert isinstance(mock_mark.call_args[0][1], FillStatus)
 
     @pytest.mark.asyncio
     async def test_cancelled_order_calls_mark_failed(self, mock_mongo):
@@ -160,11 +185,11 @@ class TestCheckPending:
         doc = _make_doc()
         orders.find.return_value = iter([doc])
 
-        tracker.broker.check_order = AsyncMock(return_value=("cancelled", "cancelled"))
+        tracker.broker.check_order = AsyncMock(return_value=FillStatus(status="cancelled", reason="user cancel"))
 
         with patch.object(tracker, "_mark_failed", new_callable=AsyncMock) as mock_fail:
             await tracker._check_pending()
-            mock_fail.assert_called_once_with(doc, "cancelled")
+            mock_fail.assert_called_once_with(doc, "user cancel")
 
     @pytest.mark.asyncio
     async def test_pending_order_updates_next_check_at(self, mock_mongo):
@@ -172,7 +197,7 @@ class TestCheckPending:
         doc = _make_doc()
         orders.find.return_value = iter([doc])
 
-        tracker.broker.check_order = AsyncMock(return_value=("pending", "new"))
+        tracker.broker.check_order = AsyncMock(return_value=FillStatus(status="pending"))
 
         await tracker._check_pending()
 
@@ -188,7 +213,7 @@ class TestCheckPending:
         doc = _make_doc({"placed_at": old})
         orders.find.return_value = iter([doc])
 
-        tracker.broker.check_order = AsyncMock(return_value=("filled", "filled"))
+        tracker.broker.check_order = AsyncMock(return_value=FillStatus(status="filled", filled_qty=10, filled_price=150.0))
 
         with patch.object(tracker, "_cancel", new_callable=AsyncMock) as mock_cancel:
             await tracker._check_pending()
@@ -230,7 +255,7 @@ class TestCheckPending:
         doc = _make_doc()
         orders.find.return_value = iter([doc])
 
-        tracker.broker.check_order = AsyncMock(return_value=("failed", "insufficient margin"))
+        tracker.broker.check_order = AsyncMock(return_value=FillStatus(status="failed", reason="insufficient margin"))
 
         with patch.object(tracker, "_mark_failed", new_callable=AsyncMock) as mock_fail:
             await tracker._check_pending()
@@ -242,11 +267,23 @@ class TestCheckPending:
         doc = _make_doc()
         orders.find.return_value = iter([doc])
 
-        tracker.broker.check_order = AsyncMock(return_value=("rejected", "risk limit"))
+        tracker.broker.check_order = AsyncMock(return_value=FillStatus(status="rejected", reason="risk limit"))
 
         with patch.object(tracker, "_mark_failed", new_callable=AsyncMock) as mock_fail:
             await tracker._check_pending()
             mock_fail.assert_called_once_with(doc, "risk limit")
+
+    @pytest.mark.asyncio
+    async def test_partial_fill_does_not_update_position(self, mock_mongo):
+        tracker, orders, store = mock_mongo
+        doc = _make_doc({"shares": 10})
+        orders.find.return_value = iter([doc])
+
+        tracker.broker.check_order = AsyncMock(return_value=FillStatus(status="filled", filled_qty=3, filled_price=150.0))
+
+        with patch.object(tracker, "_mark_filled", new_callable=AsyncMock) as mock_fill:
+            await tracker._check_pending()
+            mock_fill.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_multiple_orders_processed(self, mock_mongo):
@@ -254,7 +291,7 @@ class TestCheckPending:
         docs = [_make_doc({"_id": f"id-{i}", "order_id": f"ord-{i}"}) for i in range(3)]
         orders.find.return_value = iter(docs)
 
-        tracker.broker.check_order = AsyncMock(return_value=("filled", "ok"))
+        tracker.broker.check_order = AsyncMock(return_value=FillStatus(status="filled", filled_qty=10, filled_price=150.0))
 
         with patch.object(tracker, "_mark_filled", new_callable=AsyncMock) as mock_mark:
             await tracker._check_pending()

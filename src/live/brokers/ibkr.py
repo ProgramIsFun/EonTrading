@@ -5,7 +5,7 @@ import logging
 from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
 
-from .broker import Broker
+from .broker import Broker, FillStatus
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
@@ -51,7 +51,7 @@ class IBKRBroker(Broker):
             logger.error("IBKR order failed: %s — %s", trade.symbol, e)
             return None
 
-    async def check_order(self, order_id: str) -> tuple[str, str | None]:
+    async def check_order(self, order_id: str) -> FillStatus:
         try:
             self._connect()
             trades = self._ib.trades()
@@ -59,14 +59,16 @@ class IBKRBroker(Broker):
                 if str(t.order.orderId) == order_id:
                     status = t.orderStatus.status
                     if status == "Filled":
-                        return ("filled", None)
+                        return FillStatus(status="filled",
+                                          filled_qty=int(t.orderStatus.filled),
+                                          filled_price=t.orderStatus.avgFillPrice)
                     if status in ("Cancelled", "Inactive", "ApiCancelled"):
-                        return ("cancelled", status)
-                    return ("pending", None)
-            return ("pending", None)
+                        return FillStatus(status="cancelled", reason=status)
+                    return FillStatus(status="pending")
+            return FillStatus(status="pending")
         except Exception as e:
             logger.error("IBKR check_order error: %s", e)
-            return ("pending", None)
+            return FillStatus(status="pending")
 
     async def get_positions(self) -> dict[str, int]:
         try:

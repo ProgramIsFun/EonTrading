@@ -7,6 +7,7 @@ from src.common.clock import utcnow
 from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.position_store import PositionStore
+from src.live.brokers.broker import FillStatus
 
 COLLECTION = "orders"
 
@@ -71,17 +72,17 @@ class OrderTracker:
                 continue
 
             try:
-                status, reason = await self.broker.check_order(doc["order_id"])
+                fill = await self.broker.check_order(doc["order_id"])
             except NotImplementedError:
                 logger.warning("Broker does not support check_order, skipping")
                 continue
             except Exception as e:
-                status, reason = "unknown", str(e)
+                fill = FillStatus(status="unknown", reason=str(e))
 
-            if status == "filled":
-                await self._mark_filled(doc)
-            elif status in ("cancelled", "failed", "rejected"):
-                await self._mark_failed(doc, reason or status)
+            if fill.status == "filled" and fill.filled_qty >= int(doc["shares"]):
+                await self._mark_filled(doc, fill)
+            elif fill.status in ("cancelled", "failed", "rejected"):
+                await self._mark_failed(doc, fill.reason or fill.status)
             else:
                 self._col.update_one(
                     {"_id": doc["_id"]},
@@ -89,7 +90,7 @@ class OrderTracker:
                               "checked_at": now, "retry_count": doc["retry_count"] + 1}},
                 )
 
-    async def _mark_filled(self, doc):
+    async def _mark_filled(self, doc, fill: FillStatus):
         now = utcnow()
         await asyncio.to_thread(
             self._col.update_one, {"_id": doc["_id"]},
@@ -98,7 +99,7 @@ class OrderTracker:
 
         symbol = doc["symbol"]
         action = doc["action"]
-        price = float(doc["price"])
+        price = fill.filled_price if fill.filled_price > 0 else float(doc["price"])
         shares = int(doc["shares"])
 
         if action == "buy":

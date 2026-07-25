@@ -6,8 +6,18 @@ To add a new broker:
   3. Implement check_order() — OrderTracker polls this to confirm fills
 """
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from src.common.events import TradeEvent
+
+
+@dataclass
+class FillStatus:
+    """Result of a broker order status check."""
+    status: str  # 'pending' | 'filled' | 'cancelled' | 'failed'
+    reason: str | None = None
+    filled_qty: int = 0
+    filled_price: float = 0.0
 
 
 class Broker(ABC):
@@ -22,8 +32,8 @@ class Broker(ABC):
         """Submit a trade. Returns order_id for tracking, or None on failure."""
         pass
 
-    async def check_order(self, order_id: str) -> tuple[str, str | None]:
-        """Returns (status, error_reason).
+    async def check_order(self, order_id: str) -> FillStatus:
+        """Returns fill status.
         status: 'pending' | 'filled' | 'cancelled' | 'failed'
         Override for brokers that use OrderTracker.
         """
