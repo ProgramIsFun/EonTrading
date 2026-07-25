@@ -23,7 +23,7 @@ async def main(start: str, end: str):
     from src.common.position_store import InMemoryPositionStore
     from src.common.startup import banner
     from src.common.trading_logic import TradingLogic
-    from src.data.utils.db_helper import get_mongo_client
+    from src.data.utils.db_helper import get_db
     from src.live.analyzer_service import AnalyzerService
     from src.live.brokers.broker import PaperBroker, TradeExecutor
     from src.live.order_logger import mongo_log_order
@@ -46,7 +46,7 @@ async def main(start: str, end: str):
     broker = PaperBroker()
     store = InMemoryPositionStore()
     logic = TradingLogic(threshold=0.4, min_confidence=0.15)
-    db = get_mongo_client()["EonTradingDB"]
+    db = get_db()
     price_monitor = PriceMonitor(bus, store, logic)
 
     trader = SentimentTrader(bus, logic=logic, position_store=store, broker=broker)

@@ -9,7 +9,6 @@ import logging
 
 from src.common.clock import utcnow
 from src.common.events import TradeEvent
-from src.data.utils.db_helper import get_mongo_client
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +18,13 @@ async def noop_log_order(trade: TradeEvent, order_id: str, broker_name: str) -> 
     pass
 
 
-async def mongo_log_order(trade: TradeEvent, order_id: str, broker_name: str) -> None:
+async def mongo_log_order(trade: TradeEvent, order_id: str, broker_name: str, db=None) -> None:
     """Write order document to MongoDB orders collection."""
     try:
-        col = get_mongo_client()["EonTradingDB"]["orders"]
+        if db is None:
+            from src.data.utils.db_helper import get_db
+            db = get_db()
+        col = db["orders"]
         doc = {
             "order_id": order_id,
             "broker_type": broker_name,

@@ -3,18 +3,17 @@ import logging
 from datetime import datetime
 
 from src.common.clock import utcnow
-from src.data.utils.db_helper import get_mongo_client
-
-COLLECTION = "positions"
-DB = "EonTradingDB"
 
 
 class PositionStore:
     """Read/write positions via MongoDB. One document per symbol."""
 
-    def __init__(self, collection: str = "positions"):
+    def __init__(self, collection: str = "positions", db=None):
         try:
-            self._col = get_mongo_client()[DB][collection]
+            if db is None:
+                from src.data.utils.db_helper import get_db
+                db = get_db()
+            self._col = db[collection]
         except Exception:
             logger = logging.getLogger(__name__)
             logger.exception("Failed to connect to MongoDB for PositionStore")

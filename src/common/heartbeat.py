@@ -10,20 +10,21 @@ logger = logging.getLogger(__name__)
 
 
 COLLECTION = "heartbeats"
-DB = "EonTradingDB"
 
 
 class Heartbeat:
     """Writes heartbeat to MongoDB every interval. Dashboard reads it to show component status."""
 
-    def __init__(self, component: str, interval_sec: int = 30, metadata: dict = None):
+    def __init__(self, component: str, interval_sec: int = 30, metadata: dict = None, db=None):
         self.component = component
         self.interval = interval_sec
         self.metadata = metadata or {}
         self._col = None
         try:
-            from src.data.utils.db_helper import get_mongo_client
-            self._col = get_mongo_client()[DB][COLLECTION]
+            if db is None:
+                from src.data.utils.db_helper import get_db
+                db = get_db()
+            self._col = db[COLLECTION]
         except Exception as e:
             logger.warning("Heartbeat MongoDB unavailable: %s", e)
 

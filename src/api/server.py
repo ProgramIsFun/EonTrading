@@ -15,7 +15,7 @@ from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.costs import US_STOCKS
 from src.common.position_store import InMemoryPositionStore
 from src.common.reconcile import reconcile
-from src.data.utils.db_helper import get_mongo_client
+from src.data.utils.db_helper import get_db
 from src.live.order_logger import noop_log_order
 from src.settings import settings
 
@@ -35,6 +35,11 @@ async def _check_api_key(key: str = Depends(_api_key_header)):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
+def _get_db():
+    """FastAPI dependency — returns pymongo Database object."""
+    return get_db()
+
+
 # --- Docker component allowlist ---
 _ALLOWED_DOCKER_NAMES = {"newswatcher", "analyzer", "trader", "executor", "redis", "all"}
 
@@ -48,10 +53,8 @@ from src.common.sample_news import SAMPLE_NEWS
 
 
 @app.get("/api/health")
-def health():
+def health(db=Depends(_get_db)):
     try:
-        client = get_mongo_client()
-        db = client["EonTradingDB"]
         positions = list(db["positions"].find({}, {"_id": 0}))
         return {
             "status": "ok",
@@ -153,11 +156,10 @@ def docker_logs(name: str, lines: int = Query(default=50, ge=1, le=1000)):
 
 
 @app.get("/api/trades")
-def trades(limit: int = 100):
+def trades(limit: int = 100, db=Depends(_get_db)):
     """Return recent confirmed trades from the orders collection."""
     try:
-        client = get_mongo_client()
-        col = client["EonTradingDB"]["orders"]
+        col = db["orders"]
         docs = list(col.find({"status": "filled"}, {"_id": 0}).sort("filled_at", -1).limit(limit))
         return docs
     except Exception:
@@ -301,8 +303,8 @@ async def _run_live_backtest(job_id: str, params: dict):
         news_src = params.get("news_source", "sample")
         if news_src == "mongodb":
             try:
-                client = get_mongo_client()
-                docs = list(client["EonTradingDB"]["news"].find({}, {"_id": 0}).sort("timestamp", 1).limit(200))
+                db = get_db()
+                docs = list(db["news"].find({}, {"_id": 0}).sort("timestamp", 1).limit(200))
                 news_list = [{"date": d.get("timestamp", ""), "headline": d.get("headline", "")} for d in docs if d.get("headline")]
                 if not news_list:
                     job["status"] = "error"
@@ -484,10 +486,9 @@ def get_live_backtest(job_id: str):
 
 
 @app.get("/api/news")
-def news(limit: int = 100):
+def news(limit: int = 100, db=Depends(_get_db)):
     try:
-        client = get_mongo_client()
-        col = client["EonTradingDB"]["news"]
+        col = db["news"]
         docs = list(col.find({}, {"_id": 0}).sort("collected_at", -1).limit(limit))
         return docs
     except Exception as e:
@@ -496,10 +497,9 @@ def news(limit: int = 100):
 
 
 @app.get("/api/news/count")
-def news_count():
+def news_count(db=Depends(_get_db)):
     try:
-        client = get_mongo_client()
-        col = client["EonTradingDB"]["news"]
+        col = db["news"]
         return {"count": col.count_documents({})}
     except Exception:
         logger.warning("Failed to count news", exc_info=True)
@@ -511,11 +511,11 @@ def get_logs(
     logger_name: str = Query(default="", description="Filter by logger name (prefix match)"),
     level: str = Query(default="", description="Filter by level: DEBUG, INFO, WARNING, ERROR"),
     limit: int = Query(default=100, ge=1, le=1000),
+    db=Depends(_get_db),
 ):
     """Fetch recent logs from MongoDB."""
     try:
-        client = get_mongo_client()
-        col = client["EonTradingDB"]["logs"]
+        col = db["logs"]
         q = {}
         if logger_name:
             q["logger"] = {"$regex": f"^{logger_name}"}

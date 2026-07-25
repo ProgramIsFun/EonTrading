@@ -38,13 +38,12 @@ def mock_mongo():
     mock_orders = MagicMock()
     mock_stores = MagicMock()
 
-    with patch("src.common.order_tracker.get_mongo_client") as m:
-        mock_db = MagicMock()
-        mock_db.__getitem__ = MagicMock(side_effect=lambda name: {
-            "orders": mock_orders,
-        }[name])
-        m.return_value.__getitem__ = MagicMock(return_value=mock_db)
+    mock_db = MagicMock()
+    mock_db.__getitem__ = MagicMock(side_effect=lambda name: {
+        "orders": mock_orders,
+    }[name])
 
+    with patch("src.data.utils.db_helper.get_db", return_value=mock_db):
         tracker = _build_tracker(position_store=mock_stores)
         tracker._col = mock_orders
 

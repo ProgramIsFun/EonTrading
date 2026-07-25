@@ -10,14 +10,16 @@ logger = logging.getLogger(__name__)
 class NewsPoller:
     """Polls news sources and deduplicates. Callbacks handle what to do with each article."""
 
-    def __init__(self, sources: list[NewsSource] = None, interval_sec: int = 120, persist_seen: bool = False):
+    def __init__(self, sources: list[NewsSource] = None, interval_sec: int = 120, persist_seen: bool = False, db=None):
         self.sources = sources or []
         self.interval = interval_sec
         self._seen_col = None
         if persist_seen:
             try:
-                from src.data.utils.db_helper import get_mongo_client
-                self._seen_col = get_mongo_client()["EonTradingDB"]["seen_urls"]
+                if db is None:
+                    from src.data.utils.db_helper import get_db
+                    db = get_db()
+                self._seen_col = db["seen_urls"]
                 self._seen_col.create_index("url", unique=True)
             except Exception:
                 logger.warning("Failed to init persistent dedup — falling back to in-memory only", exc_info=True)

@@ -9,12 +9,10 @@ from src.common.position_store import InMemoryPositionStore, PositionStore
 def _make_store():
     """Create a PositionStore with mocked MongoDB collection."""
     mock_col = MagicMock()
-    with patch("src.common.position_store.get_mongo_client") as mock_client:
-        mock_db = MagicMock()
-        mock_db.__getitem__ = MagicMock(return_value=mock_col)
-        mock_client.return_value.__getitem__ = MagicMock(return_value=mock_db)
+    mock_db = MagicMock()
+    mock_db.__getitem__ = MagicMock(return_value=mock_col)
+    with patch("src.data.utils.db_helper.get_db", return_value=mock_db):
         store = PositionStore()
-        store._col = mock_col
     return store, mock_col
 
 

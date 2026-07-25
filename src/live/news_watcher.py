@@ -22,19 +22,21 @@ class NewsWatcher:
     """
 
     def __init__(self, bus: EventBus, sources: list = None, interval_sec: int = 120,
-                 persist_seen: bool = True, persist_news: bool = False, publish: bool = True):
+                 persist_seen: bool = True, persist_news: bool = False, publish: bool = True, db=None):
         self.bus = bus
-        self.poller = NewsPoller(sources=sources or [], interval_sec=interval_sec, persist_seen=persist_seen)
+        self.poller = NewsPoller(sources=sources or [], interval_sec=interval_sec, persist_seen=persist_seen, db=db)
         self.last_poll: datetime | None = None
         self.last_poll_count: int = 0
         self._publish = publish
         self._news_col = None
         if persist_news:
             try:
-                from src.data.utils.db_helper import get_mongo_client
-                self._news_col = get_mongo_client()["EonTradingDB"]["news"]
+                if db is None:
+                    from src.data.utils.db_helper import get_db
+                    db = get_db()
+                self._news_col = db["news"]
                 self._news_col.create_index("url", unique=True, sparse=True)
-                logger.info("News persistence enabled — writing to MongoDB EonTradingDB.news")
+                logger.info("News persistence enabled — writing to MongoDB news collection")
             except Exception:
                 logger.warning("Failed to init news persistence", exc_info=True)
 

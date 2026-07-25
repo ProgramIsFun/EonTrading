@@ -8,10 +8,10 @@ from httpx import ASGITransport, AsyncClient
 
 @pytest.fixture
 def mock_mongo():
-    with patch("src.api.server.get_mongo_client") as m:
+    with patch("src.api.server.get_db") as m:
         mock_db = MagicMock()
-        mock_db["EonTradingDB"]["heartbeats"].find.return_value = []
-        mock_db["EonTradingDB"]["positions"].find.return_value = []
+        mock_db["heartbeats"].find.return_value = []
+        mock_db["positions"].find.return_value = []
         m.return_value = mock_db
         yield m
 

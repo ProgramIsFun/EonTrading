@@ -7,9 +7,7 @@ from src.common.clock import utcnow
 from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.position_store import PositionStore
-from src.data.utils.db_helper import get_mongo_client
 
-DB = "EonTradingDB"
 COLLECTION = "orders"
 
 logger = logging.getLogger(__name__)
@@ -25,17 +23,24 @@ class OrderTracker:
         max_pending_age: float = 300.0,
         collection=None,
         position_store=None,
+        db=None,
     ):
         self.bus = bus
         self.broker = broker
         self.check_interval = check_interval
         self.max_pending_age = max_pending_age
         try:
-            self._col = collection or get_mongo_client()[DB][COLLECTION]
+            if collection is not None:
+                self._col = collection
+            else:
+                if db is None:
+                    from src.data.utils.db_helper import get_db
+                    db = get_db()
+                self._col = db[COLLECTION]
         except Exception:
             logger.exception("Failed to connect to MongoDB for OrderTracker")
             raise
-        self._position_store = position_store or PositionStore()
+        self._position_store = position_store or PositionStore(db=db)
         self._ensure_indexes()
 
     def _ensure_indexes(self):

@@ -8,6 +8,8 @@ from pymongo.server_api import ServerApi
 
 logger = logging.getLogger(__name__)
 _client = None
+DB_NAME = "EonTradingDB"
+
 
 def _build_uri():
     MONGODB_URI = os.getenv('MONGODB_URI', '')
@@ -45,6 +47,11 @@ def get_mongo_client(max_retries: int = 3, retry_delay: float = 2.0):
             else:
                 client.close()
                 raise ConnectionError(f"Failed to connect to MongoDB after {max_retries} attempts: {e}") from e
+
+
+def get_db(db_name: str = DB_NAME):
+    """Return a pymongo Database object. Use as dependency injection default."""
+    return get_mongo_client()[db_name]
 
 
 
