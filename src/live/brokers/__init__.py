@@ -9,6 +9,7 @@ from .executor import TradeExecutor
 from .futu import FutuBroker
 from .ibkr import IBKRBroker
 from .paper import PaperBroker
+from .webull import WebullBroker
 
 __all__ = [
     "Broker",
@@ -17,5 +18,6 @@ __all__ = [
     "FutuBroker",
     "IBKRBroker",
     "AlpacaBroker",
+    "WebullBroker",
     "TradeExecutor",
 ]

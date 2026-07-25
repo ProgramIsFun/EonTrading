@@ -716,3 +716,297 @@ class TestAlpacaBroker:
             assert cash == 0.0
         finally:
             _remove_alpaca_mock()
+
+
+# ===================================================================
+# WebullBroker
+# ===================================================================
+
+def _install_webull_mock():
+    mock_trade = MagicMock()
+    mock_core = MagicMock()
+    mock_webull = MagicMock()
+    mock_webull.core = mock_core
+    mock_webull.trade = mock_trade
+    sys.modules["webull"] = mock_webull
+    sys.modules["webull.core"] = mock_core
+    sys.modules["webull.core.client"] = mock_core
+    sys.modules["webull.trade"] = mock_trade
+    sys.modules["webull.trade.trade_client"] = mock_trade
+    return mock_webull, mock_core, mock_trade
+
+
+def _remove_webull_mock():
+    for mod in ["webull", "webull.core", "webull.core.client", "webull.trade", "webull.trade.trade_client"]:
+        sys.modules.pop(mod, None)
+
+
+class TestWebullBroker:
+
+    @pytest.mark.asyncio
+    async def test_buy_returns_order_id(self, event_bus):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_res = MagicMock()
+            mock_res.status_code = 200
+            mock_res.json.return_value = {"orderId": "ord-123"}
+
+            mock_order_v3 = MagicMock()
+            mock_order_v3.place_order.return_value = mock_res
+
+            mock_client = MagicMock()
+            mock_client.order_v3 = mock_order_v3
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            order_id = await broker.execute(_make_trade())
+            assert order_id == "ord-123"
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_execute_rejected_returns_none(self, event_bus):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_res = MagicMock()
+            mock_res.status_code = 400
+            mock_res.text = "bad request"
+
+            mock_order_v3 = MagicMock()
+            mock_order_v3.place_order.return_value = mock_res
+
+            mock_client = MagicMock()
+            mock_client.order_v3 = mock_order_v3
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            order_id = await broker.execute(_make_trade())
+            assert order_id is None
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_execute_exception_returns_none(self, event_bus):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_order_v3 = MagicMock()
+            mock_order_v3.place_order.side_effect = RuntimeError("connection lost")
+
+            mock_client = MagicMock()
+            mock_client.order_v3 = mock_order_v3
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            order_id = await broker.execute(_make_trade())
+            assert order_id is None
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_check_order_filled(self):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_res = MagicMock()
+            mock_res.status_code = 200
+            mock_res.json.return_value = {
+                "orderStatus": "FILLED",
+                "filledQty": "10",
+                "filledPrice": "150.0",
+            }
+
+            mock_order_v3 = MagicMock()
+            mock_order_v3.get_order_detail.return_value = mock_res
+
+            mock_client = MagicMock()
+            mock_client.order_v3 = mock_order_v3
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            result = await broker.check_order("ord-123")
+            assert isinstance(result, FillStatus)
+            assert result.status == "filled"
+            assert result.filled_qty == 10
+            assert result.filled_price == 150.0
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_check_order_cancelled(self):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_res = MagicMock()
+            mock_res.status_code = 200
+            mock_res.json.return_value = {"orderStatus": "CANCELED"}
+
+            mock_order_v3 = MagicMock()
+            mock_order_v3.get_order_detail.return_value = mock_res
+
+            mock_client = MagicMock()
+            mock_client.order_v3 = mock_order_v3
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            result = await broker.check_order("ord-123")
+            assert isinstance(result, FillStatus)
+            assert result.status == "cancelled"
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_check_order_pending(self):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_res = MagicMock()
+            mock_res.status_code = 200
+            mock_res.json.return_value = {"orderStatus": "WORKING"}
+
+            mock_order_v3 = MagicMock()
+            mock_order_v3.get_order_detail.return_value = mock_res
+
+            mock_client = MagicMock()
+            mock_client.order_v3 = mock_order_v3
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            result = await broker.check_order("ord-123")
+            assert isinstance(result, FillStatus)
+            assert result.status == "pending"
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_cancel_order(self):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_res = MagicMock()
+            mock_res.status_code = 200
+
+            mock_order_v3 = MagicMock()
+            mock_order_v3.cancel_order.return_value = mock_res
+
+            mock_client = MagicMock()
+            mock_client.order_v3 = mock_order_v3
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            result = await broker.cancel_order("ord-123")
+            assert result is True
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_get_positions(self):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_res = MagicMock()
+            mock_res.status_code = 200
+            mock_res.json.return_value = {
+                "positions": [
+                    {"symbol": "AAPL", "quantity": "100"},
+                    {"symbol": "TSLA", "quantity": "50"},
+                ]
+            }
+
+            mock_account_v2 = MagicMock()
+            mock_account_v2.get_account_positions.return_value = mock_res
+
+            mock_client = MagicMock()
+            mock_client.account_v2 = mock_account_v2
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            positions = await broker.get_positions()
+            assert positions == {"AAPL": 100, "TSLA": 50}
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_get_positions_error_returns_empty(self):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_res = MagicMock()
+            mock_res.status_code = 500
+
+            mock_account_v2 = MagicMock()
+            mock_account_v2.get_account_positions.return_value = mock_res
+
+            mock_client = MagicMock()
+            mock_client.account_v2 = mock_account_v2
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            positions = await broker.get_positions()
+            assert positions == {}
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_get_cash(self):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_res = MagicMock()
+            mock_res.status_code = 200
+            mock_res.json.return_value = {"availableCash": "75000.50"}
+
+            mock_account_v2 = MagicMock()
+            mock_account_v2.get_account_balance.return_value = mock_res
+
+            mock_client = MagicMock()
+            mock_client.account_v2 = mock_account_v2
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            cash = await broker.get_cash()
+            assert cash == 75000.50
+        finally:
+            _remove_webull_mock()
+
+    @pytest.mark.asyncio
+    async def test_get_cash_error_returns_zero(self):
+        _install_webull_mock()
+        try:
+            from src.live.brokers import WebullBroker
+
+            mock_account_v2 = MagicMock()
+            mock_account_v2.get_account_balance.side_effect = RuntimeError("API error")
+
+            mock_client = MagicMock()
+            mock_client.account_v2 = mock_account_v2
+
+            broker = WebullBroker(app_key="k", app_secret="s", account_id="acc-1")
+            broker._client = mock_client
+
+            cash = await broker.get_cash()
+            assert cash == 0.0
+        finally:
+            _remove_webull_mock()

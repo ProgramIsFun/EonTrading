@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     alpaca_secret_key: str = ""
     futu_real: bool = False
     futu_confirm: str = "poll"
+    webull_app_key: str = ""
+    webull_app_secret: str = ""
+    webull_account_id: str = ""
     tradable_markets: str = "HK"  # comma-separated: HK, US, etc.
 
     # Trading params
