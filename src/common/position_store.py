@@ -52,11 +52,7 @@ class PositionStore:
 
     def get_positions(self) -> dict[str, datetime]:
         """Return {symbol: entry_time} for all open positions."""
-        return {
-            doc["symbol"]: datetime.fromisoformat(doc["entryTime"])
-            for doc in self._col.find()
-            if "entryTime" in doc
-        }
+        return {sym: info["entryTime"] for sym, info in self.get_positions_with_prices().items()}
 
     def get_positions_with_prices(self) -> dict[str, dict]:
         """Return {symbol: {entryTime, entryPrice, qty}} for all open positions."""
@@ -98,11 +94,7 @@ class InMemoryPositionStore:
         self._positions.pop(symbol, None)
 
     def get_positions(self) -> dict[str, datetime]:
-        return {
-            sym: datetime.fromisoformat(info["entryTime"])
-            for sym, info in self._positions.items()
-            if "entryTime" in info
-        }
+        return {sym: info["entryTime"] for sym, info in self.get_positions_with_prices().items()}
 
     def get_positions_with_prices(self) -> dict[str, dict]:
         return {
