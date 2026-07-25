@@ -51,9 +51,8 @@ class PriceMonitor:
         state.shares = shares
         return state
 
-    def check_once_sync(self, as_of: str = None) -> list[str]:
-        """Fast synchronous SL/TP check — for backtesting only. No async, no MongoDB, no broker calls."""
-        from src.common.price import get_price
+    def _evaluate_positions(self, as_of: str = None) -> list[tuple]:
+        """Core SL/TP evaluation — returns [(symbol, trigger_price, shares, reason), ...]."""
         if not self._states:
             return []
         sold = []
@@ -67,86 +66,47 @@ class PriceMonitor:
             if sl:
                 logger.info("🛑 SL triggered: SELL %s %dsh @ $%.2f", symbol, state.shares, sl)
                 self._states.pop(symbol)
-                sold.append((symbol, sl, state.shares))
+                sold.append((symbol, sl, state.shares, "stop loss"))
                 continue
             tp = self.logic.check_take_profit(state, price)
             if tp:
                 logger.info("🎯 TP triggered: SELL %s %dsh @ $%.2f", symbol, state.shares, tp)
                 self._states.pop(symbol)
-                sold.append((symbol, tp, state.shares))
+                sold.append((symbol, tp, state.shares, "take profit"))
         return sold
 
-    def _ensure_entry_price(self, symbol: str):
-        """Fetch entry price from store if not already known."""
-        if symbol in self._states or not self.store:
-            return
-        try:
-            positions = self.store.get_positions_with_prices()
-            if symbol in positions:
-                info = positions[symbol]
-                price = info.get("entryPrice", 0.0)
-                qty = info.get("qty", 0)
-                if price > 0:
-                    self._states[symbol] = PositionState(symbol=symbol, shares=qty, entry_price=price)
-        except Exception:
-            pass
+    def check_once_sync(self, as_of: str = None) -> list[tuple]:
+        """Fast synchronous SL/TP check — for backtesting only. No async, no MongoDB, no broker calls."""
+        return self._evaluate_positions(as_of)
 
     async def check_once(self, as_of: str = None) -> list[str]:
-        """Check all positions against SL/TP. Returns list of symbols sold."""
-        check_symbols = set(self._states.keys())
+        """Check all positions against SL/TP. Publishes trade events, returns list of symbols sold."""
         all_positions: dict[str, dict] = {}
         if self.store:
             all_positions = self.store.get_positions_with_prices()
-            check_symbols |= set(all_positions.keys())
+            for symbol, info in all_positions.items():
+                if symbol not in self._states:
+                    price = info.get("entryPrice", 0.0)
+                    qty = info.get("qty", 0)
+                    if price > 0:
+                        self._states[symbol] = PositionState(symbol=symbol, shares=qty, entry_price=price)
 
-        if not check_symbols:
-            return []
+        results = self._evaluate_positions(as_of)
 
         ts = as_of or (utcnow().isoformat() + "Z")
         sold = []
-        for symbol in list(check_symbols):
-            if symbol not in self._states:
-                self._ensure_entry_price(symbol)
-            if symbol not in self._states:
-                continue  # no entry price — can't check SL/TP
-            price = get_price(symbol, as_of=as_of)
-            if price <= 0:
-                continue
-
-            info = all_positions.get(symbol, {})
-            shares = info.get("qty", 1)
-            state = self._get_or_create_state(symbol, price, shares)
-
-            self.logic.update_peak(state, price)
-
-            sl_price = self.logic.check_stop_loss(state, price)
-            if sl_price:
-                trade = TradeEvent(
-                    symbol=symbol, action="sell",
-                    reason=f"stop loss @ ${sl_price:.2f}",
-                    timestamp=ts,
-                    price=0.0, size=float(shares),
-                )
-                logger.info("🛑 SL triggered: SELL %s %dsh @ $%.2f", symbol, shares, sl_price)
-                await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
-                self._states.pop(symbol, None)
-                sold.append(symbol)
-                continue
-
-            tp_price = self.logic.check_take_profit(state, price)
-            if tp_price:
-                trade = TradeEvent(
-                    symbol=symbol, action="sell",
-                    reason=f"take profit @ ${tp_price:.2f}",
-                    timestamp=ts,
-                    price=0.0, size=float(shares),
-                )
-                logger.info("🎯 TP triggered: SELL %s %dsh @ $%.2f", symbol, shares, tp_price)
-                await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
-                self._states.pop(symbol, None)
-                sold.append(symbol)
+        for symbol, trigger_price, shares, reason in results:
+            trade = TradeEvent(
+                symbol=symbol, action="sell",
+                reason=f"{reason} @ ${trigger_price:.2f}",
+                timestamp=ts,
+                price=0.0, size=float(shares),
+            )
+            await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
+            sold.append(symbol)
 
         # Clean up states for positions that no longer exist
+        check_symbols = set(all_positions.keys()) | set(self._states.keys())
         for sym in list(self._states.keys()):
             if sym not in check_symbols:
                 del self._states[sym]

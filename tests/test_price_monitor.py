@@ -24,7 +24,7 @@ def logic():
     return TradingLogic(stop_loss_pct=0.1, take_profit_pct=0.1)
 
 
-PRICE_PATH = "src.common.price.get_price"
+PRICE_PATH = "src.live.price_monitor.get_price"
 
 
 class TestCheckOnceSync:
