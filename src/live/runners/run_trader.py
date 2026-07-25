@@ -28,13 +28,7 @@ async def main():
     await bus.start()
 
     store = PositionStore()
-    logic = TradingLogic(
-        threshold=settings.threshold,
-        min_confidence=settings.min_confidence,
-        max_allocation=settings.max_allocation,
-        stop_loss_pct=settings.stop_loss_pct,
-        take_profit_pct=settings.take_profit_pct,
-    )
+    logic = TradingLogic.from_settings()
     trader = SentimentTrader(bus, logic=logic, position_store=store)
     await trader.start()
     logger.info("🟢 Started. Waiting for [sentiment] events.")

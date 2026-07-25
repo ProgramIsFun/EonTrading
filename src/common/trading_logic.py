@@ -37,6 +37,19 @@ class TradingLogic:
         self.risk_per_trade = risk_per_trade
         self.scale_by_sentiment = scale_by_sentiment
 
+    @classmethod
+    def from_settings(cls, settings=None) -> "TradingLogic":
+        """Create TradingLogic from Settings object."""
+        if settings is None:
+            from src.settings import settings
+        return cls(
+            threshold=settings.threshold,
+            min_confidence=settings.min_confidence,
+            max_allocation=settings.max_allocation,
+            stop_loss_pct=settings.stop_loss_pct,
+            take_profit_pct=settings.take_profit_pct,
+        )
+
     def should_buy(self, sentiment: float, confidence: float, symbol: str, positions: dict, cash: float, price: float) -> int:
         """Returns number of shares to buy, or 0 if no trade."""
         if confidence < self.min_confidence:

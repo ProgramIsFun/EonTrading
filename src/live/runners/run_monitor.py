@@ -32,10 +32,7 @@ async def main():
     await bus.start()
 
     store = PositionStore()
-    logic = TradingLogic(
-        stop_loss_pct=settings.stop_loss_pct,
-        take_profit_pct=settings.take_profit_pct,
-    )
+    logic = TradingLogic.from_settings()
     monitor = PriceMonitor(bus, store, logic, interval_sec=settings.sl_check_interval)
 
     Heartbeat.create_background("monitor", metadata={"mode": "distributed"})

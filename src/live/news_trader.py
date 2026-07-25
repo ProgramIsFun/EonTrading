@@ -61,13 +61,7 @@ async def main_single():
     await bus.start()
 
     store = PositionStore()
-    logic = TradingLogic(
-        threshold=settings.threshold,
-        min_confidence=settings.min_confidence,
-        max_allocation=settings.max_allocation,
-        stop_loss_pct=settings.stop_loss_pct,
-        take_profit_pct=settings.take_profit_pct,
-    )
+    logic = TradingLogic.from_settings()
     monitor = PriceMonitor(bus, store, logic, interval_sec=60)
     trader = SentimentTrader(bus, logic=logic, position_store=store,
                              broker=broker)

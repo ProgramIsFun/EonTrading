@@ -26,7 +26,7 @@ class TestDistributedWiring:
     def test_trader_creates_trading_logic(self):
         """run_trader must create TradingLogic (not rely on SentimentTrader defaults)."""
         src = _get_function_source("src/live/runners/run_trader.py", "main")
-        assert "TradingLogic(" in src, "run_trader.py must create TradingLogic explicitly"
+        assert "TradingLogic" in src, "run_trader.py must create TradingLogic explicitly"
 
     def test_trader_passes_position_store(self):
         """run_trader must pass position_store to SentimentTrader (read-only)."""
@@ -57,14 +57,14 @@ class TestDistributedWiring:
         assert "AnalyzerService(" in single_src and "AnalyzerService(" in analyzer_src
 
     def test_monitor_reads_env_vars(self):
-        """run_monitor must read SL/TP from settings, not hardcode."""
+        """run_monitor must read SL/TP from settings (via from_settings or directly)."""
         src = _get_function_source("src/live/runners/run_monitor.py", "main")
-        assert "settings.stop_loss_pct" in src, "run_monitor.py must read stop_loss_pct from settings"
-        assert "settings.take_profit_pct" in src, "run_monitor.py must read take_profit_pct from settings"
+        assert "TradingLogic.from_settings()" in src or "settings.stop_loss_pct" in src, \
+            "run_monitor.py must read trading params from settings"
         assert "settings.sl_check_interval" in src, "run_monitor.py must read sl_check_interval from settings"
 
     def test_trader_reads_env_vars(self):
-        """run_trader must read trading params from settings, not hardcode."""
+        """run_trader must read trading params from settings (via from_settings or directly)."""
         src = _get_function_source("src/live/runners/run_trader.py", "main")
-        assert "settings.threshold" in src, "run_trader.py must read threshold from settings"
-        assert "settings.stop_loss_pct" in src, "run_trader.py must read stop_loss_pct from settings"
+        assert "TradingLogic.from_settings()" in src or "settings.threshold" in src, \
+            "run_trader.py must read trading params from settings"
