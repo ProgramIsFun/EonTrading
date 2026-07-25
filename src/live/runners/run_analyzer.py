@@ -24,6 +24,7 @@ async def main():
         "Analyzer": analyzer_name,
         "Positions from": "MongoDB",
     })
+    logger.info("Analyzer mode: %s", analyzer_name)
 
     bus = RedisStreamBus(group="analyzer")
     await bus.start()
