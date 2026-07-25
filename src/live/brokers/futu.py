@@ -14,6 +14,20 @@ from .broker import Broker, FillStatus
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
 
+# HK price tick table: (lower_bound, tick_size)
+_HK_TICK_TABLE = [
+    (0.25,  0.001),
+    (0.50,  0.005),
+    (10.00, 0.010),
+    (20.00, 0.020),
+    (100.00, 0.050),
+    (200.00, 0.100),
+    (500.00, 0.200),
+    (1000.00, 0.500),
+    (2000.00, 1.000),
+    (5000.00, 2.000),
+]
+
 
 class FutuBroker(Broker):
     """pip install futu-api
@@ -40,6 +54,14 @@ class FutuBroker(Broker):
         return self._ctx
 
     @staticmethod
+    def _round_price(price: float) -> float:
+        """Round price to valid HK tick size."""
+        for lower, tick in _HK_TICK_TABLE:
+            if price < lower:
+                return round(price / tick) * tick
+        return round(price / 5.0) * 5.0
+
+    @staticmethod
     def _to_futu_code(symbol: str) -> str:
         """Convert standard format to Futu native: '0700.HK' → 'HK.00700'."""
         if "." in symbol:
@@ -57,6 +79,26 @@ class FutuBroker(Broker):
             return f"{ticker}.{exchange}"
         return code
 
+    async def _get_lot_size(self, futu_code: str) -> int:
+        """Query lot size for a stock. Returns 1 if query fails (no rounding)."""
+        if not futu_code.startswith("HK."):
+            return 1
+        try:
+            from futu import OpenQuoteContext, Market, SecurityType
+            ctx = await asyncio.to_thread(
+                lambda: OpenQuoteContext(host=self.host, port=self.port)
+            )
+
+            def _query():
+                return ctx.get_stock_basicinfo(Market.HK, SecurityType.STOCK, code_list=[futu_code])
+            ret, info = await asyncio.to_thread(_query)
+            ctx.close()
+            if ret == 0 and not info.empty:
+                return int(info["lot_size"].iloc[0])
+        except Exception as e:
+            logger.warning("Failed to get lot size for %s: %s", futu_code, e)
+        return 100
+
     async def execute(self, trade: TradeEvent) -> str | None:
         from futu import TrdEnv, TrdSide, OrderType
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
@@ -65,15 +107,23 @@ class FutuBroker(Broker):
         try:
             ctx = await asyncio.to_thread(self._get_ctx)
 
+            price = trade.price
+            qty = int(trade.size)
+            if trade.action == "buy":
+                price = self._round_price(price)
+                lot_size = await self._get_lot_size(futu_code)
+                if lot_size > 1:
+                    qty = (qty + lot_size - 1) // lot_size * lot_size
+
             def _place():
                 if trade.action == "sell":
                     return ctx.place_order(
-                        price=trade.price, qty=int(trade.size),
+                        price=price, qty=qty,
                         code=futu_code, trd_side=trd_side, trd_env=trd_env,
                         order_type=OrderType.MARKET,
                     )
                 return ctx.place_order(
-                    price=trade.price, qty=int(trade.size),
+                    price=price, qty=qty,
                     code=futu_code, trd_side=trd_side, trd_env=trd_env,
                 )
             ret, data = await asyncio.to_thread(_place)

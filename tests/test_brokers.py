@@ -90,6 +90,30 @@ class TestFutuBroker:
         from src.live.brokers import FutuBroker
         assert FutuBroker._from_futu_code("AAPL") == "AAPL"
 
+    def test_round_price_micro_cap(self):
+        from src.live.brokers import FutuBroker
+        assert FutuBroker._round_price(0.0449) == 0.045
+
+    def test_round_price_low_range(self):
+        from src.live.brokers import FutuBroker
+        assert FutuBroker._round_price(0.599) == 0.60
+
+    def test_round_price_mid_range(self):
+        from src.live.brokers import FutuBroker
+        assert FutuBroker._round_price(15.333) == 15.34
+
+    def test_round_price_high_range(self):
+        from src.live.brokers import FutuBroker
+        assert FutuBroker._round_price(434.6000061035) == 434.6
+
+    def test_round_price_very_high(self):
+        from src.live.brokers import FutuBroker
+        assert FutuBroker._round_price(1533.7) == 1534.0
+
+    def test_round_price_noop_when_exact(self):
+        from src.live.brokers import FutuBroker
+        assert FutuBroker._round_price(100.0) == 100.0
+
     @pytest.mark.asyncio
     async def test_execute_places_order_and_returns_id(self, event_bus):
         _install_futu_mock()
@@ -339,9 +363,174 @@ class TestFutuBroker:
         finally:
             _remove_futu_mock()
 
+    @pytest.mark.asyncio
+    async def test_buy_rounds_price_to_tick_size(self, event_bus):
+        """Yahoo Finance returns 434.6000061035 — Futu needs 434.6 (tick=0.1 for ≥$100)."""
+        _install_futu_mock()
+        try:
+            from src.live.brokers import FutuBroker
 
-# ===================================================================
-# IBKRBroker
+            mock_ctx = MagicMock()
+            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["99901"]}))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            trade = TradeEvent(
+                symbol="0700.HK", action="buy",
+                reason="test", timestamp="2026-07-25T00:00:00Z",
+                price=434.6000061035, size=10,
+            )
+            await broker.execute(trade)
+
+            call_kwargs = mock_ctx.place_order.call_args[1]
+            assert call_kwargs["price"] == 434.6
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_buy_mid_price_rounds_to_050_tick(self, event_bus):
+        """Price like 86.69999694824 should round to 86.70 (tick=0.05 for $20-$100)."""
+        _install_futu_mock()
+        try:
+            from src.live.brokers import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["99902"]}))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            trade = TradeEvent(
+                symbol="3690.HK", action="buy",
+                reason="test", timestamp="2026-07-25T00:00:00Z",
+                price=86.69999694824, size=10,
+            )
+            await broker.execute(trade)
+
+            call_kwargs = mock_ctx.place_order.call_args[1]
+            assert call_kwargs["price"] == 86.70
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_buy_low_price_rounds_to_010_tick(self, event_bus):
+        """Price like 5.969999790191 should round to 5.97 (tick=0.01 for $0.50-$10)."""
+        _install_futu_mock()
+        try:
+            from src.live.brokers import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["99903"]}))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            trade = TradeEvent(
+                symbol="0636.HK", action="buy",
+                reason="test", timestamp="2026-07-25T00:00:00Z",
+                price=5.969999790191, size=10,
+            )
+            await broker.execute(trade)
+
+            call_kwargs = mock_ctx.place_order.call_args[1]
+            assert call_kwargs["price"] == 5.97
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_buy_odd_lot_rounds_up_to_lot_size(self, event_bus):
+        """qty=1 for 0388.HK (lot_size=100) should round up to 100."""
+        _install_futu_mock()
+        try:
+            from src.live.brokers import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["99904"]}))
+
+            mock_quote_ctx = MagicMock()
+            mock_quote_ctx.get_stock_basicinfo.return_value = (
+                0,
+                pd.DataFrame({"code": ["HK.00388"], "lot_size": [100]}),
+            )
+            from futu import OpenQuoteContext
+            OpenQuoteContext.return_value = mock_quote_ctx
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            trade = TradeEvent(
+                symbol="0388.HK", action="buy",
+                reason="test", timestamp="2026-07-25T00:00:00Z",
+                price=399.0, size=1,
+            )
+            await broker.execute(trade)
+
+            call_kwargs = mock_ctx.place_order.call_args[1]
+            assert call_kwargs["qty"] == 100
+            mock_quote_ctx.close.assert_called_once()
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_buy_already_exact_lot(self, event_bus):
+        """qty=200 for 9988.HK (lot_size=100) should stay 200."""
+        _install_futu_mock()
+        try:
+            from src.live.brokers import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["99905"]}))
+
+            mock_quote_ctx = MagicMock()
+            mock_quote_ctx.get_stock_basicinfo.return_value = (
+                0,
+                pd.DataFrame({"code": ["HK.09988"], "lot_size": [100]}),
+            )
+            from futu import OpenQuoteContext
+            OpenQuoteContext.return_value = mock_quote_ctx
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            trade = TradeEvent(
+                symbol="9988.HK", action="buy",
+                reason="test", timestamp="2026-07-25T00:00:00Z",
+                price=110.0, size=200,
+            )
+            await broker.execute(trade)
+
+            call_kwargs = mock_ctx.place_order.call_args[1]
+            assert call_kwargs["qty"] == 200
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_sell_not_affected_by_lot_size(self, event_bus):
+        """Sell should not query lot size — it uses whatever qty the position has."""
+        _install_futu_mock()
+        try:
+            from src.live.brokers import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.place_order.return_value = (0, pd.DataFrame({"order_id": ["99906"]}))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            trade = TradeEvent(
+                symbol="0388.HK", action="sell",
+                reason="test", timestamp="2026-07-25T00:00:00Z",
+                price=399.0, size=100,
+            )
+            await broker.execute(trade)
+
+            call_kwargs = mock_ctx.place_order.call_args[1]
+            assert call_kwargs["qty"] == 100
+            assert call_kwargs["order_type"] == "MARKET"
+            mock_ctx.get_stock_basicinfo.assert_not_called()
+        finally:
+            _remove_futu_mock()
 # ===================================================================
 
 def _install_ibkr_mock():
