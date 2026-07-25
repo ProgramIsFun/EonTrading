@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import time
 from abc import ABC, abstractmethod
 
 from ..common.clock import utcnow
@@ -61,6 +62,7 @@ class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
     """Fast keyword-based scorer. No external dependencies."""
 
     def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
+        t0 = time.perf_counter()
         text = (event.headline + " " + event.body).lower()
 
         symbols = []
@@ -84,6 +86,9 @@ class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
             confidence = min(total / 5, 1.0)
 
         urgency = "high" if any(w in text for w in ["crash", "surge", "ban", "war", "tariff"]) else "normal"
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.info("Keyword analysis in %.1fms — sentiment=%+.2f confidence=%.2f symbols=%s",
+                     elapsed_ms, round(sentiment, 3), round(confidence, 3), symbols)
 
         return SentimentEvent(
             source=event.source, headline=event.headline,
@@ -187,11 +192,18 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
             prompt = LLM_PROMPT_WITH_POSITIONS.format(headline=event.headline, positions=pos_str, markets=markets)
         else:
             prompt = LLM_PROMPT.format(headline=event.headline, markets=markets)
+        t0 = time.perf_counter()
+        elapsed_ms = 0.0
         try:
             content = self._call_llm(prompt)
+            elapsed_ms = (time.perf_counter() - t0) * 1000
             # Extract JSON from response (handle markdown code blocks)
             content = re.sub(r"```json?\s*", "", content).replace("```", "").strip()
             data = json.loads(content)
+
+            logger.info("LLM response in %.0fms — sentiment=%+.2f confidence=%.2f symbols=%s",
+                        elapsed_ms, float(data.get("sentiment", 0)),
+                        float(data.get("confidence", 0)), data.get("symbols", []))
 
             return SentimentEvent(
                 source=event.source, headline=event.headline,
@@ -204,7 +216,8 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
                 urgency=data.get("urgency", "normal"),
             )
         except Exception as e:
-            logger.error("LLM analysis failed: %s", e)
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            logger.error("LLM analysis failed after %.0fms: %s", elapsed_ms, e)
             return SentimentEvent(
                 source=event.source, headline=event.headline,
                 timestamp=event.timestamp,
