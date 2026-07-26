@@ -8,6 +8,8 @@ from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_SENTIMENT, CHANNEL_TRADE, SentimentEvent, TradeEvent
 from src.common.price import get_price
+from src.common.position_store import BasePositionStore
+from src.live.brokers.broker import Broker
 from src.common.trading_logic import TradingLogic
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ class SentimentTrader:
     """
 
     def __init__(self, bus: EventBus, logic: TradingLogic | None = None, max_hold_days: int = 0,
-                 position_store=None, broker=None, **kwargs):
+                 position_store: BasePositionStore | None = None, broker: Broker | None = None, **kwargs):
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
         self.max_hold_days = max_hold_days
