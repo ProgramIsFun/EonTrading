@@ -1,6 +1,6 @@
 """Position state storage.
 
-BasePositionStore defines the interface; PositionStore uses MongoDB,
+BasePositionStore defines the interface; MongoPositionStore uses MongoDB,
 InMemoryPositionStore uses a plain dict (for backtest/replay).
 """
 import logging
@@ -8,21 +8,22 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 from src.common.clock import utcnow
+from src.common.collections import COLLECTION_POSITIONS
 
 
 class BasePositionStore(ABC):
     """Interface for position storage backends."""
 
     @abstractmethod
-    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None):
+    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None, session=None):
         pass
 
     @abstractmethod
-    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0):
+    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0, session=None):
         pass
 
     @abstractmethod
-    def close_position(self, symbol: str):
+    def close_position(self, symbol: str, session=None):
         pass
 
     @abstractmethod
@@ -34,10 +35,10 @@ class BasePositionStore(ABC):
         pass
 
 
-class PositionStore(BasePositionStore):
+class MongoPositionStore(BasePositionStore):
     """Read/write positions via MongoDB. One document per symbol."""
 
-    def __init__(self, collection: str = "positions", db=None):
+    def __init__(self, collection: str = COLLECTION_POSITIONS, db=None):
         try:
             if db is None:
                 from src.data.utils.db_helper import get_db
@@ -48,7 +49,7 @@ class PositionStore(BasePositionStore):
             logger.exception("Failed to connect to MongoDB for PositionStore")
             raise
 
-    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None):
+    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None, session=None):
         """Sync holdings to MongoDB — upsert active, remove closed."""
         prices = entry_prices or {}
         active = set(holdings.keys())
@@ -60,24 +61,32 @@ class PositionStore(BasePositionStore):
                 {"symbol": symbol},
                 {"$set": fields},
                 upsert=True,
+                **({"session": session} if session else {}),
             )
         if active:
-            self._col.delete_many({"symbol": {"$nin": list(active)}})
+            self._col.delete_many(
+                {"symbol": {"$nin": list(active)}},
+                **({"session": session} if session else {}),
+            )
         else:
-            self._col.delete_many({})
+            self._col.delete_many({}, **({"session": session} if session else {}))
 
-    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0):
+    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0, session=None):
         """Atomically add a single position."""
         self._col.update_one(
             {"symbol": symbol},
             {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(),
                       "entryPrice": entry_price, "qty": qty, "updatedAt": utcnow()}},
             upsert=True,
+            **({"session": session} if session else {}),
         )
 
-    def close_position(self, symbol: str):
+    def close_position(self, symbol: str, session=None):
         """Atomically remove a single position."""
-        self._col.delete_one({"symbol": symbol})
+        self._col.delete_one(
+            {"symbol": symbol},
+            **({"session": session} if session else {}),
+        )
 
     def get_positions(self) -> dict[str, datetime]:
         """Return {symbol: entry_time} for all open positions."""
@@ -96,13 +105,17 @@ class PositionStore(BasePositionStore):
         }
 
 
+# Backward-compatible alias
+PositionStore = MongoPositionStore
+
+
 class InMemoryPositionStore(BasePositionStore):
     """Positions backed by a plain dict — no MongoDB. For replay/backtest use."""
 
     def __init__(self):
         self._positions: dict[str, dict] = {}
 
-    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None):
+    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None, session=None):
         prices = entry_prices or {}
         self._positions = {}
         for symbol, entry_time in holdings.items():
@@ -112,14 +125,14 @@ class InMemoryPositionStore(BasePositionStore):
                 "qty": 0,
             }
 
-    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0):
+    def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0, session=None):
         self._positions[symbol] = {
             "entryTime": entry_time.isoformat(),
             "entryPrice": entry_price,
             "qty": qty,
         }
 
-    def close_position(self, symbol: str):
+    def close_position(self, symbol: str, session=None):
         self._positions.pop(symbol, None)
 
     def get_positions(self) -> dict[str, datetime]:

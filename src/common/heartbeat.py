@@ -5,11 +5,12 @@ import os
 import platform
 
 from src.common.clock import utcnow
+from src.common.collections import COLLECTION_HEARTBEATS
 
 logger = logging.getLogger(__name__)
 
 
-COLLECTION = "heartbeats"
+COLLECTION = COLLECTION_HEARTBEATS
 
 
 class Heartbeat:
