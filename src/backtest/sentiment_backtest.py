@@ -10,6 +10,7 @@ from ..common.events import NewsEvent
 from ..common.trading_logic import PositionState, TradingLogic
 from ..data.ingest.yfinance_ingest import normalize_yfinance_df
 from . import BacktestResultBase, SentimentTrade
+from .engine import compute_backtest_metrics
 from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
 
 logger = logging.getLogger(__name__)

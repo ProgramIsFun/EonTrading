@@ -31,6 +31,10 @@ class Broker(ABC):
     OrderTracker polls check_order() to confirm fills or detect failures.
     """
 
+    def _connect(self):
+        """Establish connection to the broker. Override in subclasses if needed."""
+        pass
+
     @abstractmethod
     async def execute(self, trade: TradeEvent) -> str | None:
         """Submit a trade. Returns order_id for tracking, or None on failure."""
