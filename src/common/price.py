@@ -50,7 +50,7 @@ def _cache_set(key: str, price: float):
     _price_cache[key] = price
     r = _get_redis()
     if r:
-        r.setex(f"replay:price:{key}", 300, str(price))  # expire after 5 min
+        r.set(f"replay:price:{key}", str(price), ex=300)  # expire after 5 min
 
 
 def get_price(symbol: str, as_of: str = None) -> float:
