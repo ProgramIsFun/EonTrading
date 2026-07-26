@@ -5,7 +5,9 @@ Verifies code doesn't use patterns that break with real library objects
 """
 import ast
 import glob
+import re
 
+_COL_PATTERN = re.compile(r"(?:self\.|_|^)\_col\b")
 
 def _get_all_conditionals_on_col_attrs(path: str) -> list[str]:
     """Find all conditionals that test a _col attribute with bool() instead of 'is not None'."""
@@ -20,7 +22,7 @@ def _get_all_conditionals_on_col_attrs(path: str) -> list[str]:
         if isinstance(node, ast.If):
             src_line = source.splitlines()[node.test.lineno - 1] if hasattr(node.test, 'lineno') else ""
             # Check for bare attribute access on _col fields in conditionals
-            if "_col" in src_line and "is not None" not in src_line and "is None" not in src_line:
+            if _COL_PATTERN.search(src_line) and "is not None" not in src_line and "is None" not in src_line:
                 issues.append(f"{path}:{node.test.lineno}: {src_line.strip()}")
     return issues
 

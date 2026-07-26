@@ -8,18 +8,18 @@ from tqdm import tqdm
 from ..storage.base_storage import StorageBackend
 
 
-def normalize_yfinance_df(df: pd.DataFrame, stamp: str = "timestamp") -> pd.DataFrame:
-    """Lowercase columns and rename the date column to *stamp*.
+def normalize_yfinance_df(df: pd.DataFrame, date_column: str = "timestamp") -> pd.DataFrame:
+    """Lowercase columns and rename the date column to *date_column*.
 
     Handles yfinance's MultiIndex columns (single-ticker produces tuples).
     """
     df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
     for alias in ("datetime", "date"):
         if alias in df.columns:
-            df = df.rename(columns={alias: stamp})
+            df = df.rename(columns={alias: date_column})
             break
-    if stamp in df.columns:
-        df[stamp] = pd.to_datetime(df[stamp], utc=True)
+    if date_column in df.columns:
+        df[date_column] = pd.to_datetime(df[date_column], utc=True)
     return df
 
 
