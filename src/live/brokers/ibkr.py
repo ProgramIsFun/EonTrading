@@ -39,61 +39,58 @@ class IBKRBroker(Broker):
     async def execute(self, trade: TradeEvent) -> str | None:
         from ib_insync import MarketOrder, Stock
         try:
-            self._connect()
-            assert self._ib is not None
-            contract = Stock(trade.symbol, "SMART", "USD")
-            self._ib.qualifyContracts(contract)
-            action = "BUY" if trade.action == "buy" else "SELL"
-            order = MarketOrder(action, int(trade.size))
-            ib_trade = self._ib.placeOrder(contract, order)
+            async with self._safe(f"execute({trade.symbol})"):
+                assert self._ib is not None
+                contract = Stock(trade.symbol, "SMART", "USD")
+                self._ib.qualifyContracts(contract)
+                action = "BUY" if trade.action == "buy" else "SELL"
+                order = MarketOrder(action, int(trade.size))
+                ib_trade = self._ib.placeOrder(contract, order)
 
-            # Wait for fill confirmation
-            while not ib_trade.isDone():
-                await asyncio.sleep(0.5)
-                self._ib.sleep(0)
+                # Wait for fill confirmation
+                while not ib_trade.isDone():
+                    await asyncio.sleep(0.5)
+                    self._ib.sleep(0)
 
-            order_id = str(ib_trade.order.orderId)
-            return order_id
-        except Exception as e:
-            logger.error("IBKR order failed: %s — %s", trade.symbol, e)
+                order_id = str(ib_trade.order.orderId)
+                return order_id
+        except Exception:
             return None
 
     async def check_order(self, order_id: str) -> FillStatus:
         try:
-            self._connect()
-            assert self._ib is not None
-            trades = self._ib.trades()
-            for t in trades:
-                if str(t.order.orderId) == order_id:
-                    status = t.orderStatus.status
-                    if status == "Filled":
-                        return FillStatus(status="filled",
-                                          filled_qty=int(t.orderStatus.filled),
-                                          filled_price=t.orderStatus.avgFillPrice)
-                    if status in ("Cancelled", "Inactive", "ApiCancelled"):
-                        return FillStatus(status="cancelled", reason=status)
-                    return FillStatus(status="pending")
-            return FillStatus(status="pending")
-        except Exception as e:
-            logger.error("IBKR check_order error: %s", e)
+            async with self._safe(f"check_order({order_id})"):
+                assert self._ib is not None
+                trades = self._ib.trades()
+                for t in trades:
+                    if str(t.order.orderId) == order_id:
+                        status = t.orderStatus.status
+                        if status == "Filled":
+                            return FillStatus(status="filled",
+                                              filled_qty=int(t.orderStatus.filled),
+                                              filled_price=t.orderStatus.avgFillPrice)
+                        if status in ("Cancelled", "Inactive", "ApiCancelled"):
+                            return FillStatus(status="cancelled", reason=status)
+                        return FillStatus(status="pending")
+                return FillStatus(status="pending")
+        except Exception:
             return FillStatus(status="pending")
 
     async def get_positions(self) -> dict[str, int]:
         try:
-            self._connect()
-            assert self._ib is not None
-            return {p.contract.symbol: int(p.position) for p in self._ib.positions() if p.position > 0}
-        except Exception as e:
-            logger.error("IBKR get_positions error: %s", e)
+            async with self._safe("get_positions"):
+                assert self._ib is not None
+                return {p.contract.symbol: int(p.position) for p in self._ib.positions() if p.position > 0}
+        except Exception:
             return {}
 
     async def get_cash(self) -> float:
         try:
-            self._connect()
-            assert self._ib is not None
-            for av in self._ib.accountValues():
-                if av.tag == "CashBalance" and av.currency == "USD":
-                    return float(av.value)
-        except Exception as e:
-            logger.error("IBKR get_cash error: %s", e)
+            async with self._safe("get_cash"):
+                assert self._ib is not None
+                for av in self._ib.accountValues():
+                    if av.tag == "CashBalance" and av.currency == "USD":
+                        return float(av.value)
+        except Exception:
+            pass
         return 0.0

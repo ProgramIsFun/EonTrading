@@ -47,6 +47,9 @@ class FutuBroker(Broker):
         self.poll_timeout = poll_timeout
         self._ctx = None
 
+    def _connect(self):
+        self._get_ctx()
+
     def _get_ctx(self):
         from futu import OpenSecTradeContext
         if not self._ctx:
@@ -141,78 +144,79 @@ class FutuBroker(Broker):
         from futu import OrderStatus, TrdEnv
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
-            ctx = await asyncio.to_thread(self._get_ctx)
+            async with self._safe(f"check_order({order_id})"):
+                ctx = await asyncio.to_thread(self._get_ctx)
 
-            def _query():
-                return ctx.order_list_query(order_id=int(order_id), trd_env=trd_env)
-            ret, orders = await asyncio.to_thread(_query)
-            if ret != 0:
-                logger.warning("Futu check_order query failed: %s", orders)
+                def _query():
+                    return ctx.order_list_query(order_id=int(order_id), trd_env=trd_env)
+                ret, orders = await asyncio.to_thread(_query)
+                if ret != 0:
+                    logger.warning("Futu check_order query failed: %s", orders)
+                    return FillStatus(status="pending")
+                row = orders.iloc[0]
+                status = row["order_status"]
+                dealt_qty = int(row.get("dealt_qty", 0))
+                dealt_price = float(row.get("dealt_avg_price", 0.0))
+                if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
+                    return FillStatus(status="filled", filled_qty=dealt_qty, filled_price=dealt_price)
+                if status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
+                    return FillStatus(status="cancelled", reason=f"status: {status}")
                 return FillStatus(status="pending")
-            row = orders.iloc[0]
-            status = row["order_status"]
-            dealt_qty = int(row.get("dealt_qty", 0))
-            dealt_price = float(row.get("dealt_avg_price", 0.0))
-            if status in (OrderStatus.FILLED_ALL, OrderStatus.FILLED_PART):
-                return FillStatus(status="filled", filled_qty=dealt_qty, filled_price=dealt_price)
-            if status in (OrderStatus.CANCELLED_ALL, OrderStatus.FAILED, OrderStatus.DELETED):
-                return FillStatus(status="cancelled", reason=f"status: {status}")
-            return FillStatus(status="pending")
-        except Exception as e:
-            logger.error("Futu check_order error: %s", e)
+        except Exception:
             return FillStatus(status="pending")
 
     async def cancel_order(self, order_id: str) -> bool:
         from futu import TrdEnv, ModifyOrderOp
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
-            ctx = await asyncio.to_thread(self._get_ctx)
+            async with self._safe(f"cancel_order({order_id})"):
+                ctx = await asyncio.to_thread(self._get_ctx)
 
-            def _cancel():
-                return ctx.modify_order(
-                    ModifyOrderOp.CANCEL,
-                    order_id=int(order_id),
-                    qty=0,
-                    price=0,
-                    trd_env=trd_env,
-                )
-            ret, msg = await asyncio.to_thread(_cancel)
-            if ret != 0:
-                logger.warning("Futu cancel_order failed: %s", msg)
-            return bool(ret == 0)
-        except Exception as e:
-            logger.error("Futu cancel_order error: %s", e)
+                def _cancel():
+                    return ctx.modify_order(
+                        ModifyOrderOp.CANCEL,
+                        order_id=int(order_id),
+                        qty=0,
+                        price=0,
+                        trd_env=trd_env,
+                    )
+                ret, msg = await asyncio.to_thread(_cancel)
+                if ret != 0:
+                    logger.warning("Futu cancel_order failed: %s", msg)
+                return bool(ret == 0)
+        except Exception:
             return False
 
     async def get_positions(self) -> dict[str, int]:
         from futu import TrdEnv
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
-            ctx = await asyncio.to_thread(self._get_ctx)
+            async with self._safe("get_positions"):
+                ctx = await asyncio.to_thread(self._get_ctx)
 
-            def _query():
-                return ctx.position_list_query(trd_env=trd_env)
-            ret, data = await asyncio.to_thread(_query)
-            if ret != 0:
-                logger.warning("Futu get_positions failed: %s", data)
-                return {}
-            return {self._from_futu_code(row["code"]): int(row["qty"]) for _, row in data.iterrows() if int(row["qty"]) > 0}
-        except Exception as e:
-            logger.error("Futu get_positions error: %s", e)
+                def _query():
+                    return ctx.position_list_query(trd_env=trd_env)
+                ret, data = await asyncio.to_thread(_query)
+                if ret != 0:
+                    logger.warning("Futu get_positions failed: %s", data)
+                    return {}
+                return {self._from_futu_code(row["code"]): int(row["qty"]) for _, row in data.iterrows() if int(row["qty"]) > 0}
+        except Exception:
             return {}
 
     async def get_cash(self) -> float:
         from futu import TrdEnv
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
-            ctx = await asyncio.to_thread(self._get_ctx)
+            async with self._safe("get_cash"):
+                ctx = await asyncio.to_thread(self._get_ctx)
 
-            def _query():
-                return ctx.accinfo_query(trd_env=trd_env)
-            ret, data = await asyncio.to_thread(_query)
-            if ret == 0:
-                return float(data["cash"].iloc[0])
-            logger.warning("Futu get_cash failed: %s", data)
-        except Exception as e:
-            logger.error("Futu get_cash error: %s", e)
+                def _query():
+                    return ctx.accinfo_query(trd_env=trd_env)
+                ret, data = await asyncio.to_thread(_query)
+                if ret == 0:
+                    return float(data["cash"].iloc[0])
+                logger.warning("Futu get_cash failed: %s", data)
+        except Exception:
+            pass
         return 0.0

@@ -1,6 +1,5 @@
 """Backtest sentiment strategy against historical price data with synthetic news."""
 import logging
-from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
@@ -8,33 +7,12 @@ import yfinance as yf
 
 from ..common.costs import ZERO, CostModel
 from ..common.events import NewsEvent
+from ..common.trading_logic import PositionState, TradingLogic
 from ..data.ingest.yfinance_ingest import normalize_yfinance_df
-from . import SentimentTrade
+from . import BacktestResultBase, SentimentTrade
 from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class SentimentBacktestResult:
-    symbol: str
-    initial_capital: float
-    final_value: float
-    total_return_pct: float
-    max_drawdown_pct: float
-    total_trades: int
-    win_rate: float
-    trades: list = field(default_factory=list)
-    equity_curve: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
-
-    def summary(self) -> str:
-        return (
-            f"Sentiment Backtest: {self.symbol}\n"
-            f"  Return: {self.total_return_pct:+.2f}%\n"
-            f"  Max DD: {self.max_drawdown_pct:.2f}%\n"
-            f"  Trades: {self.total_trades} | Win rate: {self.win_rate:.1f}%\n"
-            f"  Final: ${self.final_value:,.2f}"
-        )
 
 
 def fetch_prices(symbol: str, start: str, end: str, interval: str = "1h") -> pd.DataFrame:
@@ -77,8 +55,14 @@ def run_sentiment_backtest(
     stop_loss_pct: float = 0.0,
     take_profit_pct: float = 0.0,
     interval: str = "1h",
-) -> SentimentBacktestResult:
+) -> BacktestResultBase:
     analyzer = analyzer or KeywordSentimentAnalyzer()
+    logic = TradingLogic(
+        threshold=threshold, min_confidence=min_confidence,
+        stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct,
+        scale_by_sentiment=scale_by_sentiment,
+        max_allocation=max_allocation, risk_per_trade=risk_per_trade,
+    )
     prices = fetch_prices(symbol, start, end, interval=interval)
     if prices.empty:
         raise ValueError(f"No price data for {symbol}")
@@ -133,6 +117,7 @@ def run_sentiment_backtest(
     last_trade_idx = -999
     trades = []
     equity = []
+    pos_state: PositionState | None = None
 
     for i in range(len(prices)):
         row = prices.iloc[i]
@@ -140,12 +125,14 @@ def run_sentiment_backtest(
         price = row["close"]       # use close for equity/SL/TP checks
         ts = str(row["timestamp"])[:19]
 
-        # Check stop-loss / take-profit using intraday low/high
-        if shares > 0:
+        # Check stop-loss / take-profit using TradingLogic
+        if shares > 0 and pos_state is not None:
             bar_low = row["low"] if "low" in row else price
             bar_high = row["high"] if "high" in row else price
-            if stop_loss_pct > 0 and bar_low <= entry_price * (1 - stop_loss_pct):
-                sl_price = entry_price * (1 - stop_loss_pct)
+            logic.update_peak(pos_state, bar_high)
+
+            sl_price = logic.check_stop_loss(pos_state, bar_low)
+            if sl_price is not None:
                 cost = cost_model.sell_cost(sl_price, shares)
                 pnl = (sl_price - entry_price) * shares - cost
                 cash += shares * sl_price - cost
@@ -155,17 +142,20 @@ def run_sentiment_backtest(
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0
-            elif take_profit_pct > 0 and bar_high >= entry_price * (1 + take_profit_pct):
-                tp_price = entry_price * (1 + take_profit_pct)
-                cost = cost_model.sell_cost(tp_price, shares)
-                pnl = (tp_price - entry_price) * shares - cost
-                cash += shares * tp_price - cost
-                trades.append(SentimentTrade(
-                    symbol=symbol, action="sell (TP)", date=ts,
-                    price=tp_price, sentiment=0, headline="Take profit hit",
-                    shares=shares, pnl=pnl,
-                ))
-                shares = 0
+                pos_state = None
+            else:
+                tp_price = logic.check_take_profit(pos_state, bar_high)
+                if tp_price is not None:
+                    cost = cost_model.sell_cost(tp_price, shares)
+                    pnl = (tp_price - entry_price) * shares - cost
+                    cash += shares * tp_price - cost
+                    trades.append(SentimentTrade(
+                        symbol=symbol, action="sell (TP)", date=ts,
+                        price=tp_price, sentiment=0, headline="Take profit hit",
+                        shares=shares, pnl=pnl,
+                    ))
+                    shares = 0
+                    pos_state = None
 
             # Max hold period
             if max_hold_days > 0 and shares > 0 and (i - entry_bar_idx) >= max_hold_bars:
@@ -178,6 +168,7 @@ def run_sentiment_backtest(
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0
+                pos_state = None
 
         # Check signals
         signal: dict[str, Any] | None = signal_map.get(i)
@@ -209,6 +200,7 @@ def run_sentiment_backtest(
                     entry_price = exec_price
                     entry_bar_idx = i
                     last_trade_idx = i
+                    pos_state = PositionState(symbol=symbol, shares=buy_shares, entry_price=exec_price)
                     trades.append(SentimentTrade(
                         symbol=symbol, action="buy", date=ts,
                         price=exec_price, sentiment=sent, headline=signal["headline"],
@@ -226,6 +218,7 @@ def run_sentiment_backtest(
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0
+                pos_state = None
 
         equity.append(cash + shares * price)
 
@@ -241,18 +234,12 @@ def run_sentiment_backtest(
             shares=shares, pnl=pnl,
         ))
 
-    final_value = cash
-    equity_series = pd.Series(equity, index=prices.index)
-    total_return = (final_value - initial_capital) / initial_capital * 100
-    peak = equity_series.expanding().max()
-    max_dd = abs(((equity_series - peak) / peak * 100).min())
-    sell_trades = [t for t in trades if t.action.startswith("sell")]
-    wins = sum(1 for t in sell_trades if t.pnl > 0)
-    win_rate = (wins / len(sell_trades) * 100) if sell_trades else 0
+    metrics = compute_backtest_metrics(
+        equity, initial_capital, trades,
+        wins_filter=lambda t: [x for x in t if x.action.startswith("sell")],
+        index=prices.index,
+    )
 
-    return SentimentBacktestResult(
-        symbol=symbol, initial_capital=initial_capital,
-        final_value=final_value, total_return_pct=total_return,
-        max_drawdown_pct=max_dd, total_trades=len(trades),
-        win_rate=win_rate, trades=trades, equity_curve=equity_series,
+    return BacktestResultBase(
+        initial_capital=initial_capital, **metrics, trades=trades,
     )

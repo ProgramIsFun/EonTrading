@@ -3,6 +3,7 @@ import asyncio
 from uuid import uuid4
 
 from src.common.events import TradeEvent
+from src.common.position_store import InMemoryPositionStore
 from src.live.brokers import Broker
 
 
@@ -23,26 +24,9 @@ class MockBroker(Broker):
         return {}
 
 
-class FakePositionStore:
-    """In-memory PositionStore — tracks state for tests without MongoDB."""
-
-    def __init__(self):
-        self._positions: dict[str, dict] = {}
-
-    def get_positions(self):
-        return {s: v.get("entryTime", "") for s, v in self._positions.items()}
-
-    def get_positions_with_prices(self):
-        return dict(self._positions)
-
-    def open_position(self, symbol, entry_time, entry_price=0.0, qty=0):
-        self._positions[symbol] = {"entryTime": entry_time, "entryPrice": entry_price, "qty": qty}
-
-    def close_position(self, symbol):
-        self._positions.pop(symbol, None)
-
-    def set_positions(self, holdings, entry_prices=None):
-        self._positions = {s: {"entryTime": t, "entryPrice": 0.0, "qty": 0} for s, t in holdings.items()}
+# Re-export InMemoryPositionStore as FakePositionStore for backward compatibility.
+# All tests should use InMemoryPositionStore directly in new code.
+FakePositionStore = InMemoryPositionStore
 
 
 class Collector:

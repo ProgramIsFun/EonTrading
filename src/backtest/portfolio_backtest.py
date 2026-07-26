@@ -1,6 +1,6 @@
 """Multi-symbol sentiment backtest — single news feed, shared capital, multiple positions."""
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import pandas as pd
 import yfinance as yf
@@ -9,7 +9,7 @@ from ..common.costs import ZERO, CostModel
 from ..common.events import NewsEvent
 from ..common.trading_logic import PositionState, TradingLogic
 from ..data.ingest.yfinance_ingest import normalize_yfinance_df
-from . import SentimentTrade
+from . import BacktestResultBase, SentimentTrade
 from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -26,27 +26,6 @@ class Position:
     def __post_init__(self):
         if self.state is None:
             self.state = PositionState(self.symbol, self.shares, self.entry_price)
-
-
-@dataclass
-class PortfolioResult:
-    initial_capital: float
-    final_value: float
-    total_return_pct: float
-    max_drawdown_pct: float
-    total_trades: int
-    win_rate: float
-    trades: list = field(default_factory=list)
-    equity_curve: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
-
-    def summary(self) -> str:
-        return (
-            f"Portfolio Backtest\n"
-            f"  Return: {self.total_return_pct:+.2f}%\n"
-            f"  Max DD: {self.max_drawdown_pct:.2f}%\n"
-            f"  Trades: {self.total_trades} | Win rate: {self.win_rate:.1f}%\n"
-            f"  Final: ${self.final_value:,.2f}"
-        )
 
 
 def _fetch_hourly(symbol, start, end):
@@ -84,7 +63,7 @@ def run_portfolio_backtest(
     trailing_sl: bool = False,
     max_hold_days: int = 30,
     cooldown_days: int = 1,
-) -> PortfolioResult:
+) -> BacktestResultBase:
     analyzer = analyzer or KeywordSentimentAnalyzer()
     logic = TradingLogic(
         threshold=threshold, min_confidence=min_confidence,
@@ -109,8 +88,8 @@ def run_portfolio_backtest(
         if result.confidence >= min_confidence and result.symbols:
             all_symbols.update(result.symbols)
     if not all_symbols:
-        return PortfolioResult(initial_capital=initial_capital, final_value=initial_capital,
-                               total_return_pct=0, max_drawdown_pct=0, total_trades=0, win_rate=0)
+        return BacktestResultBase(initial_capital=initial_capital, final_value=initial_capital,
+                                  total_return_pct=0, max_drawdown_pct=0, total_trades=0, win_rate=0)
 
     # Fetch prices for all symbols
     print(f"  Fetching prices for {len(all_symbols)} symbols: {', '.join(sorted(all_symbols))}")
@@ -272,16 +251,11 @@ def run_portfolio_backtest(
 
     final_value = cash
     equity_series = pd.Series(equity)
-    total_return = (final_value - initial_capital) / initial_capital * 100
-    peak = equity_series.expanding().max()
-    max_dd = abs(((equity_series - peak) / peak * 100).min()) if len(equity_series) > 0 else 0
-    sell_trades = [t for t in trades if t.action.startswith("sell")]
-    wins = sum(1 for t in sell_trades if t.pnl > 0)
-    win_rate = (wins / len(sell_trades) * 100) if sell_trades else 0
+    metrics = compute_backtest_metrics(
+        equity, initial_capital, trades,
+        wins_filter=lambda t: [x for x in t if x.action.startswith("sell")],
+    )
 
-    return PortfolioResult(
-        initial_capital=initial_capital, final_value=final_value,
-        total_return_pct=total_return, max_drawdown_pct=max_dd,
-        total_trades=len(trades), win_rate=win_rate,
-        trades=trades, equity_curve=equity_series,
+    return BacktestResultBase(
+        initial_capital=initial_capital, **metrics, trades=trades,
     )

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from .engine import BacktestResult, run_backtest
+from .engine import BacktestResult, BacktestResultBase, compute_backtest_metrics, run_backtest
 
 
 @dataclass

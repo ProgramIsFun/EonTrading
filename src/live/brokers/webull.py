@@ -44,109 +44,105 @@ class WebullBroker(Broker):
 
     async def execute(self, trade: TradeEvent) -> str | None:
         try:
-            self._connect()
-            assert self._client is not None
-            client_order_id = uuid.uuid4().hex
-            new_orders = [{
-                "combo_type": "NORMAL",
-                "client_order_id": client_order_id,
-                "symbol": trade.symbol,
-                "instrument_type": "EQUITY",
-                "market": "US",
-                "order_type": "MARKET",
-                "quantity": str(int(trade.size)),
-                "side": "BUY" if trade.action == "buy" else "SELL",
-                "time_in_force": "DAY",
-                "entrust_type": "QTY",
-            }]
+            async with self._safe(f"execute({trade.symbol})"):
+                assert self._client is not None
+                client_order_id = uuid.uuid4().hex
+                new_orders = [{
+                    "combo_type": "NORMAL",
+                    "client_order_id": client_order_id,
+                    "symbol": trade.symbol,
+                    "instrument_type": "EQUITY",
+                    "market": "US",
+                    "order_type": "MARKET",
+                    "quantity": str(int(trade.size)),
+                    "side": "BUY" if trade.action == "buy" else "SELL",
+                    "time_in_force": "DAY",
+                    "entrust_type": "QTY",
+                }]
 
-            def _place():
-                return self._client.order_v3.place_order(self.account_id, new_orders)
-            res = await asyncio.to_thread(_place)
-            if res.status_code == 200:
-                data = res.json()
-                order_id = data.get("orderId") or data.get("order_id") or client_order_id
-                logger.info("📤 Webull order placed: %s %s (id=%s)", trade.action.upper(), trade.symbol, order_id)
-                return str(order_id)
-            logger.error("Webull order rejected: %s %s — %s", trade.action.upper(), trade.symbol, res.text)
-            return None
-        except Exception as e:
-            logger.error("Webull order failed: %s — %s", trade.symbol, e)
+                def _place():
+                    return self._client.order_v3.place_order(self.account_id, new_orders)
+                res = await asyncio.to_thread(_place)
+                if res.status_code == 200:
+                    data = res.json()
+                    order_id = data.get("orderId") or data.get("order_id") or client_order_id
+                    logger.info("📤 Webull order placed: %s %s (id=%s)", trade.action.upper(), trade.symbol, order_id)
+                    return str(order_id)
+                logger.error("Webull order rejected: %s %s — %s", trade.action.upper(), trade.symbol, res.text)
+                return None
+        except Exception:
             return None
 
     async def check_order(self, order_id: str) -> FillStatus:
         try:
-            self._connect()
-            assert self._client is not None
+            async with self._safe(f"check_order({order_id})"):
+                assert self._client is not None
 
-            def _query():
-                return self._client.order_v3.get_order_detail(self.account_id, order_id)
-            res = await asyncio.to_thread(_query)
-            if res.status_code != 200:
+                def _query():
+                    return self._client.order_v3.get_order_detail(self.account_id, order_id)
+                res = await asyncio.to_thread(_query)
+                if res.status_code != 200:
+                    return FillStatus(status="pending")
+                data = res.json()
+                order_status = data.get("orderStatus", data.get("order_status", ""))
+                filled_qty = int(float(data.get("filledQty", data.get("filled_qty", 0))))
+                filled_price = float(data.get("filledPrice", data.get("filled_price", 0.0)))
+                if order_status in ("FILLED", "FINAL_FILLED"):
+                    return FillStatus(status="filled", filled_qty=filled_qty, filled_price=filled_price)
+                if order_status in ("CANCELED", "FAILED", "REJECTED"):
+                    return FillStatus(status="cancelled", reason=order_status)
                 return FillStatus(status="pending")
-            data = res.json()
-            order_status = data.get("orderStatus", data.get("order_status", ""))
-            filled_qty = int(float(data.get("filledQty", data.get("filled_qty", 0))))
-            filled_price = float(data.get("filledPrice", data.get("filled_price", 0.0)))
-            if order_status in ("FILLED", "FINAL_FILLED"):
-                return FillStatus(status="filled", filled_qty=filled_qty, filled_price=filled_price)
-            if order_status in ("CANCELED", "FAILED", "REJECTED"):
-                return FillStatus(status="cancelled", reason=order_status)
-            return FillStatus(status="pending")
-        except Exception as e:
-            logger.error("Webull check_order error: %s", e)
+        except Exception:
             return FillStatus(status="pending")
 
     async def cancel_order(self, order_id: str) -> bool:
         try:
-            self._connect()
-            assert self._client is not None
+            async with self._safe(f"cancel_order({order_id})"):
+                assert self._client is not None
 
-            def _cancel():
-                return self._client.order_v3.cancel_order(self.account_id, order_id)
-            res = await asyncio.to_thread(_cancel)
-            if res.status_code != 200:
-                logger.warning("Webull cancel_order failed: %s", res.text)
-            return bool(res.status_code == 200)
-        except Exception as e:
-            logger.error("Webull cancel_order error: %s", e)
+                def _cancel():
+                    return self._client.order_v3.cancel_order(self.account_id, order_id)
+                res = await asyncio.to_thread(_cancel)
+                if res.status_code != 200:
+                    logger.warning("Webull cancel_order failed: %s", res.text)
+                return bool(res.status_code == 200)
+        except Exception:
             return False
 
     async def get_positions(self) -> dict[str, int]:
         try:
-            self._connect()
-            assert self._client is not None
+            async with self._safe("get_positions"):
+                assert self._client is not None
 
-            def _query():
-                return self._client.account_v2.get_account_positions(self.account_id)
-            res = await asyncio.to_thread(_query)
-            if res.status_code != 200:
-                logger.warning("Webull get_positions failed: %s", res.text)
-                return {}
-            data = res.json()
-            positions = {}
-            for pos in data.get("positions", []):
-                symbol = pos.get("symbol", "")
-                qty = int(float(pos.get("quantity", 0)))
-                if qty > 0:
-                    positions[symbol] = qty
-            return positions
-        except Exception as e:
-            logger.error("Webull get_positions error: %s", e)
+                def _query():
+                    return self._client.account_v2.get_account_positions(self.account_id)
+                res = await asyncio.to_thread(_query)
+                if res.status_code != 200:
+                    logger.warning("Webull get_positions failed: %s", res.text)
+                    return {}
+                data = res.json()
+                positions = {}
+                for pos in data.get("positions", []):
+                    symbol = pos.get("symbol", "")
+                    qty = int(float(pos.get("quantity", 0)))
+                    if qty > 0:
+                        positions[symbol] = qty
+                return positions
+        except Exception:
             return {}
 
     async def get_cash(self) -> float:
         try:
-            self._connect()
-            assert self._client is not None
+            async with self._safe("get_cash"):
+                assert self._client is not None
 
-            def _query():
-                return self._client.account_v2.get_account_balance(self.account_id)
-            res = await asyncio.to_thread(_query)
-            if res.status_code == 200:
-                data = res.json()
-                return float(data.get("availableCash", data.get("available_cash", 0.0)))
-            logger.warning("Webull get_cash failed: %s", res.text)
-        except Exception as e:
-            logger.error("Webull get_cash error: %s", e)
+                def _query():
+                    return self._client.account_v2.get_account_balance(self.account_id)
+                res = await asyncio.to_thread(_query)
+                if res.status_code == 200:
+                    data = res.json()
+                    return float(data.get("availableCash", data.get("available_cash", 0.0)))
+                logger.warning("Webull get_cash failed: %s", res.text)
+        except Exception:
+            pass
         return 0.0

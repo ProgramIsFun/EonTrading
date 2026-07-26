@@ -37,47 +37,43 @@ class AlpacaBroker(Broker):
 
     async def execute(self, trade: TradeEvent) -> str | None:
         try:
-            self._connect()
-            assert self._api is not None
-            order = self._api.submit_order(
-                symbol=trade.symbol, qty=int(trade.size),
-                side=trade.action, type="market", time_in_force="day",
-            )
-            return str(order.id)
-        except Exception as e:
-            logger.error("Alpaca order failed: %s — %s", trade.symbol, e)
+            async with self._safe(f"execute({trade.symbol})"):
+                assert self._api is not None
+                order = self._api.submit_order(
+                    symbol=trade.symbol, qty=int(trade.size),
+                    side=trade.action, type="market", time_in_force="day",
+                )
+                return str(order.id)
+        except Exception:
             return None
 
     async def check_order(self, order_id: str) -> FillStatus:
         try:
-            self._connect()
-            assert self._api is not None
-            order = self._api.get_order(order_id)
-            if order.status == "filled":
-                return FillStatus(status="filled",
-                                  filled_qty=int(float(order.filled_qty)),
-                                  filled_price=float(order.filled_avg_price))
-            if order.status in ("canceled", "expired", "rejected"):
-                return FillStatus(status="cancelled", reason=order.status)
-            return FillStatus(status="pending")
-        except Exception as e:
-            logger.error("Alpaca check_order error: %s", e)
+            async with self._safe(f"check_order({order_id})"):
+                assert self._api is not None
+                order = self._api.get_order(order_id)
+                if order.status == "filled":
+                    return FillStatus(status="filled",
+                                      filled_qty=int(float(order.filled_qty)),
+                                      filled_price=float(order.filled_avg_price))
+                if order.status in ("canceled", "expired", "rejected"):
+                    return FillStatus(status="cancelled", reason=order.status)
+                return FillStatus(status="pending")
+        except Exception:
             return FillStatus(status="pending")
 
     async def get_positions(self) -> dict[str, int]:
         try:
-            self._connect()
-            assert self._api is not None
-            return {p.symbol: int(p.qty) for p in self._api.list_positions()}
-        except Exception as e:
-            logger.error("Alpaca get_positions error: %s", e)
+            async with self._safe("get_positions"):
+                assert self._api is not None
+                return {p.symbol: int(p.qty) for p in self._api.list_positions()}
+        except Exception:
             return {}
 
     async def get_cash(self) -> float:
         try:
-            self._connect()
-            assert self._api is not None
-            return float(self._api.get_account().cash)
-        except Exception as e:
-            logger.error("Alpaca get_cash error: %s", e)
-        return 0.0
+            async with self._safe("get_cash"):
+                assert self._api is not None
+                return float(self._api.get_account().cash)
+        except Exception:
+            return 0.0

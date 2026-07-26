@@ -20,20 +20,80 @@ class Trade:
 
 
 @dataclass
-class BacktestResult:
-    strategy: str
-    symbol: str
+class BacktestResultBase:
+    """Shared result fields for all backtest types."""
     initial_capital: float
     final_value: float
     total_return_pct: float
-    annual_return_pct: float
     max_drawdown_pct: float
     total_trades: int
     win_rate: float
-    sharpe_ratio: float
-    total_costs: float
     trades: list = field(default_factory=list)
     equity_curve: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
+
+    def summary(self) -> str:
+        return (
+            f"Return: {self.total_return_pct:+.2f}%\n"
+            f"  Max DD: {self.max_drawdown_pct:.2f}%\n"
+            f"  Trades: {self.total_trades} | Win rate: {self.win_rate:.1f}%\n"
+            f"  Final: ${self.final_value:,.2f}"
+        )
+
+
+def compute_backtest_metrics(
+    equity: list[float],
+    initial_capital: float,
+    trades: list,
+    *,
+    wins_filter=None,
+    index=None,
+) -> dict:
+    """Compute standard backtest metrics from an equity curve and trade list.
+
+    Args:
+        equity: List of portfolio values over time.
+        initial_capital: Starting capital.
+        trades: List of trade objects (must have .pnl attribute).
+        wins_filter: Optional callable to filter trades for win-rate calculation.
+                     If None, all trades are used.
+        index: Optional pandas index for the equity series. Defaults to RangeIndex.
+
+    Returns:
+        dict with keys: final_value, total_return_pct, max_drawdown_pct,
+        total_trades, win_rate, equity_curve (pd.Series).
+    """
+    final_value = equity[-1] if equity else initial_capital
+    equity_series = pd.Series(equity, index=index if index is not None else pd.RangeIndex(len(equity)))
+
+    total_return = (final_value - initial_capital) / initial_capital * 100 if initial_capital else 0
+
+    if len(equity_series) > 0:
+        peak = equity_series.expanding().max()
+        max_dd = abs(((equity_series - peak) / peak * 100).min())
+    else:
+        max_dd = 0
+
+    winnable = wins_filter(trades) if wins_filter else trades
+    wins = sum(1 for t in winnable if t.pnl > 0)
+    win_rate = (wins / len(winnable) * 100) if winnable else 0
+
+    return {
+        "final_value": final_value,
+        "total_return_pct": total_return,
+        "max_drawdown_pct": max_dd,
+        "total_trades": len(trades),
+        "win_rate": win_rate,
+        "equity_curve": equity_series,
+    }
+
+
+@dataclass
+class BacktestResult(BacktestResultBase):
+    strategy: str = ""
+    symbol: str = ""
+    annual_return_pct: float = 0.0
+    sharpe_ratio: float = 0.0
+    total_costs: float = 0.0
 
     def summary(self) -> str:
         return (
@@ -194,26 +254,20 @@ def run_backtest(
     equity_series = pd.Series(equity, index=df.index)
 
     # --- Metrics ---
-    total_return = (final_value - initial_capital) / initial_capital * 100
+    metrics = compute_backtest_metrics(equity, initial_capital, trades, index=df.index)
+
     days = (df["timestamp"].iloc[-1] - df["timestamp"].iloc[0]).days
     years = max(days / 365.25, 0.01)
     annual_return = ((final_value / initial_capital) ** (1 / years) - 1) * 100 if final_value > 0 else -100
 
-    peak = equity_series.expanding().max()
-    drawdown = (equity_series - peak) / peak * 100
-    max_dd = abs(drawdown.min())
-
-    wins = sum(1 for t in trades if t.pnl > 0)
-    win_rate = (wins / len(trades) * 100) if trades else 0
-
-    daily_returns = equity_series.pct_change().dropna()
+    daily_returns = metrics["equity_curve"].pct_change().dropna()
     sharpe = (daily_returns.mean() / daily_returns.std() * (252 ** 0.5)) if daily_returns.std() > 0 else 0
 
     return BacktestResult(
         strategy=strategy.name(), symbol=symbol,
-        initial_capital=initial_capital, final_value=final_value,
-        total_return_pct=total_return, annual_return_pct=annual_return,
-        max_drawdown_pct=max_dd, total_trades=len(trades),
-        win_rate=win_rate, sharpe_ratio=sharpe,
-        total_costs=total_costs, trades=trades, equity_curve=equity_series,
+        initial_capital=initial_capital, final_value=metrics["final_value"],
+        total_return_pct=metrics["total_return_pct"], annual_return_pct=annual_return,
+        max_drawdown_pct=metrics["max_drawdown_pct"], total_trades=metrics["total_trades"],
+        win_rate=metrics["win_rate"], sharpe_ratio=sharpe,
+        total_costs=total_costs, trades=trades, equity_curve=metrics["equity_curve"],
     )
