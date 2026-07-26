@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { fetchPriceBacktest } from "../hooks/api";
+import StatsCard from "./StatsCard";
 import EquityChart from "./EquityChart";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+import TradeTable from "./TradeTable";
 
 interface PriceResult {
   strategy: string;
@@ -35,13 +36,11 @@ export default function PriceBacktest() {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({
+      const data = await fetchPriceBacktest({
         symbol, strategy, capital: String(capital),
         fast: String(fast), slow: String(slow),
         period: String(period), oversold: String(oversold), overbought: String(overbought),
       });
-      const res = await fetch(`${API_BASE}/api/price-backtest?${params}`);
-      const data = await res.json();
       if (data.error) throw new Error(data.error);
       setResult(data);
     } catch (e: any) {
@@ -93,50 +92,26 @@ export default function PriceBacktest() {
 
       {result && (
         <>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            {[
-              { label: "Strategy", value: result.strategy },
-              { label: "Return", value: `${result.total_return_pct >= 0 ? "+" : ""}${result.total_return_pct}%`, color: result.total_return_pct >= 0 ? "#22c55e" : "#ef4444" },
-              { label: "Annual", value: `${result.annual_return_pct >= 0 ? "+" : ""}${result.annual_return_pct}%` },
-              { label: "Max DD", value: `${result.max_drawdown_pct}%`, color: "#ef4444" },
-              { label: "Trades", value: result.total_trades },
-              { label: "Win Rate", value: `${result.win_rate}%` },
-              { label: "Sharpe", value: result.sharpe_ratio },
-            ].map((s) => (
-              <div key={s.label} style={{ background: "#1e1e2e", borderRadius: 8, padding: "12px 20px", minWidth: 100 }}>
-                <div style={{ fontSize: 12, color: "#888" }}>{s.label}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: s.color || "#e0e0e0" }}>{s.value}</div>
-              </div>
-            ))}
-          </div>
+          <StatsCard result={{
+            initial_capital: result.initial_capital,
+            final_value: result.final_value,
+            total_return_pct: result.total_return_pct,
+            max_drawdown_pct: result.max_drawdown_pct,
+            total_trades: result.total_trades,
+            win_rate: result.win_rate,
+            equity_curve: result.equity_curve,
+            trades: result.trades.map(t => ({
+              ...t, action: t.side, date: t.entry_date, price: t.entry_price,
+              sentiment: 0, headline: "",
+            })),
+          }} />
 
           <EquityChart data={result.equity_curve} initialCapital={capital} />
 
-          <div style={{ background: "#1e1e2e", borderRadius: 8, padding: 16, overflowX: "auto" }}>
-            <div style={{ fontSize: 14, color: "#888", marginBottom: 8 }}>Trades ({result.trades.length})</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid #333" }}>
-                  {["Entry", "Exit", "Side", "Shares", "Entry $", "Exit $", "P&L"].map((h) => (
-                    <th key={h} style={{ textAlign: "left", padding: "6px 8px", color: "#888", fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {result.trades.map((t, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #222" }}>
-                    <td style={{ padding: "6px 8px", color: "#ccc" }}>{t.entry_date}</td>
-                    <td style={{ padding: "6px 8px", color: "#ccc" }}>{t.exit_date}</td>
-                    <td style={{ padding: "6px 8px", color: t.side === "long" ? "#22c55e" : "#ef4444" }}>{t.side}</td>
-                    <td style={{ padding: "6px 8px", color: "#ccc" }}>{t.shares}</td>
-                    <td style={{ padding: "6px 8px", color: "#ccc" }}>${t.entry_price}</td>
-                    <td style={{ padding: "6px 8px", color: "#ccc" }}>${t.exit_price}</td>
-                    <td style={{ padding: "6px 8px", fontWeight: 600, color: t.pnl >= 0 ? "#22c55e" : "#ef4444" }}>${t.pnl.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TradeTable trades={result.trades.map(t => ({
+            ...t, action: t.side, date: t.entry_date, price: t.entry_price,
+            sentiment: 0, headline: "",
+          }))} />
         </>
       )}
     </div>

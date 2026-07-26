@@ -64,6 +64,7 @@ const sectionTitle = (text: string, color: string) => (
 const section = { marginBottom: 24, borderBottom: "1px solid #333", paddingBottom: 20 };
 
 import { useState, useEffect } from "react";
+import { fetchDockerStatus } from "../hooks/api";
 import MermaidDiagram from "./MermaidDiagram";
 
 export default function ArchitectureDiagram() {
@@ -71,8 +72,7 @@ export default function ArchitectureDiagram() {
 
   useEffect(() => {
     const check = () =>
-      fetch("/api/docker/status")
-        .then((r) => r.json())
+      fetchDockerStatus()
         .then((d) => {
           const redis = (d.containers || []).find((c: { name: string; state: string }) => c.name === "redis");
           setRedisUp(redis ? redis.state === "running" : false);

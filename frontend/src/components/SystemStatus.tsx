@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { fetchHealth, fetchDockerStatus, fetchQueues, fetchDockerLogs, dockerAction } from "../hooks/api";
 
 interface HealthData {
   open_positions: number;
@@ -24,8 +25,8 @@ export default function SystemStatus() {
   const [queues, setQueues] = useState<Record<string, number>>({});
 
   const refreshStatus = useCallback(() => {
-    fetch("/api/health").then((r) => r.json()).then(setHealth).catch(() => setHealth(null));
-    fetch("/api/docker/status").then((r) => r.json()).then((d) => {
+    fetchHealth().then(setHealth).catch(() => setHealth(null));
+    fetchDockerStatus().then((d) => {
       const containers = d.containers || [];
       setDocker(containers);
       const watcher = containers.find((c: DockerContainer) => c.name === "watcher");
@@ -34,7 +35,7 @@ export default function SystemStatus() {
         setWatcherPublish(watcher.options.publish_pipeline ?? true);
       }
     }).catch(() => {});
-    fetch("/api/queues").then((r) => r.json()).then((d) => setQueues(d.queues || {})).catch(() => {});
+    fetchQueues().then((d) => setQueues(d.queues || {})).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -43,24 +44,21 @@ export default function SystemStatus() {
     return () => clearInterval(id);
   }, [refreshStatus]);
 
-  const fetchLogs = useCallback((name: string) => {
+  const doFetchLogs = useCallback((name: string) => {
     if (logs?.name === name) { setLogs(null); return; }
-    fetch(`/api/docker/logs/${name}?lines=50`).then((r) => r.json())
+    fetchDockerLogs(name)
       .then((d) => setLogs({ name, text: d.stdout || d.stderr || "No logs" }))
       .catch(() => setLogs({ name, text: "Failed to fetch logs" }));
   }, [logs]);
 
   const doAction = useCallback((action: string, name: string) => {
     setActionMsg(`${action}ing ${name}...`);
-    let url = `/api/docker/${action}/${name}`;
+    const params: Record<string, string> = {};
     if (action === "start" && name === "watcher") {
-      const params = new URLSearchParams();
-      if (watcherPersist) params.set("persist_news", "true");
-      if (!watcherPublish) params.set("publish_pipeline", "false");
-      if (params.toString()) url += `?${params}`;
+      if (watcherPersist) params.persist_news = "true";
+      if (!watcherPublish) params.publish_pipeline = "false";
     }
-    fetch(url, { method: "POST" })
-      .then((r) => r.json())
+    dockerAction(action, name, Object.keys(params).length > 0 ? params : undefined)
       .then((d) => {
         setActionMsg(d.ok ? `${name} ${action}ed ✅` : `${name} failed: ${d.stderr}`);
         setTimeout(() => { setActionMsg(""); refreshStatus(); }, 2000);
@@ -128,7 +126,7 @@ export default function SystemStatus() {
                     <button onClick={() => doAction("start", name)} style={{ ...btnStyle, color: "#22c55e" }}>▶ Start</button>
                     <button onClick={() => doAction("stop", name)} style={{ ...btnStyle, color: "#ef4444" }}>⏹ Stop</button>
                     <button onClick={() => doAction("restart", name)} style={{ ...btnStyle, color: "#f59e0b" }}>↻</button>
-                    <button onClick={() => fetchLogs(name)}
+                    <button onClick={() => doFetchLogs(name)}
                       style={{ ...btnStyle, color: logs?.name === name ? "#818cf8" : "#888" }}>📋 Logs</button>
                   </div>
                   {name === "watcher" && (

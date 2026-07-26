@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { BacktestResult, BacktestParams } from "./types/backtest";
 import { fetchBacktest, getNewsCount } from "./hooks/api";
+import { DEFAULT_BACKTEST_PARAMS } from "./constants";
 import StatsCard from "./components/StatsCard";
 import EquityChart from "./components/EquityChart";
 import TradeTable from "./components/TradeTable";
@@ -13,21 +14,11 @@ import LivePipelineBacktest from "./components/LivePipelineBacktest";
 import PriceBacktest from "./components/PriceBacktest";
 import LogViewer from "./components/LogViewer";
 
-const DEFAULT_PARAMS: BacktestParams = {
-  capital: 70000,
-  threshold: 0.4,
-  max_allocation: 0.2,
-  stop_loss: 0.05,
-  take_profit: 0.10,
-  max_hold_days: 30,
-  trailing_sl: false,
-};
-
 type Tab = "backtest" | "live" | "price" | "news" | "logs" | "about";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("backtest");
-  const [params, setParams] = useState<BacktestParams>(DEFAULT_PARAMS);
+  const [params, setParams] = useState<BacktestParams>(DEFAULT_BACKTEST_PARAMS);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

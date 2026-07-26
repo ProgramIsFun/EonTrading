@@ -6,19 +6,9 @@ import yfinance as yf
 
 from ..common.costs import ZERO, CostModel
 from ..common.events import NewsEvent
+from ..data.ingest.yfinance_ingest import normalize_yfinance_df
+from . import SentimentTrade
 from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
-
-
-@dataclass
-class SentimentTrade:
-    symbol: str
-    action: str
-    date: object
-    price: float
-    sentiment: float
-    headline: str
-    shares: int = 0
-    pnl: float = 0.0
 
 
 @dataclass
@@ -57,14 +47,7 @@ def fetch_prices(symbol: str, start: str, end: str, interval: str = "1h") -> pd.
         df = yf.download(symbol, start=start, end=end, interval="1d", auto_adjust=True, progress=False)
         interval = "1d"
     df = df.reset_index()
-    # Normalize column names (yfinance returns MultiIndex for single ticker)
-    first_col = df.columns[0]
-    date_col = first_col if isinstance(first_col, str) else first_col[0]
-    df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
-    df = df.rename(columns={date_col.lower(): "timestamp"})
-    if "datetime" in df.columns:
-        df = df.rename(columns={"datetime": "timestamp"})
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    df = normalize_yfinance_df(df, date_column="timestamp")
     df._interval = interval
     return df
 

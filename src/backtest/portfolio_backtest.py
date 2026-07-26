@@ -7,19 +7,9 @@ import yfinance as yf
 from ..common.costs import ZERO, CostModel
 from ..common.events import NewsEvent
 from ..common.trading_logic import PositionState, TradingLogic
+from ..data.ingest.yfinance_ingest import normalize_yfinance_df
+from . import SentimentTrade
 from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
-
-
-@dataclass
-class Trade:
-    symbol: str
-    action: str
-    date: str
-    price: float
-    sentiment: float
-    headline: str
-    shares: int = 0
-    pnl: float = 0.0
 
 
 @dataclass
@@ -127,12 +117,7 @@ def run_portfolio_backtest(
         if df.empty:
             continue
         df = df.reset_index()
-        df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
-        if "datetime" in df.columns:
-            df = df.rename(columns={"datetime": "ts"})
-        elif "date" in df.columns:
-            df = df.rename(columns={"date": "ts"})
-        df["ts"] = pd.to_datetime(df["ts"], utc=True)
+        df = normalize_yfinance_df(df, date_column="ts")
         price_data[sym] = df
 
     # Build unified timeline
@@ -206,7 +191,7 @@ def run_portfolio_backtest(
                 cost = cost_model.sell_cost(sl_price, pos.shares)
                 pnl = (sl_price - pos.entry_price) * pos.shares - cost
                 cash += pos.shares * sl_price - cost
-                trades.append(Trade(sym, "sell (SL)", ts_str, sl_price, 0, "Stop loss", pos.shares, pnl))
+                trades.append(SentimentTrade(sym, "sell (SL)", ts_str, sl_price, 0, "Stop loss", pos.shares, pnl))
                 closed = True
             else:
                 tp_price = logic.check_take_profit(pos.state, high)
@@ -214,14 +199,14 @@ def run_portfolio_backtest(
                     cost = cost_model.sell_cost(tp_price, pos.shares)
                     pnl = (tp_price - pos.entry_price) * pos.shares - cost
                     cash += pos.shares * tp_price - cost
-                    trades.append(Trade(sym, "sell (TP)", ts_str, tp_price, 0, "Take profit", pos.shares, pnl))
+                    trades.append(SentimentTrade(sym, "sell (TP)", ts_str, tp_price, 0, "Take profit", pos.shares, pnl))
                     closed = True
             if not closed and max_hold_days > 0 and (bar_idx - pos.entry_bar) >= max_hold_days * bars_per_day:
                 exec_p = float(bar["open"])
                 cost = cost_model.sell_cost(exec_p, pos.shares)
                 pnl = (exec_p - pos.entry_price) * pos.shares - cost
                 cash += pos.shares * exec_p - cost
-                trades.append(Trade(sym, "sell (expire)", ts_str, exec_p, 0, "Max hold", pos.shares, pnl))
+                trades.append(SentimentTrade(sym, "sell (expire)", ts_str, exec_p, 0, "Max hold", pos.shares, pnl))
                 closed = True
 
             if closed:
@@ -249,7 +234,7 @@ def run_portfolio_backtest(
                             cash -= buy_shares * exec_p + cost
                             positions[sym] = Position(sym, buy_shares, exec_p, bar_idx)
                             last_trade_ts[sym] = bar_idx
-                            trades.append(Trade(sym, "buy", ts_str, exec_p, sig.sentiment, nq["headline"], buy_shares))
+                            trades.append(SentimentTrade(sym, "buy", ts_str, exec_p, sig.sentiment, nq["headline"], buy_shares))
 
                     elif logic.should_sell_on_sentiment(sig.sentiment, sig.confidence, sym, positions):
                         pos = positions[sym]
@@ -260,7 +245,7 @@ def run_portfolio_backtest(
                         pnl = (exec_p - pos.entry_price) * pos.shares - cost
                         cash += pos.shares * exec_p - cost
                         last_trade_ts[sym] = bar_idx
-                        trades.append(Trade(sym, "sell", ts_str, exec_p, sig.sentiment, nq["headline"], pos.shares, pnl))
+                        trades.append(SentimentTrade(sym, "sell", ts_str, exec_p, sig.sentiment, nq["headline"], pos.shares, pnl))
                         del positions[sym]
 
         # Portfolio value
@@ -278,7 +263,7 @@ def run_portfolio_backtest(
         last_price = float(df["close"].iloc[-1])
         pnl = (last_price - pos.entry_price) * pos.shares
         cash += pos.shares * last_price
-        trades.append(Trade(sym, "sell (close)", "end", last_price, 0, "End of backtest", pos.shares, pnl))
+        trades.append(SentimentTrade(sym, "sell (close)", "end", last_price, 0, "End of backtest", pos.shares, pnl))
         del positions[sym]
 
     final_value = cash

@@ -191,9 +191,8 @@ def price_backtest(
     if df.empty:
         return {"error": f"No data for {symbol}"}
     df = df.reset_index()
-    df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
-    if "date" in df.columns:
-        df = df.rename(columns={"date": "timestamp"})
+    from src.data.ingest.yfinance_ingest import normalize_yfinance_df
+    df = normalize_yfinance_df(df, date_column="timestamp")
 
     if strategy == "rsi":
         strat = RSIMeanReversion(period=period, oversold=oversold, overbought=overbought)

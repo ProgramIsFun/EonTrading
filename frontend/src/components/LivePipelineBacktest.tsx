@@ -1,35 +1,15 @@
 import { useState } from "react";
 import { fetchLiveBacktest } from "../hooks/api";
+import { DEFAULT_LIVE_PARAMS, LIVE_EXTRA_SLIDERS, formatSliderValue } from "../constants";
 import StatsCard from "./StatsCard";
 import EquityChart from "./EquityChart";
 import TradeTable from "./TradeTable";
 import PnlBySymbol from "./PnlBySymbol";
 
-const defaults = {
-  capital: 70000,
-  threshold: 0.4,
-  max_allocation: 0.2,
-  stop_loss: 0.05,
-  take_profit: 0.10,
-  max_hold_days: 30,
-  sl_check_hours: 24,
-  analyzer: "keyword",
-  cost_model: "us_stocks",
-  news_source: "sample",
-};
-
-const sliders = [
-  { key: "capital", label: "Capital ($)", min: 1000, max: 1000000, step: 1000 },
-  { key: "threshold", label: "Sentiment Threshold", min: 0.1, max: 1.0, step: 0.05 },
-  { key: "max_allocation", label: "Max Allocation (%)", min: 0.05, max: 1.0, step: 0.05 },
-  { key: "stop_loss", label: "Stop Loss (%)", min: 0.01, max: 0.20, step: 0.01 },
-  { key: "take_profit", label: "Take Profit (%)", min: 0.01, max: 0.50, step: 0.01 },
-  { key: "max_hold_days", label: "Max Hold (days)", min: 1, max: 90, step: 1 },
-  { key: "sl_check_hours", label: "SL/TP Check Interval (hours)", min: 1, max: 168, step: 1 },
-] as const;
+const sliders = LIVE_EXTRA_SLIDERS;
 
 export default function LivePipelineBacktest() {
-  const [params, setParams] = useState(defaults);
+  const [params, setParams] = useState(DEFAULT_LIVE_PARAMS);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -42,7 +22,11 @@ export default function LivePipelineBacktest() {
     setLog([]);
     setError("");
     try {
-      const data = await fetchLiveBacktest(params, (pct, lines) => {
+      const apiParams: Record<string, string | number> = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (typeof v !== "boolean") apiParams[k] = v;
+      }
+      const data = await fetchLiveBacktest(apiParams, (pct, lines) => {
         setProgress(pct);
         setLog(lines);
       });
@@ -53,11 +37,6 @@ export default function LivePipelineBacktest() {
       setLoading(false);
     }
   };
-
-  const fmt = (key: string, val: number) =>
-    key === "capital" ? `$${val.toLocaleString()}` :
-    key === "max_hold_days" || key === "sl_check_hours" ? val :
-    `${(val * 100).toFixed(0)}%`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -88,7 +67,7 @@ export default function LivePipelineBacktest() {
           {sliders.map((f) => (
             <div key={f.key}>
               <label style={{ fontSize: 11, color: "#888" }}>
-                {f.label}: <strong style={{ color: "#e0e0e0" }}>{fmt(f.key, (params as any)[f.key])}</strong>
+                {f.label}: <strong style={{ color: "#e0e0e0" }}>{formatSliderValue(f.key, (params as any)[f.key])}</strong>
               </label>
               <input
                 type="range" min={f.min} max={f.max} step={f.step}
