@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class RSSSource(NewsSource):
     """Fetch news from RSS/Atom feeds. No API key required."""
 
-    def __init__(self, feeds: list[str] = None):
+    def __init__(self, feeds: list[str] | None = None):
         super().__init__()
         self.feeds = feeds or [
             "https://www.cnbc.com/id/100003114/device/rss/rss.html",

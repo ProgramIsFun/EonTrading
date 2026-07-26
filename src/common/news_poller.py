@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class NewsPoller:
     """Polls news sources and deduplicates. Callbacks handle what to do with each article."""
 
-    def __init__(self, sources: list = None, interval_sec: int = 120,
+    def __init__(self, sources: list | None = None, interval_sec: int = 120,
                  persist_seen: bool = False, news_store=None):
         self.sources = sources or []
         self.interval = interval_sec

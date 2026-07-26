@@ -11,7 +11,7 @@ def _val(var: str, hide: bool = False) -> str:
         return "not set"
     return "***" if hide else v
 
-def banner(component: str, extras: dict = None):
+def banner(component: str, extras: dict | None = None):
     print(f"\n{'═' * 50}")
     print(f"  {component}")
     print(f"{'═' * 50}")

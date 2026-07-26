@@ -75,7 +75,7 @@ def run_portfolio_backtest(
     initial_capital: float = 70000.0,
     threshold: float = 0.5,
     min_confidence: float = 0.15,
-    analyzer: BaseSentimentAnalyzer = None,
+    analyzer: BaseSentimentAnalyzer | None = None,
     cost_model: CostModel = ZERO,
     max_allocation: float = 0.2,
     risk_per_trade: float = 0.0,

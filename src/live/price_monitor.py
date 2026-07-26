@@ -22,7 +22,7 @@ class PriceMonitor:
     """Polls prices for open positions, publishes sell trades when SL/TP hit."""
 
     def __init__(self, bus: EventBus, store: BasePositionStore, logic: TradingLogic,
-                 interval_sec: int = 60, entry_prices: dict = None):
+                 interval_sec: int = 60, entry_prices: dict | None = None):
         self.bus = bus
         self.store = store
         self.logic = logic
@@ -51,7 +51,7 @@ class PriceMonitor:
         state.shares = shares
         return state
 
-    def _evaluate_positions(self, as_of: str = None) -> list[tuple]:
+    def _evaluate_positions(self, as_of: str | None = None) -> list[tuple]:
         """Core SL/TP evaluation — returns [(symbol, trigger_price, shares, reason), ...]."""
         if not self._states:
             return []
@@ -75,11 +75,11 @@ class PriceMonitor:
                 sold.append((symbol, tp, state.shares, "take profit"))
         return sold
 
-    def check_once_sync(self, as_of: str = None) -> list[tuple]:
+    def check_once_sync(self, as_of: str | None = None) -> list[tuple]:
         """Fast synchronous SL/TP check — for backtesting only. No async, no MongoDB, no broker calls."""
         return self._evaluate_positions(as_of)
 
-    async def check_once(self, as_of: str = None) -> list[str]:
+    async def check_once(self, as_of: str | None = None) -> list[str]:
         """Check all positions against SL/TP. Publishes trade events, returns list of symbols sold."""
         all_positions: dict[str, dict] = {}
         if self.store:

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class FinnhubSource(NewsSource):
     """Fetch market news from Finnhub.io."""
 
-    def __init__(self, api_key: str = None, category: str = "general"):
+    def __init__(self, api_key: str | None = None, category: str = "general"):
         super().__init__()
         self.api_key = api_key or os.getenv("FINNHUB_KEY")
         self.category = category  # general, forex, crypto, merger

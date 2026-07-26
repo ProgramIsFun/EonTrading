@@ -22,7 +22,7 @@ class SentimentTrader:
     Local TTL dedup prevents duplicate sends; PositionStore is the source of truth.
     """
 
-    def __init__(self, bus: EventBus, logic: TradingLogic = None, max_hold_days: int = 0,
+    def __init__(self, bus: EventBus, logic: TradingLogic | None = None, max_hold_days: int = 0,
                  position_store=None, broker=None, **kwargs):
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)

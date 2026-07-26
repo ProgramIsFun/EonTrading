@@ -22,7 +22,7 @@ class BaseNewsStore(ABC):
         pass
 
     @abstractmethod
-    def find_news(self, query: dict = None, sort_by: str = "timestamp",
+    def find_news(self, query: dict | None = None, sort_by: str = "timestamp",
                   ascending: bool = True, limit: int = 100) -> list[dict]:
         """Query news articles with sort and limit."""
         pass
@@ -70,7 +70,7 @@ class MongoNewsStore(BaseNewsStore):
     def insert_news(self, doc: dict) -> None:
         self._news_col.insert_one(doc)
 
-    def find_news(self, query: dict = None, sort_by: str = "timestamp",
+    def find_news(self, query: dict | None = None, sort_by: str = "timestamp",
                   ascending: bool = True, limit: int = 100) -> list[dict]:
         q = query or {}
         cursor = self._news_col.find(q, {"_id": 0}).sort(sort_by, 1 if ascending else -1)

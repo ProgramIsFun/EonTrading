@@ -10,7 +10,7 @@ from src.common.position_store import BasePositionStore, PositionStore
 logger = logging.getLogger(__name__)
 
 
-async def reconcile(broker, store: BasePositionStore = None) -> dict:
+async def reconcile(broker, store: BasePositionStore | None = None) -> dict:
     """Compare MongoDB positions vs broker account. Returns discrepancies."""
     store = store or PositionStore()
     our_positions = store.get_positions_with_prices()  # {symbol: {entryTime, entryPrice, qty}}

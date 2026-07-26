@@ -17,7 +17,7 @@ class BaseSentimentAnalyzer(ABC):
     """Interface for sentiment analyzers. Swap implementations freely."""
 
     @abstractmethod
-    def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
+    def analyze(self, event: NewsEvent, positions: dict | None = None) -> SentimentEvent:
         pass
 
 
@@ -61,7 +61,7 @@ BEARISH_WORDS = [
 class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
     """Fast keyword-based scorer. No external dependencies."""
 
-    def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
+    def analyze(self, event: NewsEvent, positions: dict | None = None) -> SentimentEvent:
         t0 = time.perf_counter()
         text = (event.headline + " " + event.body).lower()
 
@@ -133,7 +133,7 @@ Return:
 }}"""
 
 
-def _build_llm_prompt(headline: str, markets: str, positions: dict = None) -> str:
+def _build_llm_prompt(headline: str, markets: str, positions: dict | None = None) -> str:
     parts = ["Analyze this financial news headline" +
              (" considering the current portfolio" if positions else "") +
              ". Return JSON only, no explanation.",
@@ -158,9 +158,9 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
 
     def __init__(
         self,
-        api_key: str = None,
-        base_url: str = None,
-        model: str = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
     ):
         opencode_key = api_key or os.getenv("OPENCODE_API_KEY")
         if opencode_key:
@@ -176,7 +176,7 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         from openai import OpenAI
         return OpenAI(base_url=self.base_url, api_key=self.api_key)
 
-    def analyze(self, event: NewsEvent, positions: dict = None) -> SentimentEvent:
+    def analyze(self, event: NewsEvent, positions: dict | None = None) -> SentimentEvent:
         from src.settings import settings
 
         prompt = _build_llm_prompt(event.headline, settings.tradable_markets, positions)

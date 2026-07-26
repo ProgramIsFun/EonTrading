@@ -53,7 +53,7 @@ def _cache_set(key: str, price: float):
         r.set(f"replay:price:{key}", str(price), ex=300)  # expire after 5 min
 
 
-def get_price(symbol: str, as_of: str = None) -> float:
+def get_price(symbol: str, as_of: str | None = None) -> float:
     """Get price for a symbol.
 
     - as_of=None or recent timestamp (< 10min old): fetch latest live price
@@ -80,7 +80,7 @@ def get_price(symbol: str, as_of: str = None) -> float:
     return price
 
 
-def _parse_time(as_of: str = None) -> datetime | None:
+def _parse_time(as_of: str | None = None) -> datetime | None:
     if not as_of:
         return None
     try:
@@ -89,7 +89,7 @@ def _parse_time(as_of: str = None) -> datetime | None:
         return None
 
 
-def _from_yfinance(symbol: str, as_of: str = None) -> float:
+def _from_yfinance(symbol: str, as_of: str | None = None) -> float:
     try:
         return _yfinance_download(symbol, as_of)
     except Exception as e:
@@ -98,7 +98,7 @@ def _from_yfinance(symbol: str, as_of: str = None) -> float:
 
 
 @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
-def _yfinance_download(symbol: str, as_of: str = None) -> float:
+def _yfinance_download(symbol: str, as_of: str | None = None) -> float:
     import yfinance as yf
     t = _parse_time(as_of)
     if t:
@@ -124,7 +124,7 @@ def _yfinance_download(symbol: str, as_of: str = None) -> float:
     return 0.0
 
 
-def _from_clickhouse(symbol: str, as_of: str = None) -> float:
+def _from_clickhouse(symbol: str, as_of: str | None = None) -> float:
     try:
         from src.data.storage.clickhouse_storage import ClickHouseStorage
         t = _parse_time(as_of) or utcnow()

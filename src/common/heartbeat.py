@@ -15,7 +15,7 @@ class BaseHeartbeatStore(ABC):
     """Interface for heartbeat storage backends."""
 
     @abstractmethod
-    def beat(self, component: str, metadata: dict = None) -> None:
+    def beat(self, component: str, metadata: dict | None = None) -> None:
         """Write a heartbeat for the given component."""
         pass
 
@@ -33,7 +33,7 @@ class MongoHeartbeatStore(BaseHeartbeatStore):
             logger.warning("Heartbeat MongoDB unavailable: %s", e)
             self._col = None
 
-    def beat(self, component: str, metadata: dict = None) -> None:
+    def beat(self, component: str, metadata: dict | None = None) -> None:
         if self._col is None:
             return
         self._col.update_one(
@@ -53,7 +53,7 @@ class Heartbeat:
     """Writes heartbeat to MongoDB every interval. Dashboard reads it to show component status."""
 
     def __init__(self, component: str, interval_sec: int = 30,
-                 metadata: dict = None, store: BaseHeartbeatStore = None, db=None):
+                 metadata: dict | None = None, store: BaseHeartbeatStore | None = None, db=None):
         self.component = component
         self.interval = interval_sec
         self.metadata = metadata or {}
@@ -79,5 +79,5 @@ class Heartbeat:
             await asyncio.sleep(self.interval)
 
     @staticmethod
-    def create_background(component: str, interval_sec: int = 30, metadata: dict = None):
+    def create_background(component: str, interval_sec: int = 30, metadata: dict | None = None):
         return asyncio.create_task(Heartbeat(component, interval_sec, metadata).run())

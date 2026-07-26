@@ -45,3 +45,11 @@ US stocks use plain tickers — no suffix. Everyone recognizes `AAPL`.
 - Run tests: `python -m pytest tests/ -v`
 - Run specific test: `python -m pytest tests/test_brokers.py -v`
 - Tests requiring external services (Redis, Kafka, Futu, network) are marked and excluded by default
+
+## Type Checking
+
+- Static analysis: mypy
+- Run type check: `python -m mypy src/`
+- Config in `pyproject.toml` under `[tool.mypy]`
+- Current baseline: ~53 errors (mostly `attr-defined` and `no-any-return`)
+- New code should not introduce new mypy errors

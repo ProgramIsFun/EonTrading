@@ -64,7 +64,7 @@ def run_sentiment_backtest(
     initial_capital: float = 10000.0,
     threshold: float = 0.5,
     min_confidence: float = 0.3,
-    analyzer: BaseSentimentAnalyzer = None,
+    analyzer: BaseSentimentAnalyzer | None = None,
     cost_model: CostModel = ZERO,
     # Position sizing
     scale_by_sentiment: bool = True,

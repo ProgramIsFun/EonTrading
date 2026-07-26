@@ -66,7 +66,7 @@ class RedisStreamBus(EventBus):
     Messages survive container restarts — consumers pick up where they left off.
     """
 
-    def __init__(self, host: str = None, port: int = None, group: str = "default"):
+    def __init__(self, host: str | None = None, port: int | None = None, group: str = "default"):
         from src.settings import settings
         self._host = host or settings.redis_host
         self._port = port or settings.redis_port
@@ -147,7 +147,7 @@ class KafkaEventBus(EventBus):
     load-balanced across consumers in the same group.
     """
 
-    def __init__(self, bootstrap_servers: str = None, group: str = "default"):
+    def __init__(self, bootstrap_servers: str | None = None, group: str = "default"):
         from src.settings import settings
         self._bootstrap_servers = bootstrap_servers or settings.kafka_bootstrap_servers
         self._group = group

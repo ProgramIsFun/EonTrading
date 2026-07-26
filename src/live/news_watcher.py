@@ -21,7 +21,7 @@ class NewsWatcher:
     Set persist_news=True or PERSIST_NEWS=1 env var to enable.
     """
 
-    def __init__(self, bus: EventBus, sources: list = None, interval_sec: int = 120,
+    def __init__(self, bus: EventBus, sources: list | None = None, interval_sec: int = 120,
                  persist_seen: bool = True, persist_news: bool = False, publish: bool = True,
                  news_store: BaseNewsStore | None = None, db=None):
         self.bus = bus

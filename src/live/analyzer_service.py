@@ -18,7 +18,7 @@ MAX_NEWS_AGE_SEC = 600  # skip news older than 10 minutes
 class AnalyzerService:
     """Listens to raw news, analyzes with portfolio context, publishes sentiment."""
 
-    def __init__(self, bus: EventBus, analyzer: BaseSentimentAnalyzer = None,
+    def __init__(self, bus: EventBus, analyzer: BaseSentimentAnalyzer | None = None,
                  get_positions=None, max_age_sec: int = MAX_NEWS_AGE_SEC):
         self.bus = bus
         self.analyzer = analyzer or KeywordSentimentAnalyzer()

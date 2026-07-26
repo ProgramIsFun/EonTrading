@@ -8,7 +8,7 @@ COMPOSE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__
 COMPONENTS = ["newswatcher", "analyzer", "trader", "executor", "redis"]
 
 
-def _run(cmd: list[str], timeout: int = 30, env: dict = None) -> dict:
+def _run(cmd: list[str], timeout: int = 30, env: dict | None = None) -> dict:
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout, cwd=COMPOSE_DIR, env=env,
@@ -53,7 +53,7 @@ def container_env(name: str) -> dict:
     return env
 
 
-def start_component(name: str, profile: str = "distributed", env: dict = None) -> dict:
+def start_component(name: str, profile: str = "distributed", env: dict | None = None) -> dict:
     """Start a single service (or 'all' for the full profile)."""
     extra_env = {**os.environ, **(env or {})}
     if name == "all":

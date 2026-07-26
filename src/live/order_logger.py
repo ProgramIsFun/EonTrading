@@ -19,7 +19,7 @@ async def noop_log_order(trade: TradeEvent, order_id: str, broker_name: str) -> 
     pass
 
 
-async def mongo_log_order(trade: TradeEvent, order_id: str, broker_name: str, order_store: BaseOrderStore = None, db=None) -> None:
+async def mongo_log_order(trade: TradeEvent, order_id: str, broker_name: str, order_store: BaseOrderStore | None = None, db=None) -> None:
     """Write order document to the orders collection via BaseOrderStore."""
     try:
         if order_store is None:

@@ -15,7 +15,7 @@ class BasePositionStore(ABC):
     """Interface for position storage backends."""
 
     @abstractmethod
-    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None, session=None):
+    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] | None = None, session=None):
         pass
 
     @abstractmethod
@@ -54,7 +54,7 @@ class MongoPositionStore(BasePositionStore):
             logger.exception("Failed to connect to MongoDB for PositionStore")
             raise
 
-    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None, session=None):
+    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] | None = None, session=None):
         """Sync holdings to MongoDB — upsert active, remove closed."""
         prices = entry_prices or {}
         active = set(holdings.keys())
@@ -123,7 +123,7 @@ class InMemoryPositionStore(BasePositionStore):
     def __init__(self):
         self._positions: dict[str, dict] = {}
 
-    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] = None, session=None):
+    def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] | None = None, session=None):
         prices = entry_prices or {}
         self._positions = {}
         for symbol, entry_time in holdings.items():

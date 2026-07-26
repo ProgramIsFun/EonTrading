@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class TwitterSource(NewsSource):
     """Fetch tweets from specified accounts."""
 
-    def __init__(self, accounts: list[str] = None, bearer_token: str = None, use_official: bool = True):
+    def __init__(self, accounts: list[str] | None = None, bearer_token: str | None = None, use_official: bool = True):
         super().__init__()
         self.accounts = accounts or ["elonmusk", "realDonaldTrump"]
         self.bearer_token = bearer_token or os.getenv("TWITTER_BEARER_TOKEN")

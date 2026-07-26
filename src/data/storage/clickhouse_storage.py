@@ -9,7 +9,7 @@ from .base_storage import StorageBackend
 
 
 class ClickHouseStorage(StorageBackend):
-    def __init__(self, host: str = None, port: int = None, database: str = None):
+    def __init__(self, host: str | None = None, port: int | None = None, database: str | None = None):
         host = host or settings.clickhouse_host
         port = port or settings.clickhouse_port
         database = database or settings.clickhouse_db

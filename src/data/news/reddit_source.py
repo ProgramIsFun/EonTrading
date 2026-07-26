@@ -22,7 +22,7 @@ _warned_missing = False
 class RedditSource(NewsSource):
     """Fetch posts from finance subreddits via Reddit OAuth2."""
 
-    def __init__(self, subreddits: list[str] = None, limit: int = 20):
+    def __init__(self, subreddits: list[str] | None = None, limit: int = 20):
         super().__init__()
         self.subreddits = subreddits or ["wallstreetbets", "stocks", "investing"]
         self.limit = limit

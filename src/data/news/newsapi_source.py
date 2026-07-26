@@ -40,7 +40,7 @@ class NewsSource:
 class NewsAPISource(NewsSource):
     """Fetch headlines from NewsAPI.org."""
 
-    def __init__(self, api_key: str = None, categories: list[str] = None):
+    def __init__(self, api_key: str | None = None, categories: list[str] | None = None):
         super().__init__()
         self.api_key = api_key or os.getenv("NEWSAPI_KEY")
         self.base_url = "https://newsapi.org/v2"
