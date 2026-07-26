@@ -18,7 +18,7 @@ export default function EquityChart({ data, initialCapital }: Props) {
           <Tooltip
             contentStyle={{ background: "#2a2a3e", border: "none", borderRadius: 6 }}
             labelStyle={{ color: "#888" }}
-            formatter={(v: number) => [`$${v.toLocaleString()}`, "Value"]}
+            formatter={(v) => [`$${Number(v).toLocaleString()}`, "Value"]}
           />
           <ReferenceLine y={initialCapital} stroke="#555" strokeDasharray="3 3" />
           <Line type="monotone" dataKey="value" stroke="#818cf8" strokeWidth={2} dot={false} />

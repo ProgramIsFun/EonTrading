@@ -31,7 +31,6 @@ export default function App() {
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [newsCount, setNewsCount] = useState(0);
   const prevCount = useRef(0);
   const [newsBadge, setNewsBadge] = useState(0);
 
@@ -43,10 +42,9 @@ export default function App() {
           setNewsBadge((b) => b + (count - prevCount.current));
         }
         prevCount.current = count;
-        setNewsCount(count);
       } catch {}
     }, 30000);
-    getNewsCount().then((c) => { setNewsCount(c); prevCount.current = c; }).catch(() => {});
+    getNewsCount().then((c) => { prevCount.current = c; }).catch(() => {});
     return () => clearInterval(poll);
   }, []);
 

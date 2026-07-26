@@ -28,7 +28,7 @@ export default function PnlBySymbol({ trades }: Props) {
           <YAxis tick={{ fill: "#888", fontSize: 12 }} />
           <Tooltip
             contentStyle={{ background: "#2a2a3e", border: "none", borderRadius: 6 }}
-            formatter={(v: number) => [`$${v.toLocaleString()}`, "P&L"]}
+            formatter={(v) => [`$${Number(v).toLocaleString()}`, "P&L"]}
           />
           <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
             {data.map((d, i) => (

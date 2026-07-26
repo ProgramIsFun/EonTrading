@@ -1,6 +1,8 @@
+import type { BacktestParams } from "../types/backtest";
+
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-export async function fetchBacktest(params: Record<string, number>): Promise<any> {
+export async function fetchBacktest(params: BacktestParams): Promise<any> {
   const query = new URLSearchParams(
     Object.entries(params).map(([k, v]) => [k, String(v)])
   );
@@ -55,4 +57,20 @@ export async function fetchLogs(
   const res = await fetch(`${API_BASE}/api/logs?${params}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
+}
+
+export async function getCollectorStatus(): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/api/news/collector/status`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const data = await res.json();
+  return data.collecting;
+}
+
+export async function toggleCollector(enable: boolean): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/news/collector/toggle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enable }),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
 }

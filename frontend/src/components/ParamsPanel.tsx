@@ -25,15 +25,15 @@ export default function ParamsPanel({ params, onChange, onRun, loading }: Props)
           <div key={f.key}>
             <label style={{ fontSize: 11, color: "#888" }}>
               {f.label}: <strong style={{ color: "#e0e0e0" }}>
-                {f.key === "capital" ? `$${params[f.key].toLocaleString()}` :
+                {f.key === "capital" ? `$${(params[f.key] as number).toLocaleString()}` :
                  f.key === "max_hold_days" ? params[f.key] :
-                 `${(params[f.key] * 100).toFixed(0)}%`}
+                 `${((params[f.key] as number) * 100).toFixed(0)}%`}
               </strong>
             </label>
             <input
               type="range"
               min={f.min} max={f.max} step={f.step}
-              value={params[f.key]}
+              value={params[f.key] as number}
               onChange={(e) => onChange({ ...params, [f.key]: Number(e.target.value) })}
               style={{ width: "100%", accentColor: "#818cf8" }}
             />
