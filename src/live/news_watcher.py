@@ -56,8 +56,8 @@ class NewsWatcher:
                 if self._news_col is not None:
                     try:
                         self._news_col.insert_one(news_to_doc(news, origin="live"))
-                    except Exception:
-                        pass  # duplicate URL
+                    except Exception as e:
+                        logger.debug("News insert skipped: %s", e)
             if not events:
                 logger.info("No new articles at %s", self.last_poll.strftime('%H:%M:%S'))
             else:

@@ -77,6 +77,7 @@ class OrderTracker:
                 logger.warning("Broker does not support check_order, skipping")
                 continue
             except Exception as e:
+                logger.warning("Broker check_order failed for %s: %s", doc.get("order_id"), e)
                 fill = FillStatus(status="unknown", reason=str(e))
 
             if fill.status == "filled" and fill.filled_qty >= int(doc["shares"]):

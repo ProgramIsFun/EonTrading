@@ -79,7 +79,8 @@ def queue_status():
             key = f"stream:{name}"
             try:
                 result[name] = r.xlen(key)
-            except Exception:
+            except Exception as e:
+                logger.debug("Queue %s not available: %s", name, e)
                 result[name] = 0
         return {"queues": result}
     except Exception as e:
@@ -310,6 +311,7 @@ async def _run_live_backtest(job_id: str, params: dict):
                     job["error"] = "No news found in MongoDB"
                     return
             except Exception as e:
+                logger.error("Live backtest news fetch failed: %s", e)
                 job["status"] = "error"
                 job["error"] = f"MongoDB error: {e}"
                 return
@@ -440,6 +442,7 @@ async def _run_live_backtest(job_id: str, params: dict):
             "cash": round(final_cash, 2),
         }
     except Exception as e:
+        logger.error("Sentiment backtest failed: %s", e)
         job["status"] = "error"
         job["error"] = f"{type(e).__name__}: {e}"
 

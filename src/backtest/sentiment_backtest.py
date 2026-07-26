@@ -1,4 +1,5 @@
 """Backtest sentiment strategy against historical price data with synthetic news."""
+import logging
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -9,6 +10,8 @@ from ..common.events import NewsEvent
 from ..data.ingest.yfinance_ingest import normalize_yfinance_df
 from . import SentimentTrade
 from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -42,6 +45,7 @@ def fetch_prices(symbol: str, start: str, end: str, interval: str = "1h") -> pd.
             if df.empty:
                 df = None
         except Exception:
+            logger.debug("Interval %s unavailable for %s, falling back to 1d", interval, symbol)
             df = None
     if df is None:
         df = yf.download(symbol, start=start, end=end, interval="1d", auto_adjust=True, progress=False)

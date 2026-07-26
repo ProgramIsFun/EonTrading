@@ -1,4 +1,5 @@
 """Multi-symbol sentiment backtest — single news feed, shared capital, multiple positions."""
+import logging
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -10,6 +11,8 @@ from ..common.trading_logic import PositionState, TradingLogic
 from ..data.ingest.yfinance_ingest import normalize_yfinance_df
 from . import SentimentTrade
 from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -56,7 +59,7 @@ def _fetch_hourly(symbol, start, end):
             _price_data_cache[cache_key] = df
             return df
     except Exception:
-        pass
+        logger.debug("1h data unavailable for %s, falling back to 1d", symbol)
     df = yf.download(symbol, start=start, end=end, interval="1d", auto_adjust=True, progress=False, timeout=15)
     _price_data_cache[cache_key] = df
     return df

@@ -13,8 +13,11 @@ This runs the exact same pipeline as live mode, but:
   - Prices are fetched at the simulated time via yfinance
   - Everything else (analyzer, trader, executor, broker) is identical
 """
+import logging
 import argparse
 import asyncio
+
+logger = logging.getLogger(__name__)
 
 async def main(start: str, end: str):
     from src.common.clock import clock
@@ -94,7 +97,7 @@ async def main(start: str, end: str):
                 try:
                     clock.set_time(ts)
                 except Exception:
-                    pass
+                    logger.debug("Invalid timestamp in replay: %s", ts)
             event = NewsEvent(
                 source=doc.get("source", "replay"),
                 headline=doc.get("headline", ""),
@@ -110,7 +113,7 @@ async def main(start: str, end: str):
         try:
             clock.set_time(close_ts)
         except Exception:
-            pass
+            logger.debug("Invalid close timestamp: %s", close_ts)
         if price_monitor:
             await price_monitor.check_once(as_of=close_ts)
 
