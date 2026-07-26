@@ -17,12 +17,15 @@ import logging
 import argparse
 import asyncio
 
+
+
 logger = logging.getLogger(__name__)
 
 async def main(start: str, end: str):
     from src.common.clock import clock
     from src.common.event_bus import LocalEventBus
     from src.common.events import CHANNEL_NEWS, NewsEvent
+    from src.common.news_store import MongoNewsStore
     from src.common.position_store import InMemoryPositionStore
     from src.common.startup import banner
     from src.common.trading_logic import TradingLogic
@@ -50,6 +53,7 @@ async def main(start: str, end: str):
     store = InMemoryPositionStore()
     logic = TradingLogic(threshold=0.4, min_confidence=0.15)
     db = get_db()
+    news_store = MongoNewsStore(db)
     price_monitor = PriceMonitor(bus, store, logic)
 
     trader = SentimentTrader(bus, logic=logic, position_store=store, broker=broker)
@@ -61,9 +65,10 @@ async def main(start: str, end: str):
     await executor.start()
 
     # Fetch historical news from MongoDB
-    news_docs = list(db["news"].find({
-        "timestamp": {"$gte": start, "$lte": end},
-    }).sort("timestamp", 1))
+    news_docs = news_store.find_news(
+        query={"timestamp": {"$gte": start, "$lte": end}},
+        sort_by="timestamp", ascending=True, limit=0,
+    )
 
     # Group news by date for daily interleaving
     from datetime import datetime, timedelta

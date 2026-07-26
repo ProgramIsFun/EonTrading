@@ -2,7 +2,6 @@
 import logging
 
 from src.common.events import NewsEvent
-from src.data.news.newsapi_source import NewsSource
 
 logger = logging.getLogger(__name__)
 
@@ -10,29 +9,27 @@ logger = logging.getLogger(__name__)
 class NewsPoller:
     """Polls news sources and deduplicates. Callbacks handle what to do with each article."""
 
-    def __init__(self, sources: list[NewsSource] = None, interval_sec: int = 120, persist_seen: bool = False, db=None):
+    def __init__(self, sources: list = None, interval_sec: int = 120,
+                 persist_seen: bool = False, news_store=None):
         self.sources = sources or []
         self.interval = interval_sec
-        self._seen_col = None
-        if persist_seen:
+        self._store = None
+        if persist_seen and news_store is not None:
             try:
-                if db is None:
-                    from src.data.utils.db_helper import get_db
-                    db = get_db()
-                self._seen_col = db["seen_urls"]
-                self._seen_col.create_index("url", unique=True)
+                news_store.ensure_seen_indexes()
+                self._store = news_store
             except Exception:
                 logger.warning("Failed to init persistent dedup — falling back to in-memory only", exc_info=True)
 
     def _is_seen(self, url: str) -> bool:
-        if self._seen_col is None or not url:
+        if self._store is None or not url:
             return False
-        return self._seen_col.find_one({"url": url}) is not None
+        return self._store.is_seen(url)
 
     def _mark_seen(self, url: str):
-        if self._seen_col is not None and url:
+        if self._store is not None and url:
             try:
-                self._seen_col.insert_one({"url": url})
+                self._store.mark_seen(url)
             except Exception:
                 pass  # duplicate key — already seen
 
@@ -40,7 +37,7 @@ class NewsPoller:
         """Deduplicate events against seen URLs. Marks seen URLs as processed."""
         out = []
         for event in events:
-            if self._seen_col is not None:
+            if self._store is not None:
                 if self._is_seen(event.url):
                     continue
                 self._mark_seen(event.url)

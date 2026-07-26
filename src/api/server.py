@@ -12,7 +12,11 @@ from fastapi.security import APIKeyHeader
 from starlette.requests import Request
 
 from src.backtest.portfolio_backtest import run_portfolio_backtest
+from src.common.collections import (
+    COLLECTION_ORDERS, COLLECTION_POSITIONS, COLLECTION_LOGS,
+)
 from src.common.costs import US_STOCKS
+from src.common.news_store import MongoNewsStore
 from src.common.position_store import InMemoryPositionStore
 from src.common.reconcile import reconcile
 from src.data.utils.db_helper import get_db
@@ -40,6 +44,11 @@ def _get_db():
     return get_db()
 
 
+def _get_news_store():
+    """FastAPI dependency — returns MongoNewsStore."""
+    return MongoNewsStore(get_db())
+
+
 # --- Docker component allowlist ---
 _ALLOWED_DOCKER_NAMES = {"newswatcher", "analyzer", "trader", "executor", "redis", "all"}
 
@@ -55,7 +64,7 @@ from src.common.sample_news import SAMPLE_NEWS
 @app.get("/api/health")
 def health(db=Depends(_get_db)):
     try:
-        positions = list(db["positions"].find({}, {"_id": 0}))
+        positions = list(db[COLLECTION_POSITIONS].find({}, {"_id": 0}))
         return {
             "status": "ok",
             "open_positions": len(positions),
@@ -160,7 +169,7 @@ def docker_logs(name: str, lines: int = Query(default=50, ge=1, le=1000)):
 def trades(limit: int = 100, db=Depends(_get_db)):
     """Return recent confirmed trades from the orders collection."""
     try:
-        col = db["orders"]
+        col = db[COLLECTION_ORDERS]
         docs = list(col.find({"status": "filled"}, {"_id": 0}).sort("filled_at", -1).limit(limit))
         return docs
     except Exception:
@@ -303,8 +312,8 @@ async def _run_live_backtest(job_id: str, params: dict):
         news_src = params.get("news_source", "sample")
         if news_src == "mongodb":
             try:
-                db = get_db()
-                docs = list(db["news"].find({}, {"_id": 0}).sort("timestamp", 1).limit(200))
+                news_store = MongoNewsStore(get_db())
+                docs = news_store.find_news(limit=200, sort_by="timestamp", ascending=True)
                 news_list = [{"date": d.get("timestamp", ""), "headline": d.get("headline", "")} for d in docs if d.get("headline")]
                 if not news_list:
                     job["status"] = "error"
@@ -488,10 +497,9 @@ def get_live_backtest(job_id: str):
 
 
 @app.get("/api/news")
-def news(limit: int = 100, db=Depends(_get_db)):
+def news(limit: int = 100, news_store: MongoNewsStore = Depends(_get_news_store)):
     try:
-        col = db["news"]
-        docs = list(col.find({}, {"_id": 0}).sort("collected_at", -1).limit(limit))
+        docs = news_store.find_news(sort_by="collected_at", ascending=False, limit=limit)
         return docs
     except Exception as e:
         logger.warning("News fetch error: %s", e)
@@ -499,10 +507,9 @@ def news(limit: int = 100, db=Depends(_get_db)):
 
 
 @app.get("/api/news/count")
-def news_count(db=Depends(_get_db)):
+def news_count(news_store: MongoNewsStore = Depends(_get_news_store)):
     try:
-        col = db["news"]
-        return {"count": col.count_documents({})}
+        return {"count": news_store.count_news()}
     except Exception:
         logger.warning("Failed to count news", exc_info=True)
         return {"count": 0}
@@ -517,7 +524,7 @@ def get_logs(
 ):
     """Fetch recent logs from MongoDB."""
     try:
-        col = db["logs"]
+        col = db[COLLECTION_LOGS]
         q = {}
         if logger_name:
             q["logger"] = {"$regex": f"^{logger_name}"}

@@ -8,7 +8,7 @@ from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_NEWS
 from src.common.news_poller import NewsPoller
-from src.common.news_store import news_to_doc
+from src.common.news_store import BaseNewsStore, MongoNewsStore, news_to_doc
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("newswatcher"))
@@ -22,21 +22,21 @@ class NewsWatcher:
     """
 
     def __init__(self, bus: EventBus, sources: list = None, interval_sec: int = 120,
-                 persist_seen: bool = True, persist_news: bool = False, publish: bool = True, db=None):
+                 persist_seen: bool = True, persist_news: bool = False, publish: bool = True,
+                 news_store: BaseNewsStore | None = None, db=None):
         self.bus = bus
-        self.poller = NewsPoller(sources=sources or [], interval_sec=interval_sec, persist_seen=persist_seen, db=db)
+        if persist_news and news_store is None and db is not None:
+            news_store = MongoNewsStore(db)
+        self._store = news_store
+        self.poller = NewsPoller(sources=sources or [], interval_sec=interval_sec,
+                                 persist_seen=persist_seen, news_store=news_store)
         self.last_poll: datetime | None = None
         self.last_poll_count: int = 0
         self._publish = publish
-        self._news_col = None
-        if persist_news:
+        if self._store is not None:
             try:
-                if db is None:
-                    from src.data.utils.db_helper import get_db
-                    db = get_db()
-                self._news_col = db["news"]
-                self._news_col.create_index("url", unique=True, sparse=True)
-                logger.info("News persistence enabled — writing to MongoDB news collection")
+                self._store.ensure_news_indexes()
+                logger.info("News persistence enabled")
             except Exception:
                 logger.warning("Failed to init news persistence", exc_info=True)
 
@@ -53,9 +53,9 @@ class NewsWatcher:
             for news in events:
                 if self._publish:
                     await self.bus.publish(CHANNEL_NEWS, news.to_dict())
-                if self._news_col is not None:
+                if self._store is not None:
                     try:
-                        self._news_col.insert_one(news_to_doc(news, origin="live"))
+                        self._store.insert_news(news_to_doc(news, origin="live"))
                     except Exception as e:
                         logger.debug("News insert skipped: %s", e)
             if not events:
@@ -65,10 +65,7 @@ class NewsWatcher:
             await asyncio.sleep(self.poller.interval)
 
     async def _poll_concurrent(self):
-        """Poll all sources concurrently, then dedup.
-
-        Sources use httpx.AsyncClient — coroutines run directly on the event loop.
-        """
+        """Poll all sources concurrently, then dedup."""
         async def _fetch(source, timeout=30):
             return await asyncio.wait_for(
                 source.fetch_latest(), timeout=timeout,
