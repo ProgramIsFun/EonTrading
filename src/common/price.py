@@ -20,10 +20,13 @@ _YFINANCE_TIMEOUT = settings.price_timeout
 
 _price_cache: dict[str, float] = {}
 _redis_cache = None
+_redis_unavailable = False
 
 
 def _get_redis():
-    global _redis_cache
+    global _redis_cache, _redis_unavailable
+    if _redis_unavailable:
+        return None
     if _redis_cache is not None:
         return _redis_cache
     try:
@@ -33,8 +36,8 @@ def _get_redis():
         return _redis_cache
     except Exception:
         logger.debug("Redis price cache unavailable, using in-memory only")
-    _redis_cache = False  # mark as unavailable
-    return False
+    _redis_unavailable = True
+    return None
 
 
 def _cache_get(key: str) -> float | None:

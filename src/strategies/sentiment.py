@@ -162,6 +162,9 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         base_url: str | None = None,
         model: str | None = None,
     ):
+        self.api_key: str | None = None
+        self.base_url: str | None = None
+        self.model: str | None = None
         opencode_key = api_key or os.getenv("OPENCODE_API_KEY")
         if opencode_key:
             self.api_key = opencode_key

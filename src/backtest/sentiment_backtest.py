@@ -117,7 +117,7 @@ def run_sentiment_backtest(
             })
 
     # Dedup: keep strongest signal per bar
-    signal_map = {}
+    signal_map: dict = {}
     for sig in signals:
         idx = sig["bar_idx"]
         existing = signal_map.get(idx)

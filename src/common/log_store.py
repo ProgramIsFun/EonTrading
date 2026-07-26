@@ -32,7 +32,7 @@ class MongoLogStore(BaseLogStore):
             raise
 
     def find_logs(self, logger_name: str = "", level: str = "", limit: int = 100) -> list[dict]:
-        q = {}
+        q: dict = {}
         if logger_name:
             q["logger"] = {"$regex": f"^{logger_name}"}
         if level:

@@ -21,7 +21,7 @@ class Position:
     shares: int
     entry_price: float
     entry_bar: int
-    state: PositionState = None  # shared trading logic state
+    state: PositionState | None = None  # shared trading logic state
 
     def __post_init__(self):
         if self.state is None:
@@ -169,7 +169,7 @@ def run_portfolio_backtest(
     positions: dict[str, Position] = {}
     trades = []
     equity = []
-    last_trade_ts = {}
+    last_trade_ts: dict = {}
     bars_per_day = 7
 
     for bar_idx, ts in enumerate(timeline):
@@ -186,6 +186,7 @@ def run_portfolio_backtest(
             high = float(bar["high"]) if "high" in bar else price
 
             closed = False
+            assert pos.state is not None
             # Update peak price for trailing SL
             logic.update_peak(pos.state, high)
 
@@ -216,9 +217,9 @@ def run_portfolio_backtest(
                 del positions[sym]
 
         # Check news — re-analyze with current positions for portfolio-aware scoring
-        nq = news_map.get(ts)
-        if nq:
-            news = NewsEvent(source="backtest", headline=nq["headline"], timestamp=nq["date"], body=nq["body"])
+        nq_item = news_map.get(ts)
+        if nq_item:
+            news = NewsEvent(source="backtest", headline=nq_item["headline"], timestamp=nq_item["date"], body=nq_item["body"])
             sig = analyzer.analyze(news, positions={s: pos.shares for s, pos in positions.items()})
             if sig.confidence >= min_confidence and sig.symbols:
                 for sym in sig.symbols:

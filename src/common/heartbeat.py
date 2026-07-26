@@ -57,6 +57,7 @@ class Heartbeat:
         self.component = component
         self.interval = interval_sec
         self.metadata = metadata or {}
+        self._store: BaseHeartbeatStore | None = None
         if store is not None:
             self._store = store
         elif db is not None:
@@ -65,7 +66,7 @@ class Heartbeat:
             try:
                 self._store = MongoHeartbeatStore()
             except Exception:
-                self._store = None
+                pass
 
     def beat(self):
         if self._store is None:

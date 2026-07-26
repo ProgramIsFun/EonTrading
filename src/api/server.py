@@ -203,6 +203,7 @@ def price_backtest(
 
     from src.backtest import run_backtest
     from src.strategies import RSIMeanReversion, SMACrossover
+    from src.strategies.base_strategy import Strategy
 
     df = yf.download(symbol, start=start, end=end, auto_adjust=True, progress=False)
     if df.empty:
@@ -212,7 +213,7 @@ def price_backtest(
     df = normalize_yfinance_df(df, date_column="timestamp")
 
     if strategy == "rsi":
-        strat = RSIMeanReversion(period=period, oversold=oversold, overbought=overbought)
+        strat: Strategy = RSIMeanReversion(period=period, oversold=oversold, overbought=overbought)
     else:
         strat = SMACrossover(fast=fast, slow=slow)
 
@@ -308,6 +309,7 @@ async def _run_live_backtest(job_id: str, params: dict):
     from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
+    from src.strategies.sentiment import BaseSentimentAnalyzer
 
     job = _backtest_jobs[job_id]
     try:
@@ -344,7 +346,7 @@ async def _run_live_backtest(job_id: str, params: dict):
         await bus.start()
 
         if params["analyzer"] == "llm" and (settings.openai_api_key or settings.opencode_api_key):
-            anlzr = LLMSentimentAnalyzer()
+            anlzr: BaseSentimentAnalyzer = LLMSentimentAnalyzer()
         else:
             anlzr = KeywordSentimentAnalyzer()
 

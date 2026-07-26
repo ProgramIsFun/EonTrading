@@ -5,12 +5,14 @@ Implementations:
   - RedisStreamBus: Redis Streams (persistent message queue)
   - KafkaEventBus: Apache Kafka (distributed message queue)
 """
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Callable
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +75,7 @@ class RedisStreamBus(EventBus):
         self._group = group
         self._consumer = f"{group}-{id(self)}"
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
-        self._redis = None
+        self._redis: Any = None
         self._tasks: list[asyncio.Task] = []
 
     async def start(self):
