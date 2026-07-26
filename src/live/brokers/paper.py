@@ -7,7 +7,7 @@ from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
 from src.common.price import get_price
 
-from .broker import Broker, FillStatus
+from .broker import AccountInfo, Broker, FillStatus
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
@@ -50,5 +50,8 @@ class PaperBroker(Broker):
     async def get_positions(self) -> dict[str, int]:
         return dict(self._positions)
 
-    async def get_cash(self) -> float:
-        return self._cash
+    async def get_account_info(self) -> AccountInfo:
+        return AccountInfo(
+            cash=self._cash,
+            buying_power=self._cash,
+        )

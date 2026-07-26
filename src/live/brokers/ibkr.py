@@ -8,7 +8,7 @@ from typing import Any
 from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
 
-from .broker import Broker, FillStatus
+from .broker import AccountInfo, Broker, FillStatus
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
@@ -84,13 +84,21 @@ class IBKRBroker(Broker):
         except Exception:
             return {}
 
-    async def get_cash(self) -> float:
+    async def get_account_info(self) -> AccountInfo:
         try:
-            async with self._safe("get_cash"):
+            async with self._safe("get_account_info"):
                 assert self._ib is not None
+                cash = 0.0
+                power = 0.0
+                nav = 0.0
                 for av in self._ib.accountValues():
                     if av.tag == "CashBalance" and av.currency == "USD":
-                        return float(av.value)
+                        cash = float(av.value)
+                    elif av.tag == "BuyingPower" and av.currency == "USD":
+                        power = float(av.value)
+                    elif av.tag == "NetLiquidationByCurrency" and av.currency == "USD":
+                        nav = float(av.value)
+                return AccountInfo(cash=cash, buying_power=power, total_assets=nav)
         except Exception:
             pass
-        return 0.0
+        return AccountInfo()

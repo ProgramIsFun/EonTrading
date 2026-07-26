@@ -24,6 +24,15 @@ class FillStatus:
     filled_price: float = 0.0
 
 
+@dataclass
+class AccountInfo:
+    """Unified account balance snapshot from any broker."""
+    cash: float = 0.0
+    buying_power: float = 0.0
+    market_value: float = 0.0
+    total_assets: float = 0.0
+
+
 class Broker(ABC):
     """Interface for trade execution.
 
@@ -56,7 +65,17 @@ class Broker(ABC):
 
     async def get_cash(self) -> float:
         """Returns available cash. Override for real brokers."""
-        return 0.0
+        info = await self.get_account_info()
+        return info.cash
+
+    async def get_buying_power(self) -> float:
+        """Returns available buying power. Defaults to cash if broker doesn't report it."""
+        info = await self.get_account_info()
+        return info.buying_power or info.cash
+
+    async def get_account_info(self) -> AccountInfo:
+        """Returns full account snapshot. Override in subclasses."""
+        return AccountInfo(cash=0.0, buying_power=0.0)
 
     async def place_stop_loss(self, symbol: str, shares: int, stop_price: float) -> bool:
         return False

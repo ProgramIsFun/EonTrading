@@ -8,7 +8,7 @@ from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
 from src.settings import settings
 
-from .broker import Broker, FillStatus
+from .broker import AccountInfo, Broker, FillStatus
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
@@ -70,10 +70,16 @@ class AlpacaBroker(Broker):
         except Exception:
             return {}
 
-    async def get_cash(self) -> float:
+    async def get_account_info(self) -> AccountInfo:
         try:
-            async with self._safe("get_cash"):
+            async with self._safe("get_account_info"):
                 assert self._api is not None
-                return float(self._api.get_account().cash)
+                acct = self._api.get_account()
+                return AccountInfo(
+                    cash=float(acct.cash),
+                    buying_power=float(acct.buying_power),
+                    market_value=float(acct.portfolio_value) - float(acct.cash),
+                    total_assets=float(acct.portfolio_value),
+                )
         except Exception:
-            return 0.0
+            return AccountInfo()

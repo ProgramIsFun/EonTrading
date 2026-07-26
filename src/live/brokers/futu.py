@@ -9,7 +9,7 @@ import logging
 from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
 
-from .broker import Broker, FillStatus
+from .broker import AccountInfo, Broker, FillStatus
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
@@ -204,19 +204,25 @@ class FutuBroker(Broker):
         except Exception:
             return {}
 
-    async def get_cash(self) -> float:
+    async def get_account_info(self) -> AccountInfo:
         from futu import TrdEnv
         trd_env = TrdEnv.SIMULATE if self.simulate else TrdEnv.REAL
         try:
-            async with self._safe("get_cash"):
+            async with self._safe("get_account_info"):
                 ctx = await asyncio.to_thread(self._get_ctx)
 
                 def _query():
                     return ctx.accinfo_query(trd_env=trd_env)
                 ret, data = await asyncio.to_thread(_query)
                 if ret == 0:
-                    return float(data["cash"].iloc[0])
-                logger.warning("Futu get_cash failed: %s", data)
+                    row = data.iloc[0]
+                    return AccountInfo(
+                        cash=float(row["cash"]),
+                        buying_power=float(row["power"]),
+                        market_value=float(row["market_val"]),
+                        total_assets=float(row["total_assets"]),
+                    )
+                logger.warning("Futu get_account_info failed: %s", data)
         except Exception:
             pass
-        return 0.0
+        return AccountInfo()

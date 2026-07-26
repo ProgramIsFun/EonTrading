@@ -353,13 +353,77 @@ class TestFutuBroker:
             from src.live.brokers import FutuBroker
 
             mock_ctx = MagicMock()
-            mock_ctx.accinfo_query.return_value = (0, pd.DataFrame({"cash": [50000.0]}))
+            mock_ctx.accinfo_query.return_value = (0, pd.DataFrame({
+                "cash": [50000.0], "power": [50000.0],
+                "market_val": [30000.0], "total_assets": [80000.0],
+            }))
 
             broker = FutuBroker()
             broker._ctx = mock_ctx
 
             cash = await broker.get_cash()
             assert cash == 50000.0
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_get_buying_power(self):
+        _install_futu_mock()
+        try:
+            from src.live.brokers import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.accinfo_query.return_value = (0, pd.DataFrame({
+                "cash": [50000.0], "power": [45000.0],
+                "market_val": [30000.0], "total_assets": [80000.0],
+            }))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            power = await broker.get_buying_power()
+            assert power == 45000.0
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_get_account_info(self):
+        _install_futu_mock()
+        try:
+            from src.live.brokers import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.accinfo_query.return_value = (0, pd.DataFrame({
+                "cash": [50000.0], "power": [45000.0],
+                "market_val": [30000.0], "total_assets": [80000.0],
+            }))
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            info = await broker.get_account_info()
+            assert info.cash == 50000.0
+            assert info.buying_power == 45000.0
+            assert info.market_value == 30000.0
+            assert info.total_assets == 80000.0
+        finally:
+            _remove_futu_mock()
+
+    @pytest.mark.asyncio
+    async def test_get_account_info_query_fails(self):
+        _install_futu_mock()
+        try:
+            from src.live.brokers import FutuBroker
+
+            mock_ctx = MagicMock()
+            mock_ctx.accinfo_query.return_value = (1, "error")
+
+            broker = FutuBroker()
+            broker._ctx = mock_ctx
+
+            info = await broker.get_account_info()
+            assert info.cash == 0.0
+            assert info.buying_power == 0.0
         finally:
             _remove_futu_mock()
 
@@ -1199,3 +1263,40 @@ class TestWebullBroker:
             assert cash == 0.0
         finally:
             _remove_webull_mock()
+
+
+class TestPaperBrokerAccountInfo:
+
+    @pytest.mark.asyncio
+    async def test_get_account_info(self):
+        from src.live.brokers import PaperBroker
+
+        broker = PaperBroker(initial_cash=50000)
+        info = await broker.get_account_info()
+        assert info.cash == 50000.0
+        assert info.buying_power == 50000.0
+        assert info.market_value == 0.0
+
+    @pytest.mark.asyncio
+    async def test_get_buying_power_wraps_account_info(self):
+        from src.live.brokers import PaperBroker
+
+        broker = PaperBroker(initial_cash=75000)
+        power = await broker.get_buying_power()
+        assert power == 75000.0
+
+    @pytest.mark.asyncio
+    async def test_cash_decreases_after_buy(self):
+        from src.live.brokers import PaperBroker
+        from src.common.events import TradeEvent
+
+        broker = PaperBroker(initial_cash=50000)
+        trade = TradeEvent(
+            symbol="AAPL", action="buy", reason="test",
+            timestamp="2026-01-01T00:00:00Z", price=100.0, size=10,
+        )
+        await broker.execute(trade)
+
+        info = await broker.get_account_info()
+        assert info.cash == 49000.0
+        assert info.buying_power == 49000.0

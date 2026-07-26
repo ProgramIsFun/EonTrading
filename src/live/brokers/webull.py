@@ -10,7 +10,7 @@ from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
 from src.settings import settings
 
-from .broker import Broker, FillStatus
+from .broker import AccountInfo, Broker, FillStatus
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("executor"))
@@ -131,9 +131,9 @@ class WebullBroker(Broker):
         except Exception:
             return {}
 
-    async def get_cash(self) -> float:
+    async def get_account_info(self) -> AccountInfo:
         try:
-            async with self._safe("get_cash"):
+            async with self._safe("get_account_info"):
                 assert self._client is not None
 
                 def _query():
@@ -141,8 +141,13 @@ class WebullBroker(Broker):
                 res = await asyncio.to_thread(_query)
                 if res.status_code == 200:
                     data = res.json()
-                    return float(data.get("availableCash", data.get("available_cash", 0.0)))
-                logger.warning("Webull get_cash failed: %s", res.text)
+                    return AccountInfo(
+                        cash=float(data.get("availableCash", data.get("available_cash", 0.0))),
+                        buying_power=float(data.get("buyingPower", data.get("buying_power", 0.0))),
+                        market_value=float(data.get("portfolioValue", data.get("portfolio_value", 0.0))),
+                        total_assets=float(data.get("totalAssets", data.get("total_assets", 0.0))),
+                    )
+                logger.warning("Webull get_account_info failed: %s", res.text)
         except Exception:
             pass
-        return 0.0
+        return AccountInfo()
