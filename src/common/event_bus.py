@@ -155,8 +155,8 @@ class KafkaEventBus(EventBus):
         self._group = group
         self._consumer_id = f"{group}-{id(self)}"
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
-        self._producer = None
-        self._consumer = None
+        self._producer: Any = None
+        self._consumer: Any = None
         self._running = False
         self._tasks: list[asyncio.Task] = []
 

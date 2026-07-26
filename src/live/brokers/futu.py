@@ -179,7 +179,7 @@ class FutuBroker(Broker):
             ret, msg = await asyncio.to_thread(_cancel)
             if ret != 0:
                 logger.warning("Futu cancel_order failed: %s", msg)
-            return ret == 0
+            return bool(ret == 0)
         except Exception as e:
             logger.error("Futu cancel_order error: %s", e)
             return False

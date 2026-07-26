@@ -43,11 +43,12 @@ def retry(max_attempts: int = 3, base_delay: float = 1.0, max_delay: float = 30.
                     if on_retry:
                         on_retry(attempt, e)
                     await asyncio.sleep(delay)
+            assert last_exc is not None
             raise last_exc
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
-            last_exc = None
+            last_exc: Exception | None = None
             for attempt in range(1, max_attempts + 1):
                 try:
                     return func(*args, **kwargs)
@@ -61,6 +62,7 @@ def retry(max_attempts: int = 3, base_delay: float = 1.0, max_delay: float = 30.
                     if on_retry:
                         on_retry(attempt, e)
                     time.sleep(delay)
+            assert last_exc is not None
             raise last_exc
 
         if asyncio.iscoroutinefunction(func):

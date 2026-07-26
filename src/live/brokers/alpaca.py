@@ -1,5 +1,8 @@
 """AlpacaBroker — Alpaca Markets (US), confirms by polling order status."""
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
@@ -21,22 +24,26 @@ class AlpacaBroker(Broker):
         self.api_key = api_key or settings.alpaca_api_key
         self.secret_key = secret_key or settings.alpaca_secret_key
         self.base_url = "https://paper-api.alpaca.markets" if paper else "https://api.alpaca.markets"
-        self._api = None
+        self._api: Any = None
 
     def _connect(self):
-        if self._api:
+        if self._api is not None:
             return
-        import alpaca_trade_api as tradeapi
-        self._api = tradeapi.REST(self.api_key, self.secret_key, self.base_url, api_version="v2")
+        try:
+            import alpaca_trade_api as tradeapi
+            self._api = tradeapi.REST(self.api_key, self.secret_key, self.base_url, api_version="v2")
+        except Exception as e:
+            raise ConnectionError(f"Alpaca connect failed: {e}") from e
 
     async def execute(self, trade: TradeEvent) -> str | None:
         try:
             self._connect()
+            assert self._api is not None
             order = self._api.submit_order(
                 symbol=trade.symbol, qty=int(trade.size),
                 side=trade.action, type="market", time_in_force="day",
             )
-            return order.id
+            return str(order.id)
         except Exception as e:
             logger.error("Alpaca order failed: %s — %s", trade.symbol, e)
             return None
@@ -44,6 +51,7 @@ class AlpacaBroker(Broker):
     async def check_order(self, order_id: str) -> FillStatus:
         try:
             self._connect()
+            assert self._api is not None
             order = self._api.get_order(order_id)
             if order.status == "filled":
                 return FillStatus(status="filled",
@@ -59,6 +67,7 @@ class AlpacaBroker(Broker):
     async def get_positions(self) -> dict[str, int]:
         try:
             self._connect()
+            assert self._api is not None
             return {p.symbol: int(p.qty) for p in self._api.list_positions()}
         except Exception as e:
             logger.error("Alpaca get_positions error: %s", e)
@@ -67,6 +76,7 @@ class AlpacaBroker(Broker):
     async def get_cash(self) -> float:
         try:
             self._connect()
+            assert self._api is not None
             return float(self._api.get_account().cash)
         except Exception as e:
             logger.error("Alpaca get_cash error: %s", e)

@@ -34,7 +34,7 @@ def get_mongo_client(max_retries: int = 3, retry_delay: float = 2.0):
     uri = _build_uri()
 
     for attempt in range(1, max_retries + 1):
-        client = MongoClient(uri, server_api=ServerApi('1'))
+        client: MongoClient = MongoClient(uri, server_api=ServerApi('1'))
         try:
             client.admin.command('ping')
             logger.info("Successfully connected to MongoDB")

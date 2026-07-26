@@ -30,7 +30,7 @@ class ComponentFormatter(logging.Formatter):
 
     def __init__(self, fmt: str = COMPONENT_FORMAT, datefmt: str | None = None,
                  style: str = "%", log_format: str = "both"):
-        super().__init__(fmt, datefmt, style)
+        super().__init__(fmt, datefmt, style)  # type: ignore[arg-type]
         self.log_format = log_format
 
     def format(self, record: logging.LogRecord) -> str:
@@ -91,7 +91,7 @@ def setup_logging(component: str | None = None, log_dir: str = "logs"):
     root.setLevel(logging.INFO)
 
     # Track which components already have file handlers
-    existing = getattr(root, "_eon_components", set())
+    existing: set[str] = getattr(root, "_eon_components", set())
     if component and component in existing:
         return
 
@@ -99,7 +99,7 @@ def setup_logging(component: str | None = None, log_dir: str = "logs"):
 
     # Console handler — added once
     if not getattr(root, "_eon_console_added", False):
-        root._eon_console_added = True
+        setattr(root, "_eon_console_added", True)
         console = logging.StreamHandler()
         console.setFormatter(fmt)
         root.addHandler(console)
@@ -107,7 +107,7 @@ def setup_logging(component: str | None = None, log_dir: str = "logs"):
     # Per-component file handler
     if component:
         existing.add(component)
-        root._eon_components = existing
+        setattr(root, "_eon_components", existing)
         Path(log_dir).mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(Path(log_dir) / f"{component}.log")
         file_handler.setFormatter(fmt)

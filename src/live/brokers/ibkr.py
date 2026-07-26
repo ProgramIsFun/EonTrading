@@ -1,6 +1,9 @@
 """IBKRBroker — Interactive Brokers via ib_insync, confirms via callback."""
+from __future__ import annotations
+
 import asyncio
 import logging
+from typing import Any
 
 from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
@@ -21,19 +24,23 @@ class IBKRBroker(Broker):
         self.host = host
         self.port = port
         self.client_id = client_id
-        self._ib = None
+        self._ib: Any = None
 
     def _connect(self):
-        if self._ib and self._ib.isConnected():
+        if self._ib is not None and self._ib.isConnected():
             return
-        from ib_insync import IB
-        self._ib = IB()
-        self._ib.connect(self.host, self.port, clientId=self.client_id)
+        try:
+            from ib_insync import IB
+            self._ib = IB()
+            self._ib.connect(self.host, self.port, clientId=self.client_id)
+        except Exception as e:
+            raise ConnectionError(f"IBKR connect failed: {e}") from e
 
     async def execute(self, trade: TradeEvent) -> str | None:
         from ib_insync import MarketOrder, Stock
         try:
             self._connect()
+            assert self._ib is not None
             contract = Stock(trade.symbol, "SMART", "USD")
             self._ib.qualifyContracts(contract)
             action = "BUY" if trade.action == "buy" else "SELL"
@@ -54,6 +61,7 @@ class IBKRBroker(Broker):
     async def check_order(self, order_id: str) -> FillStatus:
         try:
             self._connect()
+            assert self._ib is not None
             trades = self._ib.trades()
             for t in trades:
                 if str(t.order.orderId) == order_id:
@@ -73,6 +81,7 @@ class IBKRBroker(Broker):
     async def get_positions(self) -> dict[str, int]:
         try:
             self._connect()
+            assert self._ib is not None
             return {p.contract.symbol: int(p.position) for p in self._ib.positions() if p.position > 0}
         except Exception as e:
             logger.error("IBKR get_positions error: %s", e)
@@ -81,6 +90,7 @@ class IBKRBroker(Broker):
     async def get_cash(self) -> float:
         try:
             self._connect()
+            assert self._ib is not None
             for av in self._ib.accountValues():
                 if av.tag == "CashBalance" and av.currency == "USD":
                     return float(av.value)

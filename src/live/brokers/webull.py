@@ -1,7 +1,10 @@
 """WebullBroker — Webull Markets via OpenAPI SDK."""
+from __future__ import annotations
+
 import asyncio
 import logging
 import uuid
+from typing import Any
 
 from src.common.events import TradeEvent
 from src.common.log_handler import ComponentFilter
@@ -25,20 +28,24 @@ class WebullBroker(Broker):
         self.app_secret = app_secret or settings.webull_app_secret
         self.region = region
         self.account_id = account_id or settings.webull_account_id
-        self._client = None
+        self._client: Any = None
 
     def _connect(self):
-        if self._client:
+        if self._client is not None:
             return
-        from webull.core.client import ApiClient
-        from webull.trade.trade_client import TradeClient
-        api_client = ApiClient(self.app_key, self.app_secret, self.region)
-        api_client.add_endpoint(self.region, f"openapi.webull.com")
-        self._client = TradeClient(api_client)
+        try:
+            from webull.core.client import ApiClient
+            from webull.trade.trade_client import TradeClient
+            api_client = ApiClient(self.app_key, self.app_secret, self.region)
+            api_client.add_endpoint(self.region, f"openapi.webull.com")
+            self._client = TradeClient(api_client)
+        except Exception as e:
+            raise ConnectionError(f"Webull connect failed: {e}") from e
 
     async def execute(self, trade: TradeEvent) -> str | None:
         try:
             self._connect()
+            assert self._client is not None
             client_order_id = uuid.uuid4().hex
             new_orders = [{
                 "combo_type": "NORMAL",
@@ -70,6 +77,7 @@ class WebullBroker(Broker):
     async def check_order(self, order_id: str) -> FillStatus:
         try:
             self._connect()
+            assert self._client is not None
 
             def _query():
                 return self._client.order_v3.get_order_detail(self.account_id, order_id)
@@ -92,13 +100,14 @@ class WebullBroker(Broker):
     async def cancel_order(self, order_id: str) -> bool:
         try:
             self._connect()
+            assert self._client is not None
 
             def _cancel():
                 return self._client.order_v3.cancel_order(self.account_id, order_id)
             res = await asyncio.to_thread(_cancel)
             if res.status_code != 200:
                 logger.warning("Webull cancel_order failed: %s", res.text)
-            return res.status_code == 200
+            return bool(res.status_code == 200)
         except Exception as e:
             logger.error("Webull cancel_order error: %s", e)
             return False
@@ -106,6 +115,7 @@ class WebullBroker(Broker):
     async def get_positions(self) -> dict[str, int]:
         try:
             self._connect()
+            assert self._client is not None
 
             def _query():
                 return self._client.account_v2.get_account_positions(self.account_id)
@@ -128,6 +138,7 @@ class WebullBroker(Broker):
     async def get_cash(self) -> float:
         try:
             self._connect()
+            assert self._client is not None
 
             def _query():
                 return self._client.account_v2.get_account_balance(self.account_id)

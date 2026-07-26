@@ -217,4 +217,5 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
         )
-        return resp.choices[0].message.content
+        content = resp.choices[0].message.content
+        return str(content) if content is not None else ""

@@ -1,6 +1,7 @@
 """Backtest sentiment strategy against historical price data with synthetic news."""
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 import pandas as pd
 import yfinance as yf
@@ -117,7 +118,7 @@ def run_sentiment_backtest(
             })
 
     # Dedup: keep strongest signal per bar
-    signal_map: dict = {}
+    signal_map: dict[int, dict[str, Any]] = {}
     for sig in signals:
         idx = sig["bar_idx"]
         existing = signal_map.get(idx)
@@ -179,9 +180,9 @@ def run_sentiment_backtest(
                 shares = 0
 
         # Check signals
-        sig = signal_map.get(i)
-        if sig and (i - last_trade_idx) >= cooldown_bars:
-            sent = sig["sentiment"]
+        signal: dict[str, Any] | None = signal_map.get(i)
+        if signal and (i - last_trade_idx) >= cooldown_bars:
+            sent = signal["sentiment"]
 
             if sent >= threshold and shares == 0:
                 size = min(abs(sent), 1.0) if scale_by_sentiment else 1.0
@@ -210,7 +211,7 @@ def run_sentiment_backtest(
                     last_trade_idx = i
                     trades.append(SentimentTrade(
                         symbol=symbol, action="buy", date=ts,
-                        price=exec_price, sentiment=sent, headline=sig["headline"],
+                        price=exec_price, sentiment=sent, headline=signal["headline"],
                         shares=buy_shares,
                     ))
 
@@ -221,7 +222,7 @@ def run_sentiment_backtest(
                 last_trade_idx = i
                 trades.append(SentimentTrade(
                     symbol=symbol, action="sell", date=ts,
-                    price=exec_price, sentiment=sent, headline=sig["headline"],
+                    price=exec_price, sentiment=sent, headline=signal["headline"],
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0

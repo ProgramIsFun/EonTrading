@@ -66,7 +66,7 @@ def get_price(symbol: str, as_of: str | None = None) -> float:
     t = _parse_time(as_of)
     is_historical = t and (utcnow() - t).total_seconds() > 600
 
-    if is_historical:
+    if is_historical and t is not None:
         cache_key = f"{symbol}:{t.strftime('%Y-%m-%d-%H')}"
         cached = _cache_get(cache_key)
         if cached:
@@ -94,7 +94,8 @@ def _parse_time(as_of: str | None = None) -> datetime | None:
 
 def _from_yfinance(symbol: str, as_of: str | None = None) -> float:
     try:
-        return _yfinance_download(symbol, as_of)
+        price = _yfinance_download(symbol, as_of)
+        return float(price)
     except Exception as e:
         logger.error("%s → error after retries: %s", symbol, e)
     return 0.0
@@ -137,7 +138,7 @@ def _from_clickhouse(symbol: str, as_of: str | None = None) -> float:
         # Try hourly first, fall back to daily
         for interval in ["1h", "1d"]:
             logger.info("[ClickHouse] %s @ %s (%s)", symbol, t.strftime('%Y-%m-%d %H:%M'), interval)
-            df = storage.query_ohlcv(symbol, interval, start, end)
+            df = storage.query_ohlcv(symbol, interval, datetime.fromisoformat(start), datetime.fromisoformat(end))
             if not df.empty:
                 # For hourly, find closest candle at or before target time
                 if interval == "1h" and "timestamp" in df.columns:

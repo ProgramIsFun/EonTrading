@@ -24,7 +24,7 @@ class NewsPoller:
     def _is_seen(self, url: str) -> bool:
         if self._store is None or not url:
             return False
-        return self._store.is_seen(url)
+        return bool(self._store.is_seen(url))
 
     def _mark_seen(self, url: str):
         if self._store is not None and url:

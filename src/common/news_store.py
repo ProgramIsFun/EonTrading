@@ -79,7 +79,7 @@ class MongoNewsStore(BaseNewsStore):
         return list(cursor)
 
     def count_news(self) -> int:
-        return self._news_col.count_documents({})
+        return int(self._news_col.count_documents({}))
 
     def ensure_news_indexes(self) -> None:
         self._news_col.create_index("url", unique=True, sparse=True)
