@@ -6,35 +6,24 @@ from src.common.log_handler import setup_logging
 setup_logging("order_tracker")
 logger = logging.getLogger(__name__)
 
-from src.common.event_bus import RedisStreamBus
 from src.common.factories import build_broker
-from src.common.heartbeat import Heartbeat
 from src.common.order_tracker import OrderTracker
 from src.common.shutdown import create_shutdown_event
-from src.common.startup import banner
+from src.live.runners import runner_lifecycle
 
 
 async def main():
     broker = build_broker()
 
-    banner("OrderTracker", {
+    async with runner_lifecycle("order_tracker", "OrderTracker", {
         "Broker": broker.__class__.__name__,
         "Poll interval": "2s",
-    })
-
-    bus = RedisStreamBus(group="order_tracker")
-    await bus.start()
-
-    tracker = OrderTracker(bus, broker)
-    run_task = asyncio.create_task(tracker.run())
-
-    logger.info("🟢 Started. Polling pending orders every 2s.")
-    Heartbeat.create_background("order_tracker", metadata={"broker": broker.__class__.__name__, "mode": "distributed"})
-
-    await create_shutdown_event().wait()
-    logger.info("Shutting down...")
-    run_task.cancel()
-    await bus.stop()
+    }) as bus:
+        tracker = OrderTracker(bus, broker)
+        run_task = asyncio.create_task(tracker.run())
+        logger.info("🟢 Started. Polling pending orders every 2s.")
+        await create_shutdown_event().wait()
+        run_task.cancel()
 
 if __name__ == "__main__":
     asyncio.run(main())

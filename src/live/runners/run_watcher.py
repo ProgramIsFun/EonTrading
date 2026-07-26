@@ -6,12 +6,10 @@ from src.common.log_handler import setup_logging
 setup_logging("newswatcher")
 logger = logging.getLogger(__name__)
 
-from src.common.event_bus import RedisStreamBus
-from src.common.heartbeat import Heartbeat
 from src.common.shutdown import create_shutdown_event
-from src.common.startup import banner
 from src.data.news.loader import build_news_sources
 from src.live.news_watcher import NewsWatcher
+from src.live.runners import runner_lifecycle
 from src.settings import settings
 
 
@@ -26,25 +24,17 @@ async def main():
     if persist:
         mode_parts.append("MongoDB")
 
-    banner("NewsWatcher", {
+    async with runner_lifecycle("newswatcher", "NewsWatcher", {
         "Publishes to": ", ".join(mode_parts) or "nowhere (dry run)",
         "Sources": ", ".join(source_names),
-    })
-
-    bus = RedisStreamBus(group="newswatcher")
-    await bus.start()
-
-    watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
-                          persist_news=persist,
-                          publish=publish)
-    logger.info("🟢 Started. Polling every 120s.")
-    Heartbeat.create_background("newswatcher", metadata={"sources": ", ".join(source_names), "mode": "distributed"})
-
-    watcher_task = asyncio.create_task(watcher.run())
-    await create_shutdown_event().wait()
-    logger.info("Shutting down...")
-    watcher_task.cancel()
-    await bus.stop()
+    }) as bus:
+        watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
+                              persist_news=persist,
+                              publish=publish)
+        logger.info("🟢 Started. Polling every 120s.")
+        watcher_task = asyncio.create_task(watcher.run())
+        await create_shutdown_event().wait()
+        watcher_task.cancel()
 
 if __name__ == "__main__":
     asyncio.run(main())
