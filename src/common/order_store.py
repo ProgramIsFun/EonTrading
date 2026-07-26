@@ -52,6 +52,11 @@ class BaseOrderStore(ABC):
         """Create required indexes (idempotent)."""
         pass
 
+    @abstractmethod
+    def find_filled(self, limit: int = 100) -> list[dict]:
+        """Return filled orders sorted by filled_at descending."""
+        pass
+
 
 class MongoOrderStore(BaseOrderStore):
     """MongoDB implementation of BaseOrderStore."""
@@ -105,3 +110,6 @@ class MongoOrderStore(BaseOrderStore):
     def ensure_indexes(self) -> None:
         self._col.create_index([("status", 1), ("next_check_at", 1)])
         self._col.create_index("placed_at", expireAfterSeconds=604800)
+
+    def find_filled(self, limit: int = 100) -> list[dict]:
+        return list(self._col.find({"status": "filled"}, {"_id": 0}).sort("filled_at", -1).limit(limit))

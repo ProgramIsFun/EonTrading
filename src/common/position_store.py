@@ -34,6 +34,11 @@ class BasePositionStore(ABC):
     def get_positions_with_prices(self) -> dict[str, dict]:
         pass
 
+    @abstractmethod
+    def list_all(self) -> list[dict]:
+        """Return all position documents (for API/dashboard)."""
+        pass
+
 
 class MongoPositionStore(BasePositionStore):
     """Read/write positions via MongoDB. One document per symbol."""
@@ -104,6 +109,9 @@ class MongoPositionStore(BasePositionStore):
             if "entryTime" in doc
         }
 
+    def list_all(self) -> list[dict]:
+        return list(self._col.find({}, {"_id": 0}))
+
 
 # Backward-compatible alias
 PositionStore = MongoPositionStore
@@ -148,3 +156,9 @@ class InMemoryPositionStore(BasePositionStore):
             for sym, info in self._positions.items()
             if "entryTime" in info
         }
+
+    def list_all(self) -> list[dict]:
+        return [
+            {"symbol": sym, **info}
+            for sym, info in self._positions.items()
+        ]

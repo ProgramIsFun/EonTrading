@@ -12,12 +12,11 @@ from fastapi.security import APIKeyHeader
 from starlette.requests import Request
 
 from src.backtest.portfolio_backtest import run_portfolio_backtest
-from src.common.collections import (
-    COLLECTION_ORDERS, COLLECTION_POSITIONS, COLLECTION_LOGS,
-)
 from src.common.costs import US_STOCKS
+from src.common.log_store import MongoLogStore
 from src.common.news_store import MongoNewsStore
-from src.common.position_store import InMemoryPositionStore
+from src.common.order_store import MongoOrderStore
+from src.common.position_store import MongoPositionStore, InMemoryPositionStore
 from src.common.reconcile import reconcile
 from src.data.utils.db_helper import get_db
 from src.live.order_logger import noop_log_order
@@ -39,14 +38,24 @@ async def _check_api_key(key: str = Depends(_api_key_header)):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-def _get_db():
-    """FastAPI dependency — returns pymongo Database object."""
-    return get_db()
-
-
 def _get_news_store():
     """FastAPI dependency — returns MongoNewsStore."""
     return MongoNewsStore(get_db())
+
+
+def _get_position_store():
+    """FastAPI dependency — returns MongoPositionStore."""
+    return MongoPositionStore(db=get_db())
+
+
+def _get_order_store():
+    """FastAPI dependency — returns MongoOrderStore."""
+    return MongoOrderStore(db=get_db())
+
+
+def _get_log_store():
+    """FastAPI dependency — returns MongoLogStore."""
+    return MongoLogStore(db=get_db())
 
 
 # --- Docker component allowlist ---
@@ -62,9 +71,9 @@ from src.common.sample_news import SAMPLE_NEWS
 
 
 @app.get("/api/health")
-def health(db=Depends(_get_db)):
+def health(store: MongoPositionStore = Depends(_get_position_store)):
     try:
-        positions = list(db[COLLECTION_POSITIONS].find({}, {"_id": 0}))
+        positions = store.list_all()
         return {
             "status": "ok",
             "open_positions": len(positions),
@@ -166,12 +175,10 @@ def docker_logs(name: str, lines: int = Query(default=50, ge=1, le=1000)):
 
 
 @app.get("/api/trades")
-def trades(limit: int = 100, db=Depends(_get_db)):
+def trades(limit: int = 100, store: MongoOrderStore = Depends(_get_order_store)):
     """Return recent confirmed trades from the orders collection."""
     try:
-        col = db[COLLECTION_ORDERS]
-        docs = list(col.find({"status": "filled"}, {"_id": 0}).sort("filled_at", -1).limit(limit))
-        return docs
+        return store.find_filled(limit=limit)
     except Exception:
         logger.warning("Failed to fetch trades from MongoDB", exc_info=True)
         return []
@@ -520,18 +527,11 @@ def get_logs(
     logger_name: str = Query(default="", description="Filter by logger name (prefix match)"),
     level: str = Query(default="", description="Filter by level: DEBUG, INFO, WARNING, ERROR"),
     limit: int = Query(default=100, ge=1, le=1000),
-    db=Depends(_get_db),
+    store: MongoLogStore = Depends(_get_log_store),
 ):
     """Fetch recent logs from MongoDB."""
     try:
-        col = db[COLLECTION_LOGS]
-        q = {}
-        if logger_name:
-            q["logger"] = {"$regex": f"^{logger_name}"}
-        if level:
-            q["level"] = level.upper()
-        docs = list(col.find(q, {"_id": 0}).sort("timestamp", -1).limit(limit))
-        return {"logs": docs}
+        return {"logs": store.find_logs(logger_name=logger_name, level=level, limit=limit)}
     except Exception as e:
         logger.warning("Failed to fetch logs: %s", e)
         return {"logs": [], "error": str(e)}
