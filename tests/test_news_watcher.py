@@ -26,6 +26,13 @@ class SlowSource(NewsSource):
         return [NewsEvent(source="slow", headline="Slow news", timestamp="2026-01-01T00:00:00Z", url="http://slow/1", body="")]
 
 
+class TimeoutSource(NewsSource):
+    """Source that simulates a timeout — fetch_latest raises before returning."""
+
+    async def fetch_latest(self):
+        raise asyncio.TimeoutError("simulated timeout")
+
+
 class FailingSource(NewsSource):
     async def fetch_latest(self):
         raise ConnectionError("source down")
@@ -66,16 +73,12 @@ async def test_poll_timeout():
     """Sources exceeding the timeout should not block the cycle."""
     bus = LocalEventBus()
     await bus.start()
-    sources = [SlowSource(delay=60)]  # way over timeout
+    sources = [TimeoutSource()]
     watcher = NewsWatcher(bus, sources=sources, persist_seen=False)
 
-    from unittest.mock import patch
-    # _poll_concurrent uses asyncio.wait_for(timeout=30). Patch it to raise
-    # immediately so we don't actually wait 30s for the slow source.
-    with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
-        start = time.monotonic()
-        events = await watcher._poll_concurrent()
-        elapsed = time.monotonic() - start
+    start = time.monotonic()
+    events = await watcher._poll_concurrent()
+    elapsed = time.monotonic() - start
 
     assert events == []
     assert elapsed < 1, f"Timeout didn't fire — took {elapsed:.2f}s"

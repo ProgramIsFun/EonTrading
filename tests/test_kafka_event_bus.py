@@ -172,6 +172,10 @@ class TestLifecycle:
             producer_instance.start.assert_called_once()
             mock_create_task.assert_called_once()
 
+            # Close the _listen coroutine that was never consumed by create_task
+            coro = mock_create_task.call_args[0][0]
+            coro.close()
+
     @pytest.mark.asyncio
     async def test_stop_cleans_up(self, make_bus, mock_kafka):
         producer, consumer, tp = mock_kafka

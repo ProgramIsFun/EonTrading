@@ -171,7 +171,9 @@ class KafkaEventBus(EventBus):
     async def stop(self):
         self._running = False
         for task in self._tasks:
-            task.cancel()
+            result = task.cancel()
+            if asyncio.iscoroutine(result):
+                await result
         if self._producer:
             await self._producer.stop()
         if self._consumer:
