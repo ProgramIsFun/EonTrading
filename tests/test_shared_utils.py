@@ -1,4 +1,4 @@
-"""Tests for DRY refactor: compute_backtest_metrics, BacktestResultBase, Broker._safe, FakePositionStore."""
+"""Tests for shared utilities: compute_backtest_metrics, BacktestResultBase, Broker._safe, FakePositionStore."""
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
