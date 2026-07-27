@@ -111,8 +111,10 @@ class RedisStreamBus(EventBus):
         """Create consumer group if it doesn't exist."""
         try:
             await self._redis.xgroup_create(f"stream:{channel}", self._group, id="0", mkstream=True)
-        except Exception:
-            pass  # group already exists — expected
+        except Exception as e:
+            if "BUSYGROUP" not in str(e):
+                raise
+            logger.debug("Consumer group [%s] already exists on [%s]", self._group, channel)
 
     async def _listen_streams(self):
         """Read from Redis Streams with consumer groups — persistent, at-least-once."""

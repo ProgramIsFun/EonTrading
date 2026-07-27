@@ -1,10 +1,10 @@
 """Unit tests for LocalEventBus — publish/subscribe, error handling, lifecycle."""
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.common.event_bus import LocalEventBus
+from src.common.event_bus import LocalEventBus, RedisStreamBus
 
 
 @pytest.fixture
@@ -119,3 +119,37 @@ class TestLifecycle:
         await bus.publish("ch", {"ok": True})
         await asyncio.sleep(0.05)
         assert received == [{"ok": True}]
+
+
+class TestRedisEnsureGroup:
+    @pytest.mark.asyncio
+    async def test_ensure_group_logs_debug_on_busygroup(self):
+        bus = RedisStreamBus.__new__(RedisStreamBus)
+        bus._redis = AsyncMock()
+        bus._group = "test-group"
+        bus._redis.xgroup_create.side_effect = Exception("BUSYGROUP Consumer Group name already exists")
+
+        with patch("src.common.event_bus.logger.debug") as mock_debug:
+            await bus._ensure_group("news")
+            mock_debug.assert_called_once()
+            assert "already exists" in mock_debug.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_ensure_group_raises_on_other_error(self):
+        bus = RedisStreamBus.__new__(RedisStreamBus)
+        bus._redis = AsyncMock()
+        bus._group = "test-group"
+        bus._redis.xgroup_create.side_effect = ConnectionError("redis down")
+
+        with pytest.raises(ConnectionError, match="redis down"):
+            await bus._ensure_group("news")
+
+    @pytest.mark.asyncio
+    async def test_ensure_group_succeeds(self):
+        bus = RedisStreamBus.__new__(RedisStreamBus)
+        bus._redis = AsyncMock()
+        bus._group = "test-group"
+        bus._redis.xgroup_create.return_value = True
+
+        await bus._ensure_group("news")
+        bus._redis.xgroup_create.assert_called_once()
