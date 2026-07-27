@@ -183,6 +183,7 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         from src.settings import settings
 
         prompt = _build_llm_prompt(event.headline, settings.tradable_markets, positions)
+        logger.info("Prompt built: %d chars, headline: %s", len(prompt), event.headline[:60])
         t0 = time.perf_counter()
         try:
             content = self._call_llm(prompt)
@@ -213,9 +214,18 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
     @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
     def _call_llm(self, prompt: str) -> str:
         client = self._get_client()
+        t0 = time.perf_counter()
+        logger.info("LLM call starting (model=%s, base_url=%s)", self.model, self.base_url)
         resp = client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
         )
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        usage = resp.usage
+        if usage:
+            logger.info("LLM call done in %.0fms — prompt_tokens=%d completion_tokens=%d total=%d",
+                        elapsed_ms, usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
+        else:
+            logger.info("LLM call done in %.0fms — usage unavailable", elapsed_ms)
         content = resp.choices[0].message.content
         return str(content) if content is not None else ""

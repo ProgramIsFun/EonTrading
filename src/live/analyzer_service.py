@@ -45,13 +45,22 @@ class AnalyzerService:
         event = NewsEvent.from_dict(msg)
         if self._is_stale(event):
             return
+        logger.info("Analyzing: %s", event.headline[:80])
+        t0 = asyncio.get_event_loop().time()
         # Run synchronous MongoDB + LLM calls off the event loop
-        positions = await asyncio.to_thread(self.get_positions) if self.get_positions else None
+        if self.get_positions:
+            positions = await asyncio.to_thread(self.get_positions)
+        else:
+            positions = None
+        t_pos = asyncio.get_event_loop().time()
         try:
             sentiment = await asyncio.to_thread(self.analyzer.analyze, event, positions)
         except Exception as e:
             logger.error("Analysis failed for %s: %s", event.headline[:60], e, exc_info=True)
             return
+        t_done = asyncio.get_event_loop().time()
+        logger.info("Done in %.1fs (positions: %.2fs, llm: %.2fs): %s",
+                     t_done - t0, t_pos - t0, t_done - t_pos, event.headline[:60])
         if sentiment.confidence > 0:
             await self.bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
             logger.info("[%+.2f] %s", sentiment.sentiment, sentiment.headline[:80])
