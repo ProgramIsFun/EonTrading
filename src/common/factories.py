@@ -1,21 +1,41 @@
-from src.live.brokers import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker
 from src.settings import settings
-from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
+# --- Broker registry ---
+# To add a new broker: import it and add one line below.
+# The factory function never needs to change.
 
-def build_analyzer() -> tuple:
-    if settings.analyzer == "llm":
-        analyzer = LLMSentimentAnalyzer()
-        return analyzer, f"LLM ({analyzer.model})"
-    return KeywordSentimentAnalyzer(), "Keyword (free)"
+from src.live.brokers import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker
+
+BROKERS = {
+    "paper": lambda: PaperBroker(),
+    "futu": lambda: FutuBroker(simulate=not settings.futu_real, confirm_mode=settings.futu_confirm),
+    "ibkr": lambda: IBKRBroker(),
+    "alpaca": lambda: AlpacaBroker(),
+}
 
 
 def build_broker():
-    broker_name = settings.broker.lower()
-    if broker_name == "futu":
-        return FutuBroker(simulate=not settings.futu_real, confirm_mode=settings.futu_confirm)
-    if broker_name == "ibkr":
-        return IBKRBroker()
-    if broker_name == "alpaca":
-        return AlpacaBroker()
-    return PaperBroker()
+    name = settings.broker.lower()
+    factory = BROKERS.get(name)
+    if factory is None:
+        raise ValueError(f"Unknown broker '{name}'. Valid: {list(BROKERS)}")
+    return factory()
+
+
+# --- Analyzer registry ---
+# To add a new analyzer: import it and add one line below.
+
+from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
+
+ANALYZERS = {
+    "llm": lambda: (LLMSentimentAnalyzer(), f"LLM ({LLMSentimentAnalyzer().model})"),
+    "keyword": lambda: (KeywordSentimentAnalyzer(), "Keyword (free)"),
+}
+
+
+def build_analyzer():
+    name = settings.analyzer.lower()
+    factory = ANALYZERS.get(name)
+    if factory is None:
+        raise ValueError(f"Unknown analyzer '{name}'. Valid: {list(ANALYZERS)}")
+    return factory()
