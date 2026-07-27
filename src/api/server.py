@@ -26,6 +26,26 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="EonTrading API")
 
+
+def format_backtest_result(result) -> dict:
+    """Format shared backtest metrics into an API response dict.
+
+    Handles BacktestResult, BacktestResultBase, or any object with the
+    standard metric attributes.  Callers add endpoint-specific fields
+    (strategy, trades, etc.) on top.
+    """
+    equity = result.equity_curve
+    equity_list = [round(v, 2) for v in (equity.tolist() if hasattr(equity, "tolist") else equity)]
+    return {
+        "initial_capital": result.initial_capital,
+        "final_value": round(result.final_value, 2),
+        "total_return_pct": round(result.total_return_pct, 2),
+        "max_drawdown_pct": round(result.max_drawdown_pct, 2),
+        "total_trades": result.total_trades,
+        "win_rate": round(result.win_rate, 1),
+        "equity_curve": equity_list,
+    }
+
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins.split(","), allow_methods=["*"], allow_headers=["*"])
 
 # --- API key auth (optional — set API_KEY env var to enable) ---
@@ -218,25 +238,20 @@ def price_backtest(
         strat = SMACrossover(fast=fast, slow=slow)
 
     result = run_backtest(df, strat, symbol=symbol, initial_capital=capital, cost_model=US_STOCKS)
-    return {
+    data = format_backtest_result(result)
+    data.update({
         "strategy": result.strategy,
         "symbol": result.symbol,
-        "initial_capital": result.initial_capital,
-        "final_value": round(result.final_value, 2),
-        "total_return_pct": round(result.total_return_pct, 2),
         "annual_return_pct": round(result.annual_return_pct, 2),
-        "max_drawdown_pct": round(result.max_drawdown_pct, 2),
-        "total_trades": result.total_trades,
-        "win_rate": round(result.win_rate, 1),
         "sharpe_ratio": round(result.sharpe_ratio, 2),
-        "equity_curve": [round(v, 2) for v in result.equity_curve.tolist()],
         "trades": [
             {"symbol": t.symbol, "side": t.side, "entry_price": round(t.entry_price, 2),
              "exit_price": round(t.exit_price, 2), "shares": t.shares, "pnl": round(t.pnl, 2),
              "entry_date": str(t.entry_date)[:10], "exit_date": str(t.exit_date)[:10]}
             for t in result.trades
         ],
-    }
+    })
+    return data
 
 
 @app.get("/api/backtest")
@@ -260,24 +275,17 @@ def backtest(
         max_hold_days=max_hold_days,
         trailing_sl=trailing_sl,
     )
-    return {
-        "initial_capital": result.initial_capital,
-        "final_value": round(result.final_value, 2),
-        "total_return_pct": round(result.total_return_pct, 2),
-        "max_drawdown_pct": round(result.max_drawdown_pct, 2),
-        "total_trades": result.total_trades,
-        "win_rate": round(result.win_rate, 1),
-        "equity_curve": [round(v, 2) for v in result.equity_curve.tolist()],
-        "trades": [
-            {
-                "symbol": t.symbol, "action": t.action, "date": t.date,
-                "price": round(t.price, 2), "shares": t.shares,
-                "sentiment": round(t.sentiment, 2), "pnl": round(t.pnl, 2),
-                "headline": t.headline,
-            }
-            for t in result.trades
-        ],
-    }
+    data = format_backtest_result(result)
+    data["trades"] = [
+        {
+            "symbol": t.symbol, "action": t.action, "date": t.date,
+            "price": round(t.price, 2), "shares": t.shares,
+            "sentiment": round(t.sentiment, 2), "pnl": round(t.pnl, 2),
+            "headline": t.headline,
+        }
+        for t in result.trades
+    ]
+    return data
 
 
 # --- Live pipeline backtest (background task) ---
@@ -444,21 +452,22 @@ async def _run_live_backtest(job_id: str, params: dict):
             if dd > max_dd:
                 max_dd = dd
 
-        job["status"] = "done"
-        job["result"] = {
+        from types import SimpleNamespace
+        metrics = SimpleNamespace(
+            initial_capital=capital, final_value=final_value,
+            total_return_pct=total_return, max_drawdown_pct=max_dd,
+            total_trades=len(trades), win_rate=0, equity_curve=equity,
+        )
+        data = format_backtest_result(metrics)
+        data.update({
             "mode": "live_pipeline",
             "analyzer": "llm" if isinstance(anlzr, LLMSentimentAnalyzer) else "keyword",
-            "initial_capital": capital,
-            "final_value": round(final_value, 2),
-            "total_return_pct": round(total_return, 2),
-            "max_drawdown_pct": round(max_dd, 2),
-            "total_trades": len(trades),
-            "win_rate": 0,
-            "equity_curve": equity,
             "trades": fill_trades,
             "open_positions": open_positions,
             "cash": round(final_cash, 2),
-        }
+        })
+        job["status"] = "done"
+        job["result"] = data
     except Exception as e:
         logger.error("Sentiment backtest failed: %s", e)
         job["status"] = "error"
