@@ -157,3 +157,30 @@ class TestInMemoryPositionStore:
         positions = store.get_positions()
         assert "AAPL" not in positions
         assert "TSLA" in positions
+
+    def test_update_peak(self):
+        store = InMemoryPositionStore()
+        now = utcnow()
+        store.open_position("AAPL", now, entry_price=150.0, qty=50)
+        store.update_peak("AAPL", 170.0)
+        prices = store.get_positions_with_prices()
+        assert prices["AAPL"]["peakPrice"] == 170.0
+
+    def test_update_peak_nonexistent_is_noop(self):
+        store = InMemoryPositionStore()
+        store.update_peak("NEVER_OPENED", 100.0)
+
+    def test_get_positions_with_prices_includes_peakPrice(self):
+        store = InMemoryPositionStore()
+        now = utcnow()
+        store.open_position("AAPL", now, entry_price=150.0, qty=50)
+        prices = store.get_positions_with_prices()
+        assert prices["AAPL"]["peakPrice"] == 150.0  # defaults to entryPrice
+
+    def test_get_positions_with_prices_peak_falls_back_to_entry(self):
+        store = InMemoryPositionStore()
+        now = utcnow()
+        store.open_position("AAPL", now, entry_price=150.0, qty=50)
+        # peakPrice not set yet — should fall back to entryPrice
+        prices = store.get_positions_with_prices()
+        assert prices["AAPL"]["peakPrice"] == 150.0

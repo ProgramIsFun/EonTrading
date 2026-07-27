@@ -28,13 +28,15 @@ class PriceMonitor:
         self.logic = logic
         self.interval = interval_sec
         self._states: dict[str, PositionState] = {}
-        # Restore entry prices from store on startup
+        # Restore entry prices + peak from store on startup
         try:
             for sym, info in store.get_positions_with_prices().items():
                 price = info.get("entryPrice", 0.0)
                 qty = info.get("qty", 0)
+                peak = info.get("peakPrice", price)
                 if price > 0:
-                    self._states[sym] = PositionState(symbol=sym, shares=qty, entry_price=price)
+                    self._states[sym] = PositionState(symbol=sym, shares=qty,
+                                                      entry_price=price, peak_price=peak)
             if self._states:
                 logger.info("PriceMonitor restored %d position(s): %s", len(self._states), list(self._states.keys()))
         except Exception as e:
@@ -61,7 +63,13 @@ class PriceMonitor:
             price = get_price(symbol, as_of=as_of)
             if price <= 0:
                 continue
+            old_peak = state.peak_price
             self.logic.update_peak(state, price)
+            if self.logic.trailing_sl and state.peak_price > old_peak:
+                try:
+                    self.store.update_peak(symbol, state.peak_price)
+                except Exception as e:
+                    logger.warning("Failed to persist peak for %s: %s", symbol, e)
             sl = self.logic.check_stop_loss(state, price)
             if sl:
                 logger.info("🛑 SL triggered: SELL %s %dsh @ $%.2f", symbol, state.shares, sl)
@@ -88,8 +96,13 @@ class PriceMonitor:
                 if symbol not in self._states:
                     price = info.get("entryPrice", 0.0)
                     qty = info.get("qty", 0)
+                    peak = info.get("peakPrice", price)
                     if price > 0:
-                        self._states[symbol] = PositionState(symbol=symbol, shares=qty, entry_price=price)
+                        self._states[symbol] = PositionState(symbol=symbol, shares=qty,
+                                                              entry_price=price, peak_price=peak)
+                else:
+                    # Update shares from store (position may have changed via averaging)
+                    self._states[symbol].shares = info.get("qty", self._states[symbol].shares)
 
         results = self._evaluate_positions(as_of)
 

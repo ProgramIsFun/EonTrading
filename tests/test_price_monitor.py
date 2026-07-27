@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.common.clock import utcnow
 from src.common.trading_logic import PositionState, TradingLogic
 from src.live.price_monitor import PriceMonitor
 
@@ -86,6 +87,31 @@ class TestCheckOnceSync:
         assert len(sold) == 1
         assert sold[0][1] == 108  # 120 * (1 - 0.1)
 
+    def test_trailing_sl_persists_peak(self, mock_bus):
+        logic = TradingLogic(stop_loss_pct=0.1, trailing_sl=True)
+        store = MagicMock()
+        store.get_positions_with_prices.return_value = {}
+        monitor = PriceMonitor(mock_bus, store, logic)
+        monitor._states["AAPL"] = PositionState("AAPL", 10, 100, peak_price=100)
+
+        with patch(PRICE_PATH, return_value=108):
+            monitor.check_once_sync()
+
+        store.update_peak.assert_called_once_with("AAPL", 108)
+        assert monitor._states["AAPL"].peak_price == 108
+
+    def test_no_persist_peak_when_trailing_disabled(self, mock_bus):
+        logic = TradingLogic(stop_loss_pct=0.1, trailing_sl=False)
+        store = MagicMock()
+        store.get_positions_with_prices.return_value = {}
+        monitor = PriceMonitor(mock_bus, store, logic)
+        monitor._states["AAPL"] = PositionState("AAPL", 10, 100, peak_price=100)
+
+        with patch(PRICE_PATH, return_value=130):
+            monitor.check_once_sync()
+
+        store.update_peak.assert_not_called()
+
     def test_multiple_positions_one_trigger(self, mock_bus, mock_store, logic):
         monitor = PriceMonitor(mock_bus, mock_store, logic)
         monitor._states["AAPL"] = PositionState("AAPL", 10, 100)
@@ -113,6 +139,60 @@ class TestInit:
         assert monitor._states["AAPL"].entry_price == 100
         assert monitor._states["AAPL"].shares == 10
         assert "GOOGL" in monitor._states
+
+    def test_restores_peak_from_store(self, mock_bus, logic):
+        store = MagicMock()
+        store.get_positions_with_prices.return_value = {
+            "AAPL": {"entryPrice": 100, "qty": 10, "peakPrice": 120},
+        }
+
+        monitor = PriceMonitor(mock_bus, store, logic)
+
+        assert monitor._states["AAPL"].peak_price == 120
+
+    def test_peak_defaults_to_entry_when_missing(self, mock_bus, logic):
+        store = MagicMock()
+        store.get_positions_with_prices.return_value = {
+            "AAPL": {"entryPrice": 100, "qty": 10},
+        }
+
+        monitor = PriceMonitor(mock_bus, store, logic)
+
+        assert monitor._states["AAPL"].peak_price == 100
+
+    def test_peak_survives_restart_via_store(self, mock_bus):
+        """Simulate price rising over cycles, then new monitor reads peak from store."""
+        from src.common.position_store import InMemoryPositionStore
+
+        store = InMemoryPositionStore()
+        logic = TradingLogic(stop_loss_pct=0.1, trailing_sl=True)
+
+        # Open position and create monitor
+        store.open_position("AAPL", utcnow(), entry_price=100.0, qty=10)
+        monitor1 = PriceMonitor(mock_bus, store, logic)
+        monitor1._states["AAPL"] = PositionState("AAPL", 10, 100, peak_price=100)
+
+        # Cycle 1: price rises to 108 — peak updates, persisted to store
+        with patch(PRICE_PATH, return_value=108):
+            monitor1.check_once_sync()
+        assert store.get_positions_with_prices()["AAPL"]["peakPrice"] == 108
+
+        # Cycle 2: price rises to 115 — peak updates again
+        with patch(PRICE_PATH, return_value=115):
+            monitor1.check_once_sync()
+        assert store.get_positions_with_prices()["AAPL"]["peakPrice"] == 115
+
+        # Simulate restart — create new monitor from same store
+        monitor2 = PriceMonitor(mock_bus, store, logic)
+
+        assert monitor2._states["AAPL"].peak_price == 115
+        assert monitor2._states["AAPL"].entry_price == 100
+
+        # New monitor uses persisted peak for SL: 115 * 0.9 = 103.5
+        with patch(PRICE_PATH, return_value=103):
+            sold = monitor2.check_once_sync()
+        assert len(sold) == 1
+        assert sold[0][1] == pytest.approx(103.5)
 
     def test_injects_entry_prices(self, mock_bus, mock_store, logic):
         monitor = PriceMonitor(mock_bus, mock_store, logic,

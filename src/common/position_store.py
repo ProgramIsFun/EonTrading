@@ -39,6 +39,11 @@ class BasePositionStore(ABC):
         """Return all position documents (for API/dashboard)."""
         pass
 
+    @abstractmethod
+    def update_peak(self, symbol: str, peak_price: float, session=None):
+        """Update trailing SL peak price for a position."""
+        pass
+
 
 class MongoPositionStore(BasePositionStore, MongoStoreBase):
     """Read/write positions via MongoDB. One document per symbol."""
@@ -101,16 +106,24 @@ class MongoPositionStore(BasePositionStore, MongoStoreBase):
         return {sym: info["entryTime"] for sym, info in self.get_positions_with_prices().items()}
 
     def get_positions_with_prices(self) -> dict[str, dict]:
-        """Return {symbol: {entryTime, entryPrice, qty}} for all open positions."""
+        """Return {symbol: {entryTime, entryPrice, qty, peakPrice}} for all open positions."""
         return {
             doc["symbol"]: {
                 "entryTime": datetime.fromisoformat(doc["entryTime"]),
                 "entryPrice": doc.get("entryPrice", 0.0),
                 "qty": doc.get("qty", 0),
+                "peakPrice": doc.get("peakPrice", doc.get("entryPrice", 0.0)),
             }
             for doc in self._col.find()
             if "entryTime" in doc
         }
+
+    def update_peak(self, symbol: str, peak_price: float, session=None):
+        self._col.update_one(
+            {"symbol": symbol},
+            {"$set": {"peakPrice": peak_price, "updatedAt": utcnow()}},
+            **({"session": session} if session else {}),
+        )
 
     def list_all(self) -> list[dict]:
         return list(self._col.find({}, {"_id": 0}))
@@ -164,10 +177,15 @@ class InMemoryPositionStore(BasePositionStore):
                 "entryTime": datetime.fromisoformat(info["entryTime"]),
                 "entryPrice": info.get("entryPrice", 0.0),
                 "qty": info.get("qty", 0),
+                "peakPrice": info.get("peakPrice", info.get("entryPrice", 0.0)),
             }
             for sym, info in self._positions.items()
             if "entryTime" in info
         }
+
+    def update_peak(self, symbol: str, peak_price: float, session=None):
+        if symbol in self._positions:
+            self._positions[symbol]["peakPrice"] = peak_price
 
     def list_all(self) -> list[dict]:
         return [
