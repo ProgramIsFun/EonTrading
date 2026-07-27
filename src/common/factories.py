@@ -8,7 +8,7 @@ from src.live.brokers import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker
 from src.common.order_store import MongoOrderStore
 
 BROKERS = {
-    "paper": lambda: PaperBroker(order_store=MongoOrderStore()),
+    "paper": lambda: PaperBroker(order_store=MongoOrderStore(), persist_cash=True),
     "futu": lambda: FutuBroker(simulate=not settings.futu_real, confirm_mode=settings.futu_confirm),
     "ibkr": lambda: IBKRBroker(),
     "alpaca": lambda: AlpacaBroker(),

@@ -15,7 +15,7 @@ import logging
 import sys
 
 from src.common.log_handler import setup_logging
-for _comp in ["newswatcher", "analyzer", "trader", "executor", "monitor", "order_tracker"]:
+for _comp in ["newswatcher", "analyzer", "trader", "executor", "monitor", "order_tracker", "wealth"]:
     setup_logging(_comp)
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ async def main_single():
     from src.live.news_watcher import NewsWatcher
     from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
+    from src.live.wealth_tracker import WealthTracker
     from src.settings import settings
 
     # --- Sources ---
@@ -75,13 +76,15 @@ async def main_single():
     asyncio.create_task(tracker.run())
 
     executor = TradeExecutor(bus, broker, log_order=mongo_log_order)
+    wealth = WealthTracker(broker, position_store=store, interval_sec=60)
 
     await analyzer_svc.start()
     await trader.start()
     await executor.start()
     monitor_task = asyncio.create_task(monitor.run())
+    wealth_task = asyncio.create_task(wealth.run())
 
-    for name in ["newswatcher", "analyzer", "trader", "executor", "monitor"]:
+    for name in ["newswatcher", "analyzer", "trader", "executor", "monitor", "wealth"]:
         Heartbeat.create_background(name, metadata={"mode": "single"})
 
     logger.info("🟢 All components started. Polling every 120s.")
@@ -99,6 +102,7 @@ async def main_single():
     logger.info("Shutting down...")
     watcher_task.cancel()
     monitor_task.cancel()
+    wealth_task.cancel()
     await bus.stop()
     logger.info("Shutdown complete.")
 
