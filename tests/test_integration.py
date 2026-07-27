@@ -490,9 +490,7 @@ class TestPositionSizing:
         await bus.subscribe(CHANNEL_TRADE, trades.handler)
 
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker)
         await trader.start()
-        await executor.start()
 
         await bus.publish(CHANNEL_SENTIMENT, SentimentEvent(
             source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",

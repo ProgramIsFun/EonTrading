@@ -235,6 +235,9 @@ class RejectingBroker(Broker):
     async def get_positions(self) -> dict[str, int]:
         return {}
 
+    async def get_cash(self) -> float:
+        return 100000.0
+
 
 # --- Trade confirmation & orders tests ---
 
@@ -369,3 +372,74 @@ class TestTraderReadsPositionStore:
         assert len(broker.trades) == 1
         assert broker.trades[0].action == "buy"
         mock_store.get_positions_with_prices.assert_called()
+
+
+class TestSequentialProcessing:
+    """Verify that sentiment events are processed sequentially, not concurrently."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_events_use_fresh_cash(self):
+        """Two rapid sentiment events should each see updated cash after the first trade."""
+        bus = LocalEventBus()
+        await bus.start()
+
+        broker = MockBroker(initial_cash=20000)
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, broker=broker)
+        await trader.start()
+
+        sentiment_aapl = SentimentEvent(
+            source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
+            analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
+            sentiment=0.8, confidence=0.9,
+        )
+        sentiment_msft = SentimentEvent(
+            source="test", headline="Microsoft surges", timestamp="2026-04-22T10:00:01Z",
+            analyzed_at="2026-04-22T10:00:02Z", symbols=["MSFT"],
+            sentiment=0.8, confidence=0.9,
+        )
+
+        # Publish both rapidly — second should see cash reduced by first trade
+        await bus.publish(CHANNEL_SENTIMENT, sentiment_aapl.to_dict())
+        await bus.publish(CHANNEL_SENTIMENT, sentiment_msft.to_dict())
+        await asyncio.sleep(0.5)
+
+        assert len(broker.trades) == 2
+        # Both should have executed
+        symbols = {t.symbol for t in broker.trades}
+        assert symbols == {"AAPL", "MSFT"}
+        # Cash should be depleted by both trades (no negative balance)
+        assert broker._cash >= 0
+
+    @pytest.mark.asyncio
+    async def test_second_event_sees_reduced_cash(self):
+        """After first buy, second event should calculate fewer shares based on reduced cash."""
+        bus = LocalEventBus()
+        await bus.start()
+
+        broker = MockBroker(initial_cash=10000)
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, broker=broker)
+        await trader.start()
+
+        # First event: buy AAPL with full cash
+        sentiment1 = SentimentEvent(
+            source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
+            analyzed_at="2026-04-22T10:00:01Z", symbols=["AAPL"],
+            sentiment=0.8, confidence=0.9,
+        )
+        await bus.publish(CHANNEL_SENTIMENT, sentiment1.to_dict())
+        await asyncio.sleep(0.3)
+
+        first_cash_after = broker._cash
+        assert first_cash_after < 10000, "First trade should have deducted cash"
+
+        # Second event: buy MSFT with reduced cash
+        sentiment2 = SentimentEvent(
+            source="test", headline="Microsoft surges", timestamp="2026-04-22T10:00:01Z",
+            analyzed_at="2026-04-22T10:00:02Z", symbols=["MSFT"],
+            sentiment=0.8, confidence=0.9,
+        )
+        await bus.publish(CHANNEL_SENTIMENT, sentiment2.to_dict())
+        await asyncio.sleep(0.3)
+
+        assert len(broker.trades) == 2
+        assert broker._cash >= 0, "Cash should never go negative"

@@ -10,11 +10,16 @@ from src.live.brokers import Broker
 class MockBroker(Broker):
     """Broker that records trades and returns synthetic order_id."""
 
-    def __init__(self):
+    def __init__(self, initial_cash: float = 100000):
         self.trades: list[TradeEvent] = []
+        self._cash = initial_cash
 
     async def execute(self, trade: TradeEvent) -> str:
         self.trades.append(trade)
+        if trade.action == "buy":
+            self._cash -= trade.price * trade.size
+        elif trade.action == "sell":
+            self._cash += trade.price * trade.size
         return f"mock-{trade.symbol}-{uuid4().hex[:8]}"
 
     async def check_order(self, order_id: str) -> tuple[str, str | None]:
@@ -22,6 +27,9 @@ class MockBroker(Broker):
 
     async def get_positions(self) -> dict[str, int]:
         return {}
+
+    async def get_cash(self) -> float:
+        return self._cash
 
 
 # Re-export InMemoryPositionStore as FakePositionStore for backward compatibility.
