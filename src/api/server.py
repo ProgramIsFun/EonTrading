@@ -153,7 +153,7 @@ async def reconcile_positions():
         broker = build_broker()
         return await reconcile(broker)
     except Exception as e:
-        logger.error("Reconcile error: %s", e)
+        logger.error("Reconcile error: %s", e, exc_info=True)
         return {"ok": False, "error": str(e)}
 
 
@@ -356,7 +356,7 @@ async def _run_live_backtest(job_id: str, params: dict):
                     job["error"] = "No news found in MongoDB"
                     return
             except Exception as e:
-                logger.error("Live backtest news fetch failed: %s", e)
+                logger.error("Live backtest news fetch failed: %s", e, exc_info=True)
                 job["status"] = "error"
                 job["error"] = f"MongoDB error: {e}"
                 return
@@ -488,7 +488,7 @@ async def _run_live_backtest(job_id: str, params: dict):
         job["status"] = "done"
         job["result"] = data
     except Exception as e:
-        logger.error("Sentiment backtest failed: %s", e)
+        logger.error("Sentiment backtest failed: %s", e, exc_info=True)
         job["status"] = "error"
         job["error"] = f"{type(e).__name__}: {e}"
 

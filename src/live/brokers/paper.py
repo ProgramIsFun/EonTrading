@@ -28,7 +28,7 @@ class PaperBroker(Broker):
         if price <= 0:
             price = await asyncio.to_thread(get_price, trade.symbol)
             if price <= 0:
-                logger.error("Could not fetch price for %s, aborting", trade.symbol)
+                logger.error("Could not fetch price for %s, aborting", trade.symbol, exc_info=True)
                 return None
         if trade.action == "buy":
             cost = price * qty

@@ -97,7 +97,7 @@ def _from_yfinance(symbol: str, as_of: str | None = None) -> float:
         price = _yfinance_download(symbol, as_of)
         return float(price)
     except Exception as e:
-        logger.error("%s → error after retries: %s", symbol, e)
+        logger.error("%s → error after retries: %s", symbol, e, exc_info=True)
     return 0.0
 
 
@@ -151,5 +151,5 @@ def _from_clickhouse(symbol: str, as_of: str | None = None) -> float:
                 return price
             logger.warning("%s (%s) → no data", symbol, interval)
     except Exception as e:
-        logger.error("%s → error: %s", symbol, e)
+        logger.error("%s → error: %s", symbol, e, exc_info=True)
     return 0.0

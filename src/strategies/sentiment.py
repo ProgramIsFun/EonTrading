@@ -207,7 +207,7 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
             )
         except Exception as e:
             elapsed_ms = (time.perf_counter() - t0) * 1000
-            logger.error("LLM analysis failed after %.0fms: %s", elapsed_ms, e)
+            logger.error("LLM analysis failed after %.0fms: %s", elapsed_ms, e, exc_info=True)
             raise
 
     @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))

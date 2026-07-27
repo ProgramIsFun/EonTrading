@@ -52,7 +52,7 @@ class TradeExecutor:
         elapsed_ms = (time.monotonic() - start) * 1000
         broker_name = self.broker.__class__.__name__
         if order_id is None:
-            logger.error("Order submission failed: %s %s (%.0fms)", trade.action.upper(), trade.symbol, elapsed_ms)
+            logger.error("Order submission failed: %s %s (%.0fms)", trade.action.upper(), trade.symbol, elapsed_ms, exc_info=True)
             await self._log_order(trade, None, broker_name, status="failed", error="broker returned None")
             return
         logger.info("✅ %s %s qty=%d @ $%.2f (order_id=%s, broker=%s, %.0fms)",

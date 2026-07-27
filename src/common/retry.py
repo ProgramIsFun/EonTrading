@@ -36,7 +36,7 @@ def retry(max_attempts: int = 3, base_delay: float = 1.0, max_delay: float = 30.
                 except exceptions as e:
                     last_exc = e
                     if attempt == max_attempts:
-                        logger.error("%s failed after %d attempts: %s", func.__name__, max_attempts, e)
+                        logger.error("%s failed after %d attempts: %s", func.__name__, max_attempts, e, exc_info=True)
                         break
                     delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
                     logger.warning("%s attempt %d/%d failed: %s — retrying in %.1fs",
@@ -56,7 +56,7 @@ def retry(max_attempts: int = 3, base_delay: float = 1.0, max_delay: float = 30.
                 except exceptions as e:
                     last_exc = e
                     if attempt == max_attempts:
-                        logger.error("%s failed after %d attempts: %s", func.__name__, max_attempts, e)
+                        logger.error("%s failed after %d attempts: %s", func.__name__, max_attempts, e, exc_info=True)
                         break
                     delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
                     logger.warning("%s attempt %d/%d failed: %s — retrying in %.1fs",

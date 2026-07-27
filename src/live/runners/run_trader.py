@@ -6,6 +6,7 @@ from src.common.log_handler import setup_logging
 setup_logging("trader")
 logger = logging.getLogger(__name__)
 
+from src.common.factories import build_broker
 from src.common.position_store import PositionStore
 from src.common.shutdown import create_shutdown_event
 from src.common.trading_logic import TradingLogic
@@ -14,15 +15,17 @@ from src.live.sentiment_trader import SentimentTrader
 
 
 async def main():
+    broker = build_broker()
+
     async with runner_lifecycle("trader", "SentimentTrader", {
         "Subscribes to": "[sentiment]",
         "Publishes to": "[trade]",
         "Positions": "MongoDB (read-only)",
-        "Trade log": "n/a — handled by executor",
+        "Broker": broker.__class__.__name__,
     }) as bus:
         store = PositionStore()
         logic = TradingLogic.from_settings()
-        trader = SentimentTrader(bus, logic=logic, position_store=store)
+        trader = SentimentTrader(bus, logic=logic, position_store=store, broker=broker)
         await trader.start()
         logger.info("🟢 Started. Waiting for [sentiment] events.")
         await create_shutdown_event().wait()

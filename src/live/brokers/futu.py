@@ -139,7 +139,7 @@ class FutuBroker(Broker):
             logger.info("📤 Futu order placed: %s %s (id=%s)", trade.action.upper(), trade.symbol, order_id)
             return order_id
         except Exception as e:
-            logger.error("Futu order failed: %s — %s", trade.symbol, e)
+            logger.error("Futu order failed: %s — %s", trade.symbol, e, exc_info=True)
             return None
 
     async def check_order(self, order_id: str) -> FillStatus:
