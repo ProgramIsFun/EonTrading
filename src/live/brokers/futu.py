@@ -214,7 +214,7 @@ class FutuBroker(Broker):
                 ctx = await asyncio.to_thread(self._get_ctx)
 
                 def _query():
-                    return ctx.accinfo_query(trd_env=trd_env)
+                    return ctx.accinfo_query(trd_env=trd_env, refresh_cache=True)
                 ret, data = await asyncio.to_thread(_query)
                 if ret == 0:
                     row = data.iloc[0]
