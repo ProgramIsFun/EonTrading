@@ -32,7 +32,7 @@ async def main_single():
     from src.data.news.loader import build_news_sources
     from src.live.analyzer_service import AnalyzerService
     from src.live.brokers import TradeExecutor
-    from src.live.order_logger import mongo_log_order
+    from src.live.order_logger import mongo_log_failed_order, mongo_log_order
     from src.live.news_watcher import NewsWatcher
     from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
@@ -74,7 +74,7 @@ async def main_single():
     tracker = OrderTracker(bus, broker)
     asyncio.create_task(tracker.run())
 
-    executor = TradeExecutor(bus, broker, log_order=mongo_log_order)
+    executor = TradeExecutor(bus, broker, log_order=mongo_log_order, log_failed_order=mongo_log_failed_order)
 
     await analyzer_svc.start()
     await trader.start()

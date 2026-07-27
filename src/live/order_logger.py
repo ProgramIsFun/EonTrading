@@ -45,3 +45,31 @@ async def mongo_log_order(trade: TradeEvent, order_id: str, broker_name: str, or
         await asyncio.to_thread(order_store.insert, doc)
     except Exception:
         logger.warning("Failed to log order %s — MongoDB may be unavailable", order_id, exc_info=True)
+
+
+async def mongo_log_failed_order(trade: TradeEvent, broker_name: str, error: str, order_store: BaseOrderStore | None = None, db=None) -> None:
+    """Write a failed order document for audit trail when broker rejects the order."""
+    try:
+        if order_store is None:
+            order_store = MongoOrderStore(db=db)
+        doc = {
+            "order_id": None,
+            "broker_type": broker_name,
+            "symbol": trade.symbol,
+            "action": trade.action,
+            "price": trade.price,
+            "shares": trade.size,
+            "reason": trade.reason,
+            "timestamp": trade.timestamp,
+            "status": "failed",
+            "placed_at": utcnow(),
+            "checked_at": None,
+            "filled_at": None,
+            "cancelled_at": None,
+            "next_check_at": None,
+            "retry_count": 0,
+            "error": error,
+        }
+        await asyncio.to_thread(order_store.insert, doc)
+    except Exception:
+        logger.warning("Failed to log failed order for %s — MongoDB may be unavailable", trade.symbol, exc_info=True)

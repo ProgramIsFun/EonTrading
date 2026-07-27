@@ -32,7 +32,7 @@ async def main(start: str, end: str):
     from src.data.utils.db_helper import get_db
     from src.live.analyzer_service import AnalyzerService
     from src.live.brokers import PaperBroker, TradeExecutor
-    from src.live.order_logger import mongo_log_order
+    from src.live.order_logger import mongo_log_failed_order, mongo_log_order
     from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
     from src.settings import settings
@@ -58,7 +58,7 @@ async def main(start: str, end: str):
 
     trader = SentimentTrader(bus, logic=logic, position_store=store, broker=broker)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
-    executor = TradeExecutor(bus, broker, log_order=mongo_log_order)
+    executor = TradeExecutor(bus, broker, log_order=mongo_log_order, log_failed_order=mongo_log_failed_order)
 
     await analyzer_svc.start()
     await trader.start()
