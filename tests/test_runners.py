@@ -20,6 +20,7 @@ RUNNERS = {
     "executor": "src/live/runners/run_executor.py",
     "monitor": "src/live/runners/run_monitor.py",
     "order_tracker": "src/live/runners/run_order_tracker.py",
+    "wealth": "src/live/runners/run_wealth.py",
 }
 
 EXPECTED_GROUPS = {
@@ -29,6 +30,7 @@ EXPECTED_GROUPS = {
     "executor": "executor",
     "monitor": "monitor",
     "order_tracker": "order_tracker",
+    "wealth": "wealth",
 }
 
 _LIFECYCLE_PATCHES = [
@@ -246,10 +248,12 @@ class TestRunnerMainExecution:
 
         mock_bus = AsyncMock()
         mock_store = MagicMock()
+        mock_broker = MagicMock()
 
         with patch("src.common.event_bus.RedisStreamBus", return_value=mock_bus), \
              patch("src.common.heartbeat.Heartbeat") as mock_hb, \
              patch("src.common.startup.banner"), \
+             patch.object(mod, "build_broker", return_value=mock_broker), \
              patch.object(mod, "PositionStore", return_value=mock_store), \
              patch.object(mod, "TradingLogic") as mock_logic, \
              patch.object(mod, "SentimentTrader") as mock_trader, \
@@ -348,3 +352,30 @@ class TestRunnerMainExecution:
             mock_hb.create_background.assert_called_once()
             mock_logic.from_settings.assert_called_once()
             mock_mon.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_wealth_runner_wiring(self):
+        import src.live.runners.run_wealth as mod
+
+        mock_bus = AsyncMock()
+        mock_broker = MagicMock()
+        mock_store = MagicMock()
+
+        with patch("src.common.event_bus.RedisStreamBus", return_value=mock_bus), \
+             patch("src.common.heartbeat.Heartbeat") as mock_hb, \
+             patch("src.common.startup.banner"), \
+             patch.object(mod, "build_broker", return_value=mock_broker), \
+             patch.object(mod, "PositionStore", return_value=mock_store), \
+             patch.object(mod, "WealthTracker") as mock_wealth, \
+             patch.object(mod, "create_shutdown_event") as mock_shutdown:
+            mock_wealth.return_value.run = AsyncMock()
+            evt = asyncio.Event()
+            evt.set()
+            mock_shutdown.return_value = evt
+
+            await mod.main()
+
+            mock_bus.start.assert_called_once()
+            mock_bus.stop.assert_called_once()
+            mock_hb.create_background.assert_called_once()
+            mock_wealth.assert_called_once()
