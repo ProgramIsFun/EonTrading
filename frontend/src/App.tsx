@@ -7,7 +7,6 @@ import EquityChart from "./components/EquityChart";
 import TradeTable from "./components/TradeTable";
 import ParamsPanel from "./components/ParamsPanel";
 import PnlBySymbol from "./components/PnlBySymbol";
-import ArchitectureDiagram from "./components/ArchitectureDiagram";
 import SystemStatus from "./components/SystemStatus";
 import NewsFeed from "./components/NewsFeed";
 import LivePipelineBacktest from "./components/LivePipelineBacktest";
@@ -94,7 +93,7 @@ export default function App() {
 
         {tab === "logs" && <LogViewer />}
 
-        {tab === "about" && <><SystemStatus /><ArchitectureDiagram /></>}
+        {tab === "about" && <SystemStatus />}
 
         {tab === "backtest" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
