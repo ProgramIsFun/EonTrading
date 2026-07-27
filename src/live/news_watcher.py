@@ -90,7 +90,7 @@ class NewsWatcher:
                 logger.warning("Source %s timed out after 30s", source.__class__.__name__)
                 continue
             except Exception as e:
-                logger.error("Source %s failed: %s", source.__class__.__name__, e)
+                logger.error("Source %s failed: %s", source.__class__.__name__, e, exc_info=True)
                 continue
             events.extend(self.poller.filter_unseen(result))
             count = len(result)

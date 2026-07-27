@@ -47,7 +47,7 @@ class FinnhubSource(NewsSource):
                     body=article.get("summary", ""),
                 ))
         except Exception as e:
-            logger.error("Finnhub error: %s", e)
+            logger.error("Finnhub error: %s", e, exc_info=True)
         return events
 
     @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError, httpx.HTTPStatusError))

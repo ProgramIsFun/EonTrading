@@ -83,17 +83,28 @@ class OrderTracker:
         if action == "buy":
             entry_time = now.replace(microsecond=0)
             await asyncio.to_thread(self._position_store.open_position, symbol, entry_time, price, shares)
+            logger.info("BUY filled: %s %dsh @ $%.2f (order_id=%s, latency=%.1fs)",
+                        symbol, shares, price, doc.get("order_id"),
+                        (now - doc["placed_at"]).total_seconds())
         elif action == "sell":
             await asyncio.to_thread(self._position_store.close_position, symbol)
+            logger.info("SELL filled: %s %dsh @ $%.2f (order_id=%s, latency=%.1fs)",
+                        symbol, shares, price, doc.get("order_id"),
+                        (now - doc["placed_at"]).total_seconds())
 
     async def _cancel(self, doc):
+        logger.warning("Order timed out: %s %s %s (age=%.0fs, retries=%d)",
+                       doc.get("order_id"), doc["action"], doc["symbol"],
+                       (utcnow() - doc["placed_at"]).total_seconds(), doc.get("retry_count", 0))
         try:
             await self.broker.cancel_order(doc["order_id"])
         except Exception as e:
-            logger.warning("Failed to cancel order %s: %s", doc["order_id"], e)
+            logger.warning("Failed to cancel order %s: %s", doc.get("order_id"), e)
         await asyncio.to_thread(
             self._store.mark_timeout, doc["_id"], "max_pending_age exceeded",
         )
 
     async def _mark_failed(self, doc, reason):
+        logger.error("Order failed: %s %s %s — %s", doc.get("order_id"), doc["action"],
+                     doc["symbol"], reason)
         await asyncio.to_thread(self._store.mark_failed, doc["_id"], reason)

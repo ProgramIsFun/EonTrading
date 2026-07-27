@@ -116,9 +116,14 @@ class PriceMonitor:
     async def run(self):
         """Continuous monitoring loop for live mode."""
         logger.info("PriceMonitor started, checking every %ds", self.interval)
+        check_count = 0
         while True:
             try:
                 await self.check_once()
+                check_count += 1
+                if check_count % 5 == 0 and self._states:
+                    symbols = list(self._states.keys())
+                    logger.info("Monitoring %d position(s): %s", len(symbols), ", ".join(symbols))
             except Exception as exc:
                 logger.exception("PriceMonitor.check_once failed — %s", exc)
             await asyncio.sleep(self.interval)

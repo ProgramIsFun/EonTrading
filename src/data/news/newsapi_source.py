@@ -68,7 +68,7 @@ class NewsAPISource(NewsSource):
                     body=article.get("description", ""),
                 ))
         except Exception as e:
-            logger.error("NewsAPI error: %s", e)
+            logger.error("NewsAPI error: %s", e, exc_info=True)
         return events
 
     @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError, httpx.HTTPStatusError))

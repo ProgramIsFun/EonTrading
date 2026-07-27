@@ -42,7 +42,7 @@ class RSSSource(NewsSource):
                 resp = await self._fetch_feed(feed_url)
                 events.extend(self._parse_feed(resp.text, feed_url))
             except Exception as e:
-                logger.error("RSS error (%s): %s", feed_url[:50], e)
+                logger.error("RSS error (%s): %s", feed_url[:50], e, exc_info=True)
         return events
 
     @retry(max_attempts=3, base_delay=2.0, exceptions=(httpx.RequestError, httpx.HTTPStatusError))

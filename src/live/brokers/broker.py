@@ -107,5 +107,5 @@ class Broker(ABC):
             self._connect()
             yield
         except Exception as e:
-            logger.error("%s.%s failed: %s", type(self).__name__, operation, e)
+            logger.error("%s.%s failed: %s", type(self).__name__, operation, e, exc_info=True)
             raise

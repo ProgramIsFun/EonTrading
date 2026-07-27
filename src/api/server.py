@@ -3,13 +3,16 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import datetime
 from collections import deque
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import Response
 
 from src.backtest.portfolio_backtest import run_portfolio_backtest
 from src.common.costs import US_STOCKS
@@ -48,6 +51,21 @@ def format_backtest_result(result) -> dict:
 
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins.split(","), allow_methods=["*"], allow_headers=["*"])
 
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Logs every HTTP request with method, path, status code, and latency."""
+
+    async def dispatch(self, request: Request, call_next):
+        start = time.monotonic()
+        response = await call_next(request)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        logger.info("%s %s %d (%.0fms)", request.method, request.url.path,
+                     response.status_code, elapsed_ms)
+        return response
+
+
+app.add_middleware(RequestLoggingMiddleware)
+
 # --- API key auth (optional — set API_KEY env var to enable) ---
 _api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 _API_KEY = settings.api_key
@@ -55,6 +73,7 @@ _API_KEY = settings.api_key
 
 async def _check_api_key(key: str = Depends(_api_key_header)):
     if _API_KEY and key != _API_KEY:
+        logger.warning("Auth failed: invalid API key from %s", "request")
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 

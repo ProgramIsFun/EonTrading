@@ -46,6 +46,8 @@ class FutuBroker(Broker):
         self.poll_interval = poll_interval
         self.poll_timeout = poll_timeout
         self._ctx = None
+        mode = "SIMULATE" if simulate else "LIVE"
+        logger.info("FutuBroker initialized in %s mode", mode)
 
     def _connect(self):
         self._get_ctx()

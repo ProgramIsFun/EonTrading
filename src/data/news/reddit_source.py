@@ -63,7 +63,7 @@ class RedditSource(NewsSource):
                         body=d.get("selftext", "")[:500],
                     ))
             except Exception as e:
-                logger.error("Reddit error (r/%s): %s", sub, e)
+                logger.error("Reddit error (r/%s): %s", sub, e, exc_info=True)
         return events
 
     async def _authenticate(self):

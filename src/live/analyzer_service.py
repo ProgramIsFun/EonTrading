@@ -50,7 +50,7 @@ class AnalyzerService:
         try:
             sentiment = await asyncio.to_thread(self.analyzer.analyze, event, positions)
         except Exception as e:
-            logger.error("Analysis failed for %s: %s", event.headline[:60], e)
+            logger.error("Analysis failed for %s: %s", event.headline[:60], e, exc_info=True)
             return
         if sentiment.confidence > 0:
             await self.bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())

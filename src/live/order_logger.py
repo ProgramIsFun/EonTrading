@@ -54,5 +54,7 @@ async def mongo_log_order(
             "error": error,
         }
         await asyncio.to_thread(order_store.insert, doc)
+        logger.info("Order logged: %s %s %s (order_id=%s, status=%s)",
+                     trade.action, trade.symbol, broker_name, order_id, status)
     except Exception:
         logger.warning("Failed to log order %s — MongoDB may be unavailable", order_id, exc_info=True)

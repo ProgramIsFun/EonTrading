@@ -16,10 +16,11 @@ logger.addFilter(ComponentFilter("executor"))
 class PaperBroker(Broker):
     """Dry-run broker — fills instantly. Optionally applies transaction costs."""
 
-    def __init__(self, initial_cash: float = 100000, cost_model=None):
+    def __init__(self, initial_cash: float = 100000, cost_model=None, order_store=None):
         self._positions: dict[str, int] = {}
         self._cash = initial_cash
         self.cost_model = cost_model
+        self._order_store = order_store
 
     async def execute(self, trade: TradeEvent) -> str | None:
         qty = int(trade.size)
@@ -45,7 +46,17 @@ class PaperBroker(Broker):
         return f"paper-{trade.symbol}-{uuid4().hex[:8]}"
 
     async def check_order(self, order_id: str) -> FillStatus:
-        return FillStatus(status="filled", filled_qty=0, filled_price=0.0)
+        if self._order_store is None:
+            from src.common.order_store import MongoOrderStore
+            self._order_store = MongoOrderStore()
+        doc = await asyncio.to_thread(self._order_store.find_by_order_id, order_id)
+        if doc and doc.get("status") == "pending":
+            return FillStatus(
+                status="filled",
+                filled_qty=int(doc["shares"]),
+                filled_price=float(doc["price"]),
+            )
+        return FillStatus(status="unknown")
 
     async def get_positions(self) -> dict[str, int]:
         return dict(self._positions)

@@ -25,6 +25,8 @@ class AlpacaBroker(Broker):
         self.secret_key = secret_key or settings.alpaca_secret_key
         self.base_url = "https://paper-api.alpaca.markets" if paper else "https://api.alpaca.markets"
         self._api: Any = None
+        mode = "PAPER" if paper else "LIVE"
+        logger.info("AlpacaBroker initialized in %s mode", mode)
 
     def _connect(self):
         if self._api is not None:

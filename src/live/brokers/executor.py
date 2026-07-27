@@ -1,5 +1,6 @@
 """TradeExecutor — routes [trade] events to the configured broker."""
 import logging
+import time
 
 from src.common.events import CHANNEL_TRADE, TradeEvent
 from src.common.event_bus import EventBus
@@ -46,13 +47,15 @@ class TradeExecutor:
         if len(self._seen) > 10000:
             self._seen = set(list(self._seen)[-5000:])
 
+        start = time.monotonic()
         order_id = await self.broker.execute(trade)
+        elapsed_ms = (time.monotonic() - start) * 1000
         broker_name = self.broker.__class__.__name__
         if order_id is None:
-            logger.error("Order submission failed: %s %s", trade.action.upper(), trade.symbol)
+            logger.error("Order submission failed: %s %s (%.0fms)", trade.action.upper(), trade.symbol, elapsed_ms)
             await self._log_order(trade, None, broker_name, status="failed", error="broker returned None")
             return
-        await self._log_order(trade, order_id, broker_name)
-        logger.info("✅ %s %s qty=%d @ $%.2f (order_id=%s, broker=%s)",
+        logger.info("✅ %s %s qty=%d @ $%.2f (order_id=%s, broker=%s, %.0fms)",
                      trade.action.upper(), trade.symbol, int(trade.size),
-                     trade.price, order_id, broker_name)
+                     trade.price, order_id, broker_name, elapsed_ms)
+        await self._log_order(trade, order_id, broker_name)

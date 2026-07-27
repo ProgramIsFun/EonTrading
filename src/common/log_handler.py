@@ -1,6 +1,8 @@
 """Structured logging setup — console + per-component file + optional JSON format."""
 import json
 import logging
+import logging.handlers
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -64,6 +66,12 @@ class JsonFormatter(logging.Formatter):
             "func": record.funcName,
             "line": record.lineno,
         }
+        if record.exc_info and record.exc_info[1] is not None:
+            doc["exception"] = {
+                "type": record.exc_info[0].__name__ if record.exc_info[0] else "Unknown",
+                "message": str(record.exc_info[1]),
+                "traceback": "".join(traceback.format_exception(*record.exc_info)),
+            }
         return json.dumps(doc, ensure_ascii=False)
 
 
@@ -109,6 +117,10 @@ def setup_logging(component: str | None = None, log_dir: str = "logs"):
         existing.add(component)
         setattr(root, "_eon_components", existing)
         Path(log_dir).mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(Path(log_dir) / f"{component}.log")
+        file_handler = logging.handlers.RotatingFileHandler(
+            Path(log_dir) / f"{component}.log",
+            maxBytes=10 * 1024 * 1024,  # 10 MB
+            backupCount=5,
+        )
         file_handler.setFormatter(fmt)
         root.addHandler(file_handler)

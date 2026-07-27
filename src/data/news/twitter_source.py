@@ -74,7 +74,7 @@ class TwitterSource(NewsSource):
                         body=tweet.text,
                     ))
             except Exception as e:
-                logger.error("Twitter error (@%s): %s", account, e)
+                logger.error("Twitter error (@%s): %s", account, e, exc_info=True)
         return events
 
     def _fetch_alternative(self) -> list[NewsEvent]:

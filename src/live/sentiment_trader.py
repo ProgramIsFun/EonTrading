@@ -38,6 +38,8 @@ class SentimentTrader:
         await self.bus.subscribe(CHANNEL_SENTIMENT, self._on_sentiment)
         if self.max_hold_days > 0:
             self._hold_task = asyncio.create_task(self._hold_checker())
+        logger.info("SentimentTrader started (threshold=%.2f, min_confidence=%.2f, max_hold=%dd)",
+                     self.logic.threshold, self.logic.min_confidence, self.max_hold_days)
 
     async def _hold_checker(self):
         while True:
@@ -88,15 +90,22 @@ class SentimentTrader:
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
                 positions.pop(symbol, None)
             else:
-                if event.confidence < self.logic.min_confidence or event.sentiment < self.logic.threshold:
+                if event.confidence < self.logic.min_confidence:
+                    logger.debug("Skipped %s: confidence %.2f < min %.2f",
+                                 symbol, event.confidence, self.logic.min_confidence)
+                    continue
+                if event.sentiment < self.logic.threshold:
+                    logger.debug("Skipped %s: sentiment %.2f < threshold %.2f",
+                                 symbol, event.sentiment, self.logic.threshold)
                     continue
                 price = await asyncio.to_thread(get_price, symbol, event_ts)
                 if price <= 0:
+                    logger.warning("No price for %s, skipping", symbol)
                     continue
                 try:
                     cash = await self.broker.get_cash() if self.broker else 0.0
                 except Exception:
-                    logger.warning("Failed to fetch cash from broker, using 0")
+                    logger.warning("Failed to fetch cash from broker, using 0", exc_info=True)
                     cash = 0.0
                 if cash > 0:
                     shares = self.logic.should_buy(
@@ -104,6 +113,7 @@ class SentimentTrader:
                         positions, cash, price,
                     )
                 else:
+                    logger.warning("Cash unavailable, defaulting to qty=1 for %s", symbol)
                     shares = 1
                 if shares <= 0:
                     continue
@@ -111,6 +121,8 @@ class SentimentTrader:
 
             last = self._last_trade_at.get(symbol, {}).get(action)
             if last and (now - last).total_seconds() < self._dedup_seconds:
+                logger.debug("Dedup suppressed: %s %s (last trade %.0fs ago)",
+                             action, symbol, (now - last).total_seconds())
                 continue
 
             self._last_trade_at.setdefault(symbol, {})[action] = now

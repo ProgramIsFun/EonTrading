@@ -41,6 +41,11 @@ class BaseOrderStore(ABC):
         pass
 
     @abstractmethod
+    def find_by_order_id(self, order_id: str) -> dict | None:
+        """Return the order document for a given order_id, or None."""
+        pass
+
+    @abstractmethod
     def insert(self, doc: dict) -> None:
         """Insert a new order document."""
         pass
@@ -90,6 +95,9 @@ class MongoOrderStore(BaseOrderStore, MongoStoreBase):
             {"_id": mongo_id},
             {"$set": {"next_check_at": next_check, "checked_at": checked_at, "retry_count": retry_count}},
         )
+
+    def find_by_order_id(self, order_id: str) -> dict | None:
+        return self._col.find_one({"order_id": order_id})
 
     def insert(self, doc: dict) -> None:
         self._col.insert_one(doc)
