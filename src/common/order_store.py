@@ -97,7 +97,8 @@ class MongoOrderStore(BaseOrderStore, MongoStoreBase):
         )
 
     def find_by_order_id(self, order_id: str) -> dict | None:
-        return self._col.find_one({"order_id": order_id})
+        result = self._col.find_one({"order_id": order_id})
+        return result if result is not None else None
 
     def insert(self, doc: dict) -> None:
         self._col.insert_one(doc)

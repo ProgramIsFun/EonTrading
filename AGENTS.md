@@ -42,14 +42,18 @@ US stocks use plain tickers — no suffix. Everyone recognizes `AAPL`.
 ## Tests
 
 - Test framework: pytest with pytest-asyncio
-- Run tests: `python -m pytest tests/ -v`
+- Run all unit tests: `python -m pytest tests/ -v`
 - Run specific test: `python -m pytest tests/test_brokers.py -v`
 - Tests requiring external services (Redis, Kafka, Futu, network) are marked and excluded by default
+- **Integration tests**: marked `integration`, requires running MongoDB on localhost:27017
+  - Run: `python -m pytest -m integration -v`
+  - Uses separate database `EonTradingDB_test`, dropped after each test
+  - Skipped by default in `pytest` run
 
 ## Type Checking
 
 - Static analysis: mypy
 - Run type check: `python -m mypy src/`
 - Config in `pyproject.toml` under `[tool.mypy]`
-- Current baseline: ~53 errors (mostly `attr-defined` and `no-any-return`)
+- Current baseline: 0 errors
 - New code should not introduce new mypy errors

@@ -14,7 +14,7 @@ from src.common.order_store import BaseOrderStore, MongoOrderStore
 logger = logging.getLogger(__name__)
 
 
-async def noop_log_order(trade: TradeEvent, order_id: str, broker_name: str, **kwargs) -> None:
+async def noop_log_order(trade: TradeEvent, order_id: str | None, broker_name: str, **kwargs) -> None:
     """No-op — used in tests and when audit logging is disabled."""
     pass
 
