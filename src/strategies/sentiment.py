@@ -170,10 +170,12 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
             self.api_key = opencode_key
             self.base_url = base_url or os.getenv("OPENCODE_BASE_URL", "https://opencode.ai/zen/v1")
             self.model = model or os.getenv("OPENCODE_MODEL", "big-pickle")
+            logger.info("LLM provider: OpenCode (model=%s)", self.model)
         else:
             self.api_key = api_key or os.getenv("OPENAI_API_KEY")
             self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
             self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            logger.info("LLM provider: OpenAI (model=%s)", self.model)
 
     def _get_client(self):
         from openai import OpenAI
