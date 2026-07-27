@@ -34,10 +34,13 @@ class AccountInfo:
 
 
 class Broker(ABC):
-    """Interface for trade execution.
-
-    execute() submits the order and returns an order_id.
+    """Interface for trade execute() submits the order and returns an order_id.
     OrderTracker polls check_order() to confirm fills or detect failures.
+
+    Note on ISP: this is intentionally a fat interface (cancel, SL/TP stubs)
+    because most real brokers implement all methods. Only PaperBroker stubs
+    cancel and SL/TP — splitting into Broker+CancelCapable+SLTPCapable would
+    add isinstance() checks everywhere just to accommodate one test broker.
     """
 
     def _connect(self):
