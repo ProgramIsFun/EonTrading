@@ -153,6 +153,18 @@ class SentimentTrader:
                              action, symbol, (now - last).total_seconds())
                 continue
 
+            if action == "buy" and self.broker:
+                try:
+                    current_cash = await self.broker.get_cash()
+                except Exception:
+                    logger.warning("Failed to fetch cash for pre-flight check, skipping %s", symbol, exc_info=True)
+                    continue
+                cost = shares * price
+                if cost > current_cash:
+                    logger.warning("Pre-flight rejected: BUY %s would cost $%.2f but only $%.2f available",
+                                   symbol, cost, current_cash)
+                    continue
+
             self._last_trade_at.setdefault(symbol, {})[action] = now
             trade = TradeEvent(
                 symbol=symbol, action=action,
