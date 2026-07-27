@@ -36,7 +36,10 @@ class OrderTracker:
     async def run(self):
         while True:
             await asyncio.sleep(self.check_interval)
-            await self._check_pending()
+            try:
+                await self._check_pending()
+            except Exception as e:
+                logger.error("OrderTracker._check_pending crashed: %s", e, exc_info=True)
 
     async def _check_pending(self):
         now = utcnow()
@@ -45,31 +48,34 @@ class OrderTracker:
         docs = await asyncio.to_thread(self._store.find_pending, now)
 
         for doc in docs:
-            age = now - doc["placed_at"]
-
-            if age.total_seconds() > self.max_pending_age:
-                await self._cancel(doc)
-                continue
-
             try:
-                fill = await self.broker.check_order(doc["order_id"])
-            except NotImplementedError:
-                logger.warning("Broker does not support check_order, skipping")
-                continue
-            except Exception as e:
-                logger.warning("Broker check_order failed for %s: %s", doc.get("order_id"), e)
-                fill = FillStatus(status="unknown", reason=str(e))
+                age = now - doc["placed_at"]
 
-            if fill.status == "filled" and fill.filled_qty >= int(doc["shares"]):
-                await self._mark_filled(doc, fill)
-            elif fill.status in ("cancelled", "failed", "rejected"):
-                await self._mark_failed(doc, fill.reason or fill.status)
-            else:
-                await asyncio.to_thread(
-                    self._store.update_retry, doc["_id"],
-                    now + timedelta(seconds=self.check_interval),
-                    now, doc["retry_count"] + 1,
-                )
+                if age.total_seconds() > self.max_pending_age:
+                    await self._cancel(doc)
+                    continue
+
+                try:
+                    fill = await self.broker.check_order(doc["order_id"])
+                except NotImplementedError:
+                    logger.warning("Broker does not support check_order, skipping")
+                    continue
+                except Exception as e:
+                    logger.warning("Broker check_order failed for %s: %s", doc.get("order_id"), e)
+                    fill = FillStatus(status="unknown", reason=str(e))
+
+                if fill.status == "filled" and fill.filled_qty >= int(doc["shares"]):
+                    await self._mark_filled(doc, fill)
+                elif fill.status in ("cancelled", "failed", "rejected"):
+                    await self._mark_failed(doc, fill.reason or fill.status)
+                else:
+                    await asyncio.to_thread(
+                        self._store.update_retry, doc["_id"],
+                        now + timedelta(seconds=self.check_interval),
+                        now, doc["retry_count"] + 1,
+                    )
+            except Exception as e:
+                logger.error("Failed to process order %s: %s", doc.get("order_id"), e, exc_info=True)
 
     async def _mark_filled(self, doc, fill: FillStatus):
         now = utcnow()
@@ -80,17 +86,21 @@ class OrderTracker:
         price = fill.filled_price if fill.filled_price > 0 else float(doc["price"])
         shares = int(doc["shares"])
 
-        if action == "buy":
-            entry_time = now.replace(microsecond=0)
-            await asyncio.to_thread(self._position_store.open_position, symbol, entry_time, price, shares)
-            logger.info("BUY filled: %s %dsh @ $%.2f (order_id=%s, latency=%.1fs)",
-                        symbol, shares, price, doc.get("order_id"),
-                        (now - doc["placed_at"]).total_seconds())
-        elif action == "sell":
-            await asyncio.to_thread(self._position_store.close_position, symbol)
-            logger.info("SELL filled: %s %dsh @ $%.2f (order_id=%s, latency=%.1fs)",
-                        symbol, shares, price, doc.get("order_id"),
-                        (now - doc["placed_at"]).total_seconds())
+        latency = (now - doc["placed_at"]).total_seconds()
+
+        try:
+            if action == "buy":
+                entry_time = now.replace(microsecond=0)
+                await asyncio.to_thread(self._position_store.open_position, symbol, entry_time, price, shares)
+                logger.info("BUY filled: %s %dsh @ $%.2f (order_id=%s, latency=%.1fs)",
+                            symbol, shares, price, doc.get("order_id"), latency)
+            elif action == "sell":
+                await asyncio.to_thread(self._position_store.close_position, symbol)
+                logger.info("SELL filled: %s %dsh @ $%.2f (order_id=%s, latency=%.1fs)",
+                            symbol, shares, price, doc.get("order_id"), latency)
+        except Exception as e:
+            logger.error("Position update failed after fill for %s %s %s: %s",
+                         doc.get("order_id"), action, symbol, e, exc_info=True)
 
     async def _cancel(self, doc):
         logger.warning("Order timed out: %s %s %s (age=%.0fs, retries=%d)",
