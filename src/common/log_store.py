@@ -1,12 +1,10 @@
 """Log store abstraction — BaseLogStore defines the interface,
 MongoLogStore implements it with pymongo.
 """
-import logging
 from abc import ABC, abstractmethod
 
 from src.common.collections import COLLECTION_LOGS
-
-logger = logging.getLogger(__name__)
+from src.common.mongo_base import MongoStoreBase
 
 
 class BaseLogStore(ABC):
@@ -18,18 +16,10 @@ class BaseLogStore(ABC):
         pass
 
 
-class MongoLogStore(BaseLogStore):
+class MongoLogStore(BaseLogStore, MongoStoreBase):
     """MongoDB implementation of log storage."""
 
-    def __init__(self, db=None):
-        try:
-            if db is None:
-                from src.data.utils.db_helper import get_db
-                db = get_db()
-            self._col = db[COLLECTION_LOGS]
-        except Exception:
-            logger.exception("Failed to connect to MongoDB for LogStore")
-            raise
+    collection = COLLECTION_LOGS
 
     def find_logs(self, logger_name: str = "", level: str = "", limit: int = 100) -> list[dict]:
         q: dict = {}

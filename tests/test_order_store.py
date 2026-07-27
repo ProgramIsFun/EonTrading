@@ -37,11 +37,13 @@ class TestMongoOrderStore:
         assert store._col is mock_col
         mock_db.__getitem__.assert_called_once()
 
-    def test_init_uses_provided_collection(self):
+    def test_init_uses_provided_collection_name(self):
         mock_col = MagicMock()
         mock_db = MagicMock()
-        store = MongoOrderStore(collection=mock_col, db=mock_db)
+        mock_db.__getitem__ = MagicMock(return_value=mock_col)
+        store = MongoOrderStore(db=mock_db, collection="custom_orders")
         assert store._col is mock_col
+        mock_db.__getitem__.assert_called_once_with("custom_orders")
 
     def test_insert(self):
         store, mock_col = _make_store()

@@ -4,14 +4,12 @@ MongoOrderStore implements it with pymongo.
 FUTURE: Add PostgresOrderStore, SqliteOrderStore, etc. by implementing
 the same BaseOrderStore ABC. OrderTracker and order_logger never change.
 """
-import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 
 from src.common.clock import utcnow
 from src.common.collections import COLLECTION_ORDERS
-
-logger = logging.getLogger(__name__)
+from src.common.mongo_base import MongoStoreBase
 
 
 class BaseOrderStore(ABC):
@@ -58,21 +56,10 @@ class BaseOrderStore(ABC):
         pass
 
 
-class MongoOrderStore(BaseOrderStore):
+class MongoOrderStore(BaseOrderStore, MongoStoreBase):
     """MongoDB implementation of BaseOrderStore."""
 
-    def __init__(self, collection=None, db=None):
-        try:
-            if collection is not None:
-                self._col = collection
-            else:
-                if db is None:
-                    from src.data.utils.db_helper import get_db
-                    db = get_db()
-                self._col = db[COLLECTION_ORDERS]
-        except Exception:
-            logger.exception("Failed to connect to MongoDB for OrderStore")
-            raise
+    collection = COLLECTION_ORDERS
 
     def find_pending(self, now: datetime) -> list[dict]:
         return list(self._col.find({

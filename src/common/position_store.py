@@ -3,12 +3,12 @@
 BasePositionStore defines the interface; MongoPositionStore uses MongoDB,
 InMemoryPositionStore uses a plain dict (for backtest/replay).
 """
-import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 
 from src.common.clock import utcnow
 from src.common.collections import COLLECTION_POSITIONS
+from src.common.mongo_base import MongoStoreBase
 
 
 class BasePositionStore(ABC):
@@ -40,19 +40,10 @@ class BasePositionStore(ABC):
         pass
 
 
-class MongoPositionStore(BasePositionStore):
+class MongoPositionStore(BasePositionStore, MongoStoreBase):
     """Read/write positions via MongoDB. One document per symbol."""
 
-    def __init__(self, collection: str = COLLECTION_POSITIONS, db=None):
-        try:
-            if db is None:
-                from src.data.utils.db_helper import get_db
-                db = get_db()
-            self._col = db[collection]
-        except Exception:
-            logger = logging.getLogger(__name__)
-            logger.exception("Failed to connect to MongoDB for PositionStore")
-            raise
+    collection = COLLECTION_POSITIONS
 
     def set_positions(self, holdings: dict[str, datetime], entry_prices: dict[str, float] | None = None, session=None):
         """Sync holdings to MongoDB — upsert active, remove closed."""

@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 
 from src.common.clock import utcnow
 from src.common.collections import COLLECTION_HEARTBEATS
+from src.common.mongo_base import MongoStoreBase
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +21,17 @@ class BaseHeartbeatStore(ABC):
         pass
 
 
-class MongoHeartbeatStore(BaseHeartbeatStore):
+class MongoHeartbeatStore(BaseHeartbeatStore, MongoStoreBase):
     """MongoDB implementation of heartbeat storage."""
+
+    collection = COLLECTION_HEARTBEATS
 
     def __init__(self, db=None):
         try:
             if db is None:
                 from src.data.utils.db_helper import get_db
                 db = get_db()
-            self._col = db[COLLECTION_HEARTBEATS]
+            self._col = db[self.collection]
         except Exception as e:
             logger.warning("Heartbeat MongoDB unavailable: %s", e)
             self._col = None

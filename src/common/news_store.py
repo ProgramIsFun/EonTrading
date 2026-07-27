@@ -4,13 +4,11 @@ MongoNewsStore implements it with pymongo (two collections: news + seen_urls).
 FUTURE: Add PostgresNewsStore, SqliteNewsStore, etc. by implementing
 the same BaseNewsStore ABC.
 """
-import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 
 from src.common.collections import COLLECTION_NEWS, COLLECTION_SEEN_URLS
-
-logger = logging.getLogger(__name__)
+from src.common.mongo_base import MongoStoreBase
 
 
 class BaseNewsStore(ABC):
@@ -53,8 +51,10 @@ class BaseNewsStore(ABC):
         pass
 
 
-class MongoNewsStore(BaseNewsStore):
+class MongoNewsStore(BaseNewsStore, MongoStoreBase):
     """MongoDB implementation using two collections: news + seen_urls."""
+
+    collection = COLLECTION_NEWS
 
     def __init__(self, db=None):
         try:
@@ -64,7 +64,8 @@ class MongoNewsStore(BaseNewsStore):
             self._news_col = db[COLLECTION_NEWS]
             self._seen_col = db[COLLECTION_SEEN_URLS]
         except Exception:
-            logger.exception("Failed to connect to MongoDB for NewsStore")
+            import logging
+            logging.getLogger(__name__).exception("Failed to connect to MongoDB for NewsStore")
             raise
 
     def insert_news(self, doc: dict) -> None:
