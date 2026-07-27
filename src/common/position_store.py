@@ -68,14 +68,26 @@ class MongoPositionStore(BasePositionStore, MongoStoreBase):
             self._col.delete_many({}, **({"session": session} if session else {}))
 
     def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0, session=None):
-        """Atomically add a single position."""
-        self._col.update_one(
-            {"symbol": symbol},
-            {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(),
-                      "entryPrice": entry_price, "qty": qty, "updatedAt": utcnow()}},
-            upsert=True,
-            **({"session": session} if session else {}),
-        )
+        """Add to position — merges qty and averages entry price if already holding."""
+        existing = self._col.find_one({"symbol": symbol})
+        if existing and existing.get("qty", 0) > 0:
+            old_qty = existing["qty"]
+            old_price = existing.get("entryPrice", 0.0)
+            new_qty = old_qty + qty
+            new_price = ((old_price * old_qty) + (entry_price * qty)) / new_qty if new_qty > 0 else entry_price
+            self._col.update_one(
+                {"symbol": symbol},
+                {"$set": {"qty": new_qty, "entryPrice": new_price, "updatedAt": utcnow()}},
+                **({"session": session} if session else {}),
+            )
+        else:
+            self._col.update_one(
+                {"symbol": symbol},
+                {"$set": {"symbol": symbol, "entryTime": entry_time.isoformat(),
+                          "entryPrice": entry_price, "qty": qty, "updatedAt": utcnow()}},
+                upsert=True,
+                **({"session": session} if session else {}),
+            )
 
     def close_position(self, symbol: str, session=None):
         """Atomically remove a single position."""
@@ -125,11 +137,20 @@ class InMemoryPositionStore(BasePositionStore):
             }
 
     def open_position(self, symbol: str, entry_time: datetime, entry_price: float = 0.0, qty: int = 0, session=None):
-        self._positions[symbol] = {
-            "entryTime": entry_time.isoformat(),
-            "entryPrice": entry_price,
-            "qty": qty,
-        }
+        existing = self._positions.get(symbol)
+        if existing and existing.get("qty", 0) > 0:
+            old_qty = existing["qty"]
+            old_price = existing.get("entryPrice", 0.0)
+            new_qty = old_qty + qty
+            new_price = ((old_price * old_qty) + (entry_price * qty)) / new_qty if new_qty > 0 else entry_price
+            existing["qty"] = new_qty
+            existing["entryPrice"] = new_price
+        else:
+            self._positions[symbol] = {
+                "entryTime": entry_time.isoformat(),
+                "entryPrice": entry_price,
+                "qty": qty,
+            }
 
     def close_position(self, symbol: str, session=None):
         self._positions.pop(symbol, None)

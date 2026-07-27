@@ -8,7 +8,7 @@ class TestShouldBuy:
     @pytest.mark.parametrize("desc,kwargs,sentiment,confidence,positions,cash,price,expected", [
         ("low confidence",  dict(threshold=0.3, min_confidence=0.5), 0.8, 0.2, {}, 10000, 150, 0),
         ("low sentiment",   dict(threshold=0.3, min_confidence=0.1), 0.1, 0.9, {}, 10000, 150, 0),
-        ("already holding", dict(threshold=0.3, min_confidence=0.1), 0.8, 0.9, {"AAPL": "..."}, 10000, 150, 0),
+        ("already holding", dict(threshold=0.3, min_confidence=0.1), 0.8, 0.9, {"AAPL": "..."}, 10000, 150, 13),
         ("max alloc 20%",   dict(threshold=0.3, min_confidence=0.1, max_allocation=0.2), 0.5, 0.9, {}, 20000, 100, 40),
         ("max alloc 10%",   dict(threshold=0.3, min_confidence=0.1, max_allocation=0.1), 1.0, 0.9, {}, 20000, 100, 20),
         ("risk per trade",  dict(threshold=0.3, min_confidence=0.1, max_allocation=1.0,

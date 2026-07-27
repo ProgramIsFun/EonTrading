@@ -365,6 +365,7 @@ class TestTraderReadsPositionStore:
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
         await asyncio.sleep(0.2)
 
-        # Should NOT buy AAPL — it's already in the store as a holding
-        assert len(broker.trades) == 0
+        # Should buy more AAPL (average in) — bullish sentiment with high confidence
+        assert len(broker.trades) == 1
+        assert broker.trades[0].action == "buy"
         mock_store.get_positions_with_prices.assert_called()

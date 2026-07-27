@@ -83,12 +83,40 @@ class SentimentTrader:
         for symbol in event.symbols:
             action = None
             if symbol in positions:
-                if not self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, positions):
-                    continue
-                action = "sell"
-                shares = positions[symbol].get("qty", 1)
-                price = await asyncio.to_thread(get_price, symbol, event_ts)
-                positions.pop(symbol, None)
+                if self.logic.should_sell_on_sentiment(event.sentiment, event.confidence, symbol, positions):
+                    action = "sell"
+                    shares = positions[symbol].get("qty", 1)
+                    price = await asyncio.to_thread(get_price, symbol, event_ts)
+                    positions.pop(symbol, None)
+                else:
+                    if event.confidence < self.logic.min_confidence:
+                        logger.debug("Skipped %s: confidence %.2f < min %.2f",
+                                     symbol, event.confidence, self.logic.min_confidence)
+                        continue
+                    if event.sentiment < self.logic.threshold:
+                        logger.debug("Skipped %s: sentiment %.2f < threshold %.2f",
+                                     symbol, event.sentiment, self.logic.threshold)
+                        continue
+                    price = await asyncio.to_thread(get_price, symbol, event_ts)
+                    if price <= 0:
+                        logger.warning("No price for %s, skipping", symbol)
+                        continue
+                    try:
+                        cash = await self.broker.get_cash() if self.broker else 0.0
+                    except Exception:
+                        logger.warning("Failed to fetch cash from broker, using 0", exc_info=True)
+                        cash = 0.0
+                    if cash > 0:
+                        shares = self.logic.should_buy(
+                            event.sentiment, event.confidence, symbol,
+                            positions, cash, price,
+                        )
+                    else:
+                        logger.warning("Cash unavailable, defaulting to qty=1 for %s", symbol)
+                        shares = 1
+                    if shares <= 0:
+                        continue
+                    action = "buy"
             else:
                 if event.confidence < self.logic.min_confidence:
                     logger.debug("Skipped %s: confidence %.2f < min %.2f",

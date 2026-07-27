@@ -56,8 +56,6 @@ class TradingLogic:
             return 0
         if sentiment < self.threshold:
             return 0
-        if symbol in positions:
-            return 0
 
         size = min(abs(sentiment), 1.0) if self.scale_by_sentiment else 1.0
         alloc = cash * self.max_allocation if self.max_allocation > 0 else cash * size

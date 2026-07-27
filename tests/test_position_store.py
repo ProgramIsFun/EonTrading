@@ -20,6 +20,7 @@ class TestPositionStore:
     def test_open_position(self):
         store, mock_col = _make_store()
         now = utcnow()
+        mock_col.find_one.return_value = None
         store.open_position("AAPL", now)
         mock_col.update_one.assert_called_once()
         args = mock_col.update_one.call_args
@@ -78,6 +79,24 @@ class TestInMemoryPositionStore:
         store.open_position("AAPL", utcnow(), entry_price=150.0)
         prices = store.get_positions_with_prices()
         assert prices["AAPL"]["entryPrice"] == 150.0
+
+    def test_open_position_averages_entry_price(self):
+        store = InMemoryPositionStore()
+        now = utcnow()
+        store.open_position("AAPL", now, entry_price=150.0, qty=50)
+        store.open_position("AAPL", now, entry_price=160.0, qty=50)
+        prices = store.get_positions_with_prices()
+        assert prices["AAPL"]["entryPrice"] == 155.0
+        assert prices["AAPL"]["qty"] == 100
+
+    def test_open_position_averagesUnequal_qty(self):
+        store = InMemoryPositionStore()
+        now = utcnow()
+        store.open_position("AAPL", now, entry_price=100.0, qty=30)
+        store.open_position("AAPL", now, entry_price=200.0, qty=10)
+        prices = store.get_positions_with_prices()
+        assert prices["AAPL"]["entryPrice"] == 125.0
+        assert prices["AAPL"]["qty"] == 40
 
     def test_close_position(self):
         store = InMemoryPositionStore()
