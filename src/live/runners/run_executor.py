@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 from src.common.factories import build_broker
 from src.common.shutdown import create_shutdown_event
 from src.live.brokers import TradeExecutor
-from src.live.order_logger import mongo_log_failed_order, mongo_log_order
+from src.live.order_logger import mongo_log_order
 from src.live.runners import runner_lifecycle
 
 
@@ -21,7 +21,7 @@ async def main():
         "Publishes to": "orders (OrderTracker polls)",
         "Broker": broker.__class__.__name__,
     }) as bus:
-        executor = TradeExecutor(bus, broker, log_order=mongo_log_order, log_failed_order=mongo_log_failed_order)
+        executor = TradeExecutor(bus, broker, log_order=mongo_log_order)
         await executor.start()
         logger.info("🟢 Started. Waiting for [trade] events.")
         await create_shutdown_event().wait()

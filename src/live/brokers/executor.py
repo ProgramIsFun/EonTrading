@@ -20,19 +20,17 @@ class TradeExecutor:
     ----------
     bus : EventBus
     broker : Broker
-    log_order : async callable (trade, order_id, broker_name) -> None
-        Called after each successful order submission.  Pass ``noop_log_order``
+    log_order : async callable (trade, order_id, broker_name, **kwargs) -> None
+        Called after each order attempt.  Pass ``noop_log_order``
         (or omit) to disable audit logging.  Default implementation is a no-op.
-    log_failed_order : async callable (trade, broker_name, error) -> None
-        Called when broker rejects the order.  Logs to MongoDB for audit trail.
+        kwargs: status="pending"|"failed", error=None|"<reason>".
     """
 
-    def __init__(self, bus: EventBus, broker: Broker, log_order=None, log_failed_order=None):
+    def __init__(self, bus: EventBus, broker: Broker, log_order=None):
         from src.live.order_logger import noop_log_order
         self.bus = bus
         self.broker = broker
         self._log_order = log_order or noop_log_order
-        self._log_failed_order = log_failed_order
         self._seen: set[str] = set()
 
     async def start(self):
@@ -49,12 +47,12 @@ class TradeExecutor:
             self._seen = set(list(self._seen)[-5000:])
 
         order_id = await self.broker.execute(trade)
+        broker_name = self.broker.__class__.__name__
         if order_id is None:
             logger.error("Order submission failed: %s %s", trade.action.upper(), trade.symbol)
-            if self._log_failed_order:
-                await self._log_failed_order(trade, self.broker.__class__.__name__, "broker returned None")
+            await self._log_order(trade, None, broker_name, status="failed", error="broker returned None")
             return
-        await self._log_order(trade, order_id, self.broker.__class__.__name__)
+        await self._log_order(trade, order_id, broker_name)
         logger.info("✅ %s %s qty=%d @ $%.2f (order_id=%s, broker=%s)",
                      trade.action.upper(), trade.symbol, int(trade.size),
-                     trade.price, order_id, self.broker.__class__.__name__)
+                     trade.price, order_id, broker_name)

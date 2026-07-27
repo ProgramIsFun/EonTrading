@@ -282,8 +282,8 @@ class TestTradeExecution:
         _mock_log_order.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_buy_rejected_skips_order(self, setup_with_rejecting, _mock_log_order):
-        """Executor skips log_order when broker rejects."""
+    async def test_buy_rejected_logs_failed_order(self, setup_with_rejecting, _mock_log_order):
+        """Executor logs failed order when broker rejects."""
         bus, trader, executor, broker = setup_with_rejecting
         executor._log_order = _mock_log_order
         await bus.start()
@@ -298,7 +298,11 @@ class TestTradeExecution:
         await bus.publish(CHANNEL_SENTIMENT, sentiment.to_dict())
         await asyncio.sleep(0.2)
 
-        _mock_log_order.assert_not_called()
+        _mock_log_order.assert_called_once()
+        call_kwargs = _mock_log_order.call_args[1]
+        assert call_kwargs["status"] == "failed"
+        assert call_kwargs["error"] == "broker returned None"
+        assert _mock_log_order.call_args[0][1] is None  # order_id is None
 
     @pytest.mark.asyncio
     async def test_ttl_dedup_blocks_duplicate_orders(self, setup_with_mock):
