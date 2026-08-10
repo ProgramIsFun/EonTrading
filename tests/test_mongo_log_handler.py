@@ -187,14 +187,20 @@ class TestLLMSentimentAnalyzerOpencode:
 
     def test_openai_key_fallback_when_no_opencode(self):
         from src.strategies.sentiment import LLMSentimentAnalyzer
+        from src.settings import settings
         os.environ.pop("OPENCODE_API_KEY", None)
         os.environ.pop("OPENAI_API_KEY", None)
         os.environ.pop("OPENAI_BASE_URL", None)
         os.environ.pop("OPENAI_MODEL", None)
-        a = LLMSentimentAnalyzer()
-        assert a.api_key is None
-        assert "api.openai.com" in a.base_url
-        assert a.model == "gpt-4o-mini"
+        old_provider = settings.llm_provider
+        settings.llm_provider = ""
+        try:
+            a = LLMSentimentAnalyzer()
+            assert a.api_key is None
+            assert "api.openai.com" in a.base_url
+            assert a.model == "gpt-4o-mini"
+        finally:
+            settings.llm_provider = old_provider
 
     def test_opencode_custom_model(self):
         from src.strategies.sentiment import LLMSentimentAnalyzer

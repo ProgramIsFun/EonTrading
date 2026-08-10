@@ -211,25 +211,42 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         api_key: str | None = None,
         base_url: str | None = None,
         model: str | None = None,
+        provider: str | None = None,
     ):
-        self.api_key: str | None = None
-        self.base_url: str | None = None
-        self.model: str | None = None
-        opencode_key = api_key or os.getenv("OPENCODE_API_KEY")
-        if opencode_key:
-            self.api_key = opencode_key
+        from src.settings import settings
+
+        provider = (provider or settings.llm_provider or "").strip().lower()
+        if not provider:
+            # Legacy auto-detect: OpenCode if its key is set, otherwise OpenAI/Azure.
+            provider = "opencode" if os.getenv("OPENCODE_API_KEY") else "openai"
+        self.api_key = api_key
+        self.base_url = base_url
+        self.model = model
+        self.api_version = settings.openai_api_version or ""
+        if provider == "opencode":
+            self.api_key = api_key or os.getenv("OPENCODE_API_KEY")
             self.base_url = base_url or os.getenv("OPENCODE_BASE_URL", "https://opencode.ai/zen/v1")
             self.model = model or os.getenv("OPENCODE_MODEL", "big-pickle")
             logger.info("LLM provider: OpenCode (model=%s)", self.model)
-        else:
+        elif provider == "azure":
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+            self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+            self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            logger.info("LLM provider: Azure (deployment=%s)", self.model)
+        elif provider == "openai":
             self.api_key = api_key or os.getenv("OPENAI_API_KEY")
             self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
             self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
             logger.info("LLM provider: OpenAI (model=%s)", self.model)
+        else:
+            raise ValueError(f"Unknown LLM provider '{provider}' — use 'opencode', 'openai', 'azure', or '' (auto)")
 
     def _get_client(self):
         from openai import OpenAI
-        return OpenAI(base_url=self.base_url, api_key=self.api_key)
+        kwargs: dict = {"base_url": self.base_url, "api_key": self.api_key}
+        if self.api_version:
+            kwargs["default_query"] = {"api-version": self.api_version}
+        return OpenAI(**kwargs)
 
     def analyze(self, event: NewsEvent, positions: dict | None = None) -> SentimentEvent:
         from src.settings import settings

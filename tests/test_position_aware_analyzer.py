@@ -133,3 +133,53 @@ class TestLLMPromptSelection:
 
         call_args = mock_get_client.return_value.chat.completions.create.call_args
         assert call_args[1]["max_tokens"] == 1500
+
+
+class TestLLMProviderSelection:
+    @patch("src.strategies.sentiment.os.getenv")
+    def test_explicit_opencode(self, mock_getenv):
+        mock_getenv.side_effect = lambda name, default=None: default
+        analyzer = LLMSentimentAnalyzer(api_key="test-key", provider="opencode")
+        assert analyzer.base_url == "https://opencode.ai/zen/v1"
+        assert analyzer.model == "big-pickle"
+
+    @patch("src.strategies.sentiment.os.getenv")
+    def test_explicit_openai(self, mock_getenv):
+        mock_getenv.side_effect = lambda name, default=None: default
+        analyzer = LLMSentimentAnalyzer(api_key="test-key", provider="openai")
+        assert analyzer.model == "gpt-4o-mini"
+        assert "openai.com" in analyzer.base_url
+
+    @patch("src.strategies.sentiment.os.getenv")
+    def test_explicit_azure(self, mock_getenv):
+        mock_getenv.side_effect = lambda name, default=None: default
+        analyzer = LLMSentimentAnalyzer(api_key="test-key", provider="azure")
+        assert analyzer.model == "gpt-4o-mini"
+
+    def test_unknown_provider_raises(self):
+        with pytest.raises(ValueError, match="Unknown LLM provider"):
+            LLMSentimentAnalyzer(api_key="test-key", provider="claude")
+
+    @patch("src.strategies.sentiment.os.getenv")
+    def test_auto_prefers_opencode_when_key_set(self, mock_getenv):
+        mock_getenv.side_effect = lambda name, default=None: (
+            "sk-test" if name == "OPENCODE_API_KEY" else default
+        )
+        analyzer = LLMSentimentAnalyzer()
+        assert analyzer.model == "big-pickle"
+
+    @patch("src.strategies.sentiment.os.getenv")
+    def test_auto_falls_back_to_openai(self, mock_getenv):
+        mock_getenv.side_effect = lambda name, default=None: default
+        from src.settings import settings
+        with patch.object(settings, "llm_provider", ""):
+            analyzer = LLMSentimentAnalyzer()
+        assert analyzer.model == "gpt-4o-mini"
+
+    @patch("src.strategies.sentiment.os.getenv")
+    def test_settings_provider_wins(self, mock_getenv):
+        mock_getenv.side_effect = lambda name, default=None: default
+        from src.settings import settings
+        with patch.object(settings, "llm_provider", "azure"):
+            analyzer = LLMSentimentAnalyzer(api_key="test-key")
+        assert analyzer.model == "gpt-4o-mini"
