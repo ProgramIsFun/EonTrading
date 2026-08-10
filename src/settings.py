@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     opencode_api_key: str = ""
     opencode_base_url: str = "https://opencode.ai/zen/v1"
     opencode_model: str = "big-pickle"
+    llm_reasoning_effort: str = "low"  # "low"|"medium"|"high"|"" — cap thinking so the JSON reply isn't starved
     openai_api_version: str = ""
 
     # Broker

@@ -134,6 +134,18 @@ class TestLLMPromptSelection:
         call_args = mock_get_client.return_value.chat.completions.create.call_args
         assert call_args[1]["max_tokens"] == 1500
 
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_llm_call_sends_reasoning_effort(self, mock_get_client):
+        mock_get_client.return_value = _mock_llm_response(
+            '{"symbols":[],"sector":"","sentiment":0,"confidence":0,"urgency":"normal"}'
+        )
+
+        analyzer = LLMSentimentAnalyzer(api_key="test-key")
+        analyzer.analyze(TARIFF_NEWS)
+
+        call_args = mock_get_client.return_value.chat.completions.create.call_args
+        assert call_args[1]["reasoning_effort"] == "low"
+
 
 class TestLLMProviderSelection:
     @patch("src.strategies.sentiment.os.getenv")

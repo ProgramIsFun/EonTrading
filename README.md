@@ -199,3 +199,5 @@ Supports OpenAI, Azure OpenAI, and local Ollama.
 **Done:** Live pipeline (3 channels: [news], [sentiment], [trade]), 5 news sources, 5 brokers, single `orders` collection for order lifecycle, OrderTracker state machine (fill/fail/timeout), MongoDB persistence, dedup, 2 analyzers (keyword + LLM), SL/TP (trailing), backtesting (sentiment + price), React dashboard, single/distributed modes, Redis Streams, replay mode, price cache, transaction costs, Docker Compose deployment, heartbeats, graceful shutdown, 269 tests.
 
 **To do:** Cross-source dedup, inverse ETF support, sector trading, real-news backtest, side-by-side comparison, live dashboard, Telegram alerts.
+
+**Cash reservation:** We trust the real broker to report held cash. If a broker were ever slow to register the hold (like a bank that hasn't processed the hold yet), we might ask "how much money?" and get the old number ($10,000 instead of $9,000), then place a second order we can't really afford. We don't yet keep our own "money on hold" ledger to protect against that.

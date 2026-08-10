@@ -285,14 +285,16 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
 
     @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
     def _call_llm(self, prompt: str) -> str:
+        from src.settings import settings
+
         client = self._get_client()
         t0 = time.perf_counter()
         logger.info("LLM call starting (model=%s, base_url=%s)", self.model, self.base_url)
-        resp = client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=_LLM_MAX_TOKENS,
-        )
+        kwargs: dict = {"model": self.model, "messages": [{"role": "user", "content": prompt}]}
+        if settings.llm_reasoning_effort:
+            kwargs["reasoning_effort"] = settings.llm_reasoning_effort
+        kwargs["max_tokens"] = _LLM_MAX_TOKENS
+        resp = client.chat.completions.create(**kwargs)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         usage = resp.usage
         if usage:
@@ -301,4 +303,10 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         else:
             logger.info("LLM call done in %.0fms — usage unavailable", elapsed_ms)
         content = resp.choices[0].message.content
-        return str(content) if content is not None else ""
+        if not content:
+            reasoning = getattr(resp.choices[0].message, "reasoning_content", None) or ""
+            logger.warning("LLM returned empty content (completion_tokens=%s, reasoning_chars=%d, effort=%s) — "
+                           "the thinking budget starved the JSON reply",
+                           usage.completion_tokens if usage else "?", len(reasoning), settings.llm_reasoning_effort)
+            return ""
+        return str(content)
