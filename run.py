@@ -4,7 +4,7 @@
 Usage:
     python run.py <command>      # required — no default mode
     python run.py single         # single process (all components in one process)
-    python run.py start          # distributed mode — start all 7 components
+    python run.py start          # distributed mode — start all 6 components
     python run.py stop           # kill all distributed processes
     python run.py status         # show running processes
     python run.py restart        # stop + start

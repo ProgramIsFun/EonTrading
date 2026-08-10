@@ -19,7 +19,7 @@ async def main():
     from src.common.events import CHANNEL_NEWS, NewsEvent
     from src.common.trading_logic import TradingLogic
     from src.live.analyzer_service import AnalyzerService
-    from src.live.brokers import PaperBroker, TradeExecutor
+    from src.live.brokers import PaperBroker
     from src.live.sentiment_trader import SentimentTrader
     from src.strategies.sentiment import KeywordSentimentAnalyzer
 
@@ -45,15 +45,13 @@ async def main():
     # Clean slate — clear positions from previous runs
     store.set_positions({})
 
-    monitor = PriceMonitor(bus, store, logic, interval_sec=0)
+    monitor = PriceMonitor(bus, store, logic, interval_sec=0, broker=broker)
 
     trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
     analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
-    executor = TradeExecutor(bus, broker)
 
     await analyzer_svc.start()
     await trader.start()
-    await executor.start()
 
     print(f"\n{'═' * 60}")
     print("  Replay Backtest via Live Pipeline")

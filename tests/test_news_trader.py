@@ -235,7 +235,7 @@ class RejectingBroker(Broker):
 
 @pytest.fixture
 def _mock_log_order():
-    """Provide a mock log_order callable for TradeExecutor."""
+    """Provide a mock log_order callable for the trader."""
     mock = AsyncMock()
     return mock
 

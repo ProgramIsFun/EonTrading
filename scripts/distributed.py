@@ -21,7 +21,6 @@ COMPONENTS = {
     "newswatcher": "src.live.runners.run_watcher",
     "analyzer": "src.live.runners.run_analyzer",
     "trader": "src.live.runners.run_trader",
-    "executor": "src.live.runners.run_executor",
     "monitor": "src.live.runners.run_monitor",
     "order_tracker": "src.live.runners.run_order_tracker",
 }

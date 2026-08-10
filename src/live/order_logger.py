@@ -1,8 +1,8 @@
-"""Order logging — decoupled from TradeExecutor via dependency injection.
+"""Order logging — decoupled from the executing component via dependency injection.
 
-TradeExecutor calls `log_order(trade, order_id, broker_name)` without knowing
-the backend.  The default implementation writes to MongoDB; pass a no-op or
-custom logger to TradeExecutor for testing.
+The trader and the price monitor call `log_order(trade, order_id, broker_name)`
+without knowing the backend.  The default implementation writes to MongoDB;
+pass a no-op or custom logger for testing.
 """
 import asyncio
 import logging

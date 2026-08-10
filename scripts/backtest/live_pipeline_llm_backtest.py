@@ -1,7 +1,7 @@
 """Replay with pre-scored LLM sentiment — skips analyzer, feeds directly to trader.
 
 The sentiment scores below simulate what an LLM would output for each headline.
-The rest of the pipeline (trader, executor, monitor) runs identically to live mode.
+The rest of the pipeline (trader, monitor) runs identically to live mode.
 
 Usage:
   REDIS_HOST=localhost PRICE_SOURCE=clickhouse PYTHONPATH=. python3 scripts/backtest/live_pipeline_llm_backtest.py
@@ -61,7 +61,7 @@ async def main():
     from src.common.events import CHANNEL_SENTIMENT, SentimentEvent
     from src.common.position_store import PositionStore
     from src.common.trading_logic import TradingLogic
-    from src.live.brokers import PaperBroker, TradeExecutor
+    from src.live.brokers import PaperBroker
     from src.live.price_monitor import PriceMonitor
     from src.live.sentiment_trader import SentimentTrader
 
@@ -81,12 +81,10 @@ async def main():
     store.set_positions({})
     print(f"  {elapsed()} store cleared")
 
-    monitor = PriceMonitor(bus, store, logic, interval_sec=0)
+    monitor = PriceMonitor(bus, store, logic, interval_sec=0, broker=broker)
     trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-    executor = TradeExecutor(bus, broker)
 
     await trader.start()
-    await executor.start()
 
     SL_CHECK_INTERVAL = int(os.getenv("SL_CHECK_HOURS", "24"))
 
@@ -139,16 +137,10 @@ async def main():
             while check_time < curr:
                 if not monitor._states:
                     break
-                sold = monitor.check_once_sync(as_of=check_time.isoformat())
+                sold = await monitor.check_once(as_of=check_time.isoformat())
                 checks_done += 1
                 if sold:
-                    for sym, price, qty in sold:
-                        from src.common.events import CHANNEL_TRADE, TradeEvent
-                        trade = TradeEvent(symbol=sym, action="sell",
-                                           reason=f"SL/TP @ ${price:.2f}",
-                                           timestamp=check_time.isoformat(), price=price, size=float(qty))
-                        await bus.publish(CHANNEL_TRADE, trade.to_dict())
-                    print(f"    ⏰ SL/TP @ {check_time.strftime('%Y-%m-%d %H:%M')} — sold {', '.join(s[0] for s in sold)}")
+                    print(f"    ⏰ SL/TP @ {check_time.strftime('%Y-%m-%d %H:%M')} — sold {', '.join(sold)}")
                     await asyncio.sleep(0.05)
                 elif checks_done % 500 == 0:
                     print(f"    {elapsed()} ... {checks_done} SL/TP checks (@ {check_time.strftime('%Y-%m-%d %H:%M')})")

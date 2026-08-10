@@ -81,7 +81,7 @@ async def main_single():
     monitor_task = asyncio.create_task(pipeline.monitor.run())
     wealth_task = asyncio.create_task(wealth.run())
 
-    for name in ["newswatcher", "analyzer", "trader", "executor", "monitor", "wealth"]:
+    for name in ["newswatcher", "analyzer", "trader", "monitor", "wealth"]:
         Heartbeat.create_background(name, metadata={"mode": "single"})
 
     logger.info("🟢 All components started. Polling every 120s.")
