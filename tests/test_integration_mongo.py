@@ -7,12 +7,78 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from src.common.portfolio import MongoPortfolioSource
 from src.common.position_store import MongoPositionStore
 from src.common.order_store import MongoOrderStore
 from src.common.clock import utcnow
 from src.live.brokers.paper import PaperBroker
 
 pytestmark = pytest.mark.integration
+
+
+class TestMongoPortfolioSource:
+    def _source(self, test_db):
+        return MongoPortfolioSource(
+            db=test_db,
+            position_store=MongoPositionStore(db=test_db),
+            order_store=MongoOrderStore(db=test_db),
+            limit=20,
+        )
+
+    def test_snapshot_reads_positions_orders_and_cash(self, test_db):
+        source = self._source(test_db)
+        now = utcnow()
+
+        source._get_position_store().open_position("AAPL", now, entry_price=150.0, qty=10)
+        source._get_order_store().insert({
+            "order_id": "ord-1", "symbol": "AAPL", "action": "buy",
+            "shares": 10, "price": 150.0, "status": "filled",
+            "placed_at": now, "filled_at": now,
+        })
+        test_db.paper_account.update_one(
+            {"_id": "paper_account"}, {"$set": {"cash": 99999.0}}, upsert=True,
+        )
+
+        snap = source._load()
+
+        assert snap.source == "db"
+        assert snap.cash == 99999.0
+        assert snap.positions_by_symbol()["AAPL"].qty == 10
+        assert snap.positions_by_symbol()["AAPL"].entry_price == 150.0
+        assert len(snap.recent_orders) == 1
+        assert snap.recent_orders[0].symbol == "AAPL"
+        assert snap.recent_orders[0].action == "buy"
+        assert snap.recent_orders[0].order_id == "ord-1"
+
+    def test_recent_orders_newest_first(self, test_db):
+        source = self._source(test_db)
+        base = utcnow()
+
+        source._get_order_store().insert({
+            "order_id": "old", "symbol": "MSFT", "action": "buy",
+            "shares": 5, "price": 300.0, "status": "filled",
+            "placed_at": base - timedelta(hours=2),
+        })
+        source._get_order_store().insert({
+            "order_id": "new", "symbol": "NVDA", "action": "sell",
+            "shares": 2, "price": 900.0, "status": "filled",
+            "placed_at": base,
+        })
+
+        snap = source._load()
+        ids = [o.order_id for o in snap.recent_orders]
+        assert ids == ["new", "old"]
+
+    @pytest.mark.asyncio
+    async def test_get_snapshot_async(self, test_db):
+        source = self._source(test_db)
+        now = utcnow()
+        source._get_position_store().open_position("0700.HK", now, entry_price=380.0, qty=100)
+
+        snap = await source.get_snapshot()
+
+        assert snap.source == "db"
+        assert snap.positions_by_symbol()["0700.HK"].qty == 100
 
 
 class TestMongoPositionStore:

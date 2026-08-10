@@ -7,24 +7,25 @@ setup_logging("analyzer")
 logger = logging.getLogger(__name__)
 
 from src.common.factories import build_analyzer
-from src.common.position_store import PositionStore
+from src.common.portfolio import build_portfolio_source
 from src.common.shutdown import create_shutdown_event
 from src.live.analyzer_service import AnalyzerService
 from src.live.runners import runner_lifecycle
+from src.settings import settings
 
 
 async def main():
     analyzer, analyzer_name = build_analyzer()
+    portfolio_source = build_portfolio_source()
 
     async with runner_lifecycle("analyzer", "AnalyzerService", {
         "Subscribes to": "[news]",
         "Publishes to": "[sentiment]",
         "Analyzer": analyzer_name,
-        "Positions from": "MongoDB",
+        "Portfolio from": f"{portfolio_source.__class__.__name__} ({settings.portfolio_source})",
     }) as bus:
         logger.info("Analyzer mode: %s", analyzer_name)
-        store = PositionStore()
-        svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
+        svc = AnalyzerService(bus, analyzer=analyzer, portfolio_source=portfolio_source)
         await svc.start()
         logger.info("🟢 Started. Waiting for [news] events.")
         await create_shutdown_event().wait()

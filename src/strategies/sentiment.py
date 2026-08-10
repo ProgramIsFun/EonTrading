@@ -5,6 +5,7 @@ import os
 import re
 import time
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 from ..common.clock import utcnow
 from ..common.events import NewsEvent, SentimentEvent
@@ -36,7 +37,8 @@ class BaseSentimentAnalyzer(ABC):
     """Interface for sentiment analyzers. Swap implementations freely."""
 
     @abstractmethod
-    def analyze(self, event: NewsEvent, positions: dict | None = None) -> SentimentEvent:
+    def analyze(self, event: NewsEvent, positions: dict | None = None,
+                recent_orders: list | None = None) -> SentimentEvent:
         pass
 
 
@@ -80,7 +82,8 @@ BEARISH_WORDS = [
 class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
     """Fast keyword-based scorer. No external dependencies."""
 
-    def analyze(self, event: NewsEvent, positions: dict | None = None) -> SentimentEvent:
+    def analyze(self, event: NewsEvent, positions: dict | None = None,
+                recent_orders: list | None = None) -> SentimentEvent:
         t0 = time.perf_counter()
         text = (event.headline + " " + event.body).lower()
 
@@ -178,25 +181,63 @@ def _market_rules(markets: str) -> str:
     return "\n".join(lines)
 
 
-def _build_llm_prompt(headline: str, markets: str, positions: dict | None = None) -> str:
+def _build_llm_prompt(headline: str, markets: str, positions: dict | None = None,
+                      recent_orders: list | None = None) -> str:
     parts = ["Analyze this financial news headline" +
-             (" considering the current portfolio" if positions else "") +
+             (" considering the current portfolio" if (positions or recent_orders) else "") +
              ". Return JSON only, no explanation.",
              f'\nHeadline: "{headline}"']
     if positions:
         pos_str = "\n".join(f"- {sym}" for sym in positions.keys()) or "None"
         parts.append(f"\nCurrent holdings:\n{pos_str}")
+    if recent_orders:
+        order_lines = []
+        for o in recent_orders[:10]:
+            sym = o.get("symbol") if isinstance(o, dict) else getattr(o, "symbol", "?")
+            action = ((o.get("action") if isinstance(o, dict) else getattr(o, "action", "")) or "").upper()
+            qty = o.get("qty") if isinstance(o, dict) else getattr(o, "qty", 0)
+            price = o.get("price") if isinstance(o, dict) else getattr(o, "price", 0.0)
+            when = _order_age(o)
+            order_lines.append(f"- {when}: {action} {sym} {qty} @ ${price}")
+        parts.append("\nRecent trades (newest first):\n" + ("\n".join(order_lines) or "None"))
     parts.append("\nRules:")
     parts.append("- We trade CASH ONLY — no margin, no short selling, no borrowing.")
     parts.append(_market_rules(markets))
-    if positions:
+    if positions or recent_orders:
         parts.append("- Only list a holding for SELLING if the headline directly and specifically concerns that company or its sector/industry.")
         parts.append("- If the news does not directly concern a holding, leave it out of symbols entirely — even if the news is broadly negative.")
         parts.append("- Never return the full holdings list just because sentiment is negative.")
         parts.append("- Higher confidence if the news directly impacts our holdings.")
+        parts.append("- If a symbol was traded very recently (within the last 10 minutes) and this headline is the same story, "
+                     "do NOT recommend trading it again — recency matters more than the signal here.")
     parts.append("- Sentiment is from the perspective of the returned symbols (positive = those symbols go up).")
     parts.append(_return_example(markets))
     return "\n".join(parts)
+
+
+def _order_age(order) -> str:
+    """Human-readable age of an order for the prompt, e.g. '2 min ago'."""
+    placed = order.get("placed_at") if isinstance(order, dict) else getattr(order, "placed_at", None)
+    ts = _parse_dt(placed)
+    if ts is None:
+        return "recently"
+    age_sec = max(0, (utcnow().replace(tzinfo=None) - ts.replace(tzinfo=None)).total_seconds())
+    if age_sec < 60:
+        return "just now"
+    if age_sec < 3600:
+        return f"{int(age_sec // 60)} min ago"
+    return f"{int(age_sec // 3600)} h ago"
+
+
+def _parse_dt(value) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
 
 
 class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
@@ -248,10 +289,11 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
             kwargs["default_query"] = {"api-version": self.api_version}
         return OpenAI(**kwargs)
 
-    def analyze(self, event: NewsEvent, positions: dict | None = None) -> SentimentEvent:
+    def analyze(self, event: NewsEvent, positions: dict | None = None,
+                recent_orders: list | None = None) -> SentimentEvent:
         from src.settings import settings
 
-        prompt = _build_llm_prompt(event.headline, settings.tradable_markets, positions)
+        prompt = _build_llm_prompt(event.headline, settings.tradable_markets, positions, recent_orders)
         logger.info("Prompt built: %d chars, headline: %s", len(prompt), event.headline[:60])
         t0 = time.perf_counter()
         try:

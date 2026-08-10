@@ -136,3 +136,31 @@ def test_llm_prompt_empty_markets_returns_nothing():
     prompt = _build_llm_prompt("Some news", "")
     assert "empty symbols" in prompt
     assert "0700.HK" not in prompt
+
+
+def test_llm_prompt_includes_recent_orders_and_recency_rule():
+    """Recent orders must be surfaced to the LLM alongside the recency guard."""
+    from src.strategies.sentiment import _build_llm_prompt
+
+    orders = [{"symbol": "XOM", "action": "buy", "qty": 50, "price": 110.0,
+               "placed_at": "2026-05-31T10:00:00Z"}]
+    prompt = _build_llm_prompt("Oil news", "US", positions={"XOM": 50}, recent_orders=orders)
+
+    assert "Recent trades (newest first):" in prompt
+    assert "BUY XOM 50" in prompt
+    assert "do NOT recommend trading it again" in prompt
+
+
+def test_llm_prompt_handles_dataclass_orders():
+    """OrderInfo dataclass objects (from PortfolioSnapshot) render in the prompt."""
+    from datetime import datetime
+
+    from src.common.portfolio import OrderInfo
+    from src.strategies.sentiment import _build_llm_prompt
+
+    orders = [OrderInfo(symbol="AAPL", action="buy", qty=10, price=200.0,
+                        placed_at=datetime(2026, 5, 31, 10, 0, 0))]
+    prompt = _build_llm_prompt("Apple news", "US", positions={"AAPL": 10}, recent_orders=orders)
+
+    assert "AAPL" in prompt
+    assert "BUY AAPL 10" in prompt

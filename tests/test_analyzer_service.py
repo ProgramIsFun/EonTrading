@@ -87,8 +87,40 @@ class TestOnNews:
         svc = AnalyzerService(bus, analyzer=analyzer, get_positions=lambda: positions, **DISABLE_STALE)
         await svc._on_news({"source": "t", "headline": "h", "timestamp": "2026-05-31T10:00:00Z", "url": "", "body": ""})
         call_args = analyzer.analyze.call_args[0]
-        assert len(call_args) == 2
+        assert len(call_args) == 3
         assert call_args[1] == positions
+        assert call_args[2] is None
+
+    async def test_portfolio_source_passes_positions_and_orders(self, bus, analyzer):
+        class FakeSource:
+            async def get_snapshot(self):
+                from src.common.portfolio import OrderInfo, PortfolioSnapshot, PositionInfo
+                return PortfolioSnapshot(
+                    source="db", as_of=__import__("datetime").datetime(2026, 5, 31),
+                    cash=1000.0,
+                    positions=[PositionInfo(symbol="AAPL", qty=10), PositionInfo(symbol="XOM", qty=0)],
+                    recent_orders=[OrderInfo(symbol="AAPL", action="buy", qty=10, price=200.0)],
+                )
+
+        svc = AnalyzerService(bus, analyzer=analyzer, portfolio_source=FakeSource(), **DISABLE_STALE)
+        await svc._on_news({"source": "t", "headline": "h", "timestamp": "2026-05-31T10:00:00Z", "url": "", "body": ""})
+        call_args = analyzer.analyze.call_args[0]
+        assert call_args[1] == {"AAPL": 10}
+        assert len(call_args[2]) == 1
+        assert call_args[2][0].symbol == "AAPL"
+
+    async def test_portfolio_source_failure_falls_back_to_plain(self, bus, analyzer):
+        class BrokenSource:
+            async def get_snapshot(self):
+                raise RuntimeError("mongo down")
+
+        analyzer._result.confidence = 0.8
+        svc = AnalyzerService(bus, analyzer=analyzer, portfolio_source=BrokenSource(), **DISABLE_STALE)
+        await svc._on_news({"source": "t", "headline": "h", "timestamp": "2026-05-31T10:00:00Z", "url": "", "body": ""})
+        bus.publish.assert_called_once()
+        call_args = analyzer.analyze.call_args[0]
+        assert call_args[1] is None
+        assert call_args[2] is None
 
     async def test_skips_stale_news(self, bus, analyzer):
         svc = AnalyzerService(bus, analyzer=analyzer, max_age_sec=10)

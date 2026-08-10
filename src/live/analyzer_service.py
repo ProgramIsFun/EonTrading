@@ -19,10 +19,11 @@ class AnalyzerService:
     """Listens to raw news, analyzes with portfolio context, publishes sentiment."""
 
     def __init__(self, bus: EventBus, analyzer: BaseSentimentAnalyzer | None = None,
-                 get_positions=None, max_age_sec: int = MAX_NEWS_AGE_SEC):
+                 get_positions=None, portfolio_source=None, max_age_sec: int = MAX_NEWS_AGE_SEC):
         self.bus = bus
         self.analyzer = analyzer or KeywordSentimentAnalyzer()
-        self.get_positions = get_positions  # callable → {symbol: shares}
+        self.get_positions = get_positions  # legacy callable → {symbol: shares}
+        self.portfolio_source = portfolio_source  # optional PortfolioSource (preferred)
         self.max_age_sec = max_age_sec
 
     async def start(self):
@@ -48,13 +49,21 @@ class AnalyzerService:
         logger.info("Analyzing: %s", event.headline[:80])
         t0 = asyncio.get_event_loop().time()
         # Run synchronous MongoDB + LLM calls off the event loop
-        if self.get_positions:
+        positions, recent_orders = None, None
+        if self.portfolio_source is not None:
+            try:
+                snapshot = await self.portfolio_source.get_snapshot()
+                positions = {p.symbol: p.qty for p in snapshot.positions if p.qty > 0}
+                recent_orders = snapshot.recent_orders
+                logger.info("Portfolio snapshot (%s): %d positions, %d recent orders, cash=%.2f",
+                            snapshot.source, len(positions), len(recent_orders), snapshot.cash)
+            except Exception as e:
+                logger.warning("Portfolio snapshot failed (%s) — analyzing without portfolio context", e, exc_info=True)
+        elif self.get_positions:
             positions = await asyncio.to_thread(self.get_positions)
-        else:
-            positions = None
         t_pos = asyncio.get_event_loop().time()
         try:
-            sentiment = await asyncio.to_thread(self.analyzer.analyze, event, positions)
+            sentiment = await asyncio.to_thread(self.analyzer.analyze, event, positions, recent_orders)
         except Exception as e:
             logger.error("Analysis failed for %s: %s", event.headline[:60], e, exc_info=True)
             return

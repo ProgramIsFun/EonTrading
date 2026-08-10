@@ -70,6 +70,41 @@ class TestLLMPromptSelection:
         assert "Current holdings" not in prompt
 
     @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_llm_receives_positions_and_recent_orders_in_prompt(self, mock_get_client):
+        mock_get_client.return_value = _mock_llm_response(
+            '{"symbols":["AAPL"],"sector":"technology","sentiment":-0.5,"confidence":0.7,"urgency":"normal"}'
+        )
+
+        analyzer = LLMSentimentAnalyzer(api_key="test-key")
+        recent_orders = [
+            {"symbol": "NVDA", "action": "sell", "qty": 5, "price": 900.0,
+             "placed_at": "2026-05-31T10:00:00Z"},
+        ]
+        analyzer.analyze(TARIFF_NEWS, positions=HOLDINGS, recent_orders=recent_orders)
+
+        call_args = mock_get_client.return_value.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][0]["content"]
+        assert "Current holdings" in prompt
+        assert "AAPL" in prompt
+        assert "Recent trades (newest first)" in prompt
+        assert "SELL NVDA 5" in prompt
+        assert "do NOT recommend trading it again" in prompt
+
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_llm_uses_basic_prompt_when_no_orders_or_positions(self, mock_get_client):
+        mock_get_client.return_value = _mock_llm_response(
+            '{"symbols":[],"sector":"","sentiment":0,"confidence":0,"urgency":"normal"}'
+        )
+
+        analyzer = LLMSentimentAnalyzer(api_key="test-key")
+        analyzer.analyze(TARIFF_NEWS)
+
+        call_args = mock_get_client.return_value.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][0]["content"]
+        assert "Current holdings" not in prompt
+        assert "Recent trades" not in prompt
+
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
     def test_llm_returns_valid_sentiment_event(self, mock_get_client):
         mock_get_client.return_value = _mock_llm_response(
             '{"symbols":["AAPL","NVDA"],"sector":"technology","sentiment":-0.9,"confidence":0.95,"urgency":"high"}'

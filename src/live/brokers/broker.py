@@ -80,6 +80,19 @@ class Broker(ABC):
         """Returns full account snapshot. Override in subclasses."""
         return AccountInfo(cash=0.0, buying_power=0.0)
 
+    async def get_recent_orders(self, limit: int = 20) -> list[dict]:
+        """Return recent orders (newest first). Each dict may contain
+        {symbol, action, qty, price, status, order_id, placed_at, filled_at}.
+
+        Not implemented in the base class: a broker that has no order-history
+        API must say so loudly rather than let BrokerPortfolioSource silently
+        feed an empty list to the LLM. Implement in subclasses that can.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__}.get_recent_orders() is not implemented — "
+            "PORTFOLIO_SOURCE=broker requires a broker that exposes order history."
+        )
+
     async def place_stop_loss(self, symbol: str, shares: int, stop_price: float) -> bool:
         return False
 

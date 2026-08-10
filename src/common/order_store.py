@@ -60,6 +60,11 @@ class BaseOrderStore(ABC):
         """Return filled orders sorted by filled_at descending."""
         pass
 
+    @abstractmethod
+    def find_recent(self, limit: int = 20) -> list[dict]:
+        """Return the most recent orders (any status) sorted by placed_at descending."""
+        pass
+
 
 class MongoOrderStore(BaseOrderStore, MongoStoreBase):
     """MongoDB implementation of BaseOrderStore."""
@@ -109,3 +114,6 @@ class MongoOrderStore(BaseOrderStore, MongoStoreBase):
 
     def find_filled(self, limit: int = 100) -> list[dict]:
         return list(self._col.find({"status": "filled"}, {"_id": 0}).sort("filled_at", -1).limit(limit))
+
+    def find_recent(self, limit: int = 20) -> list[dict]:
+        return list(self._col.find({}, {"_id": 0}).sort("placed_at", -1).limit(limit))

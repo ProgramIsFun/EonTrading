@@ -198,7 +198,7 @@ class TestRunnerMainExecution:
         with patch("src.common.event_bus.RedisStreamBus", return_value=mock_bus), \
              patch("src.common.heartbeat.Heartbeat") as mock_hb, \
              patch("src.common.startup.banner"), \
-             patch.object(mod, "PositionStore", return_value=mock_store), \
+             patch.object(mod, "build_portfolio_source", return_value=mock_store), \
              patch.object(mod, "build_analyzer") as mock_build, \
              patch.object(mod, "AnalyzerService") as mock_svc, \
              patch.object(mod, "create_shutdown_event") as mock_shutdown:
