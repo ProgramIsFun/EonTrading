@@ -2,7 +2,8 @@
 """EonTrading CLI — cross-platform replacement for run.sh.
 
 Usage:
-    python run.py                # single process (default)
+    python run.py <command>      # required — no default mode
+    python run.py single         # single process (all components in one process)
     python run.py start          # distributed mode — start all 7 components
     python run.py stop           # kill all distributed processes
     python run.py status         # show running processes
@@ -199,7 +200,11 @@ COMMANDS = {
 
 
 def main():
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "single"
+    if len(sys.argv) < 2:
+        print("No command given — nothing started.")
+        print(__doc__.strip())
+        sys.exit(2)
+    cmd = sys.argv[1]
     if cmd in ("-h", "--help", "help"):
         print(__doc__.strip())
         sys.exit(0)
