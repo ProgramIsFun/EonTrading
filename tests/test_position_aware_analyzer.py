@@ -104,3 +104,32 @@ class TestLLMPromptSelection:
         analyzer = LLMSentimentAnalyzer(api_key="test-key")
         with pytest.raises(Exception, match="API down"):
             analyzer.analyze(TARIFF_NEWS, positions=HOLDINGS)
+
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_sell_rule_requires_direct_relevance(self, mock_get_client):
+        mock_get_client.return_value = _mock_llm_response(
+            '{"symbols":[],"sector":"","sentiment":0,"confidence":0,"urgency":"normal"}'
+        )
+
+        analyzer = LLMSentimentAnalyzer(api_key="test-key")
+        analyzer.analyze(TARIFF_NEWS, positions=HOLDINGS)
+
+        call_args = mock_get_client.return_value.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][0]["content"]
+
+        # Must not instruct the LLM to dump holdings on any negative news
+        assert "indirectly" not in prompt
+        assert "Never return the full holdings list just because sentiment is negative" in prompt
+        assert "only list a holding for selling if the headline directly" in prompt.lower()
+
+    @patch.object(LLMSentimentAnalyzer, "_get_client")
+    def test_llm_call_caps_max_tokens(self, mock_get_client):
+        mock_get_client.return_value = _mock_llm_response(
+            '{"symbols":[],"sector":"","sentiment":0,"confidence":0,"urgency":"normal"}'
+        )
+
+        analyzer = LLMSentimentAnalyzer(api_key="test-key")
+        analyzer.analyze(TARIFF_NEWS)
+
+        call_args = mock_get_client.return_value.chat.completions.create.call_args
+        assert call_args[1]["max_tokens"] == 500

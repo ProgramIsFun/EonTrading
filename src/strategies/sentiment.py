@@ -122,6 +122,10 @@ class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
 
 # --- LLM-based (accurate, needs API key) ---
 
+# Cap output so a rambling LLM can't turn a 50-token JSON into 4000 tokens (42s calls).
+# JSON-only replies fit comfortably; prose gets truncated and parsed conservatively.
+_LLM_MAX_TOKENS = 500
+
 _LLM_RETURN_JSON = """\
 {{
   "symbols": ["{symbol}"],
@@ -185,7 +189,9 @@ def _build_llm_prompt(headline: str, markets: str, positions: dict | None = None
     parts.append("- We trade CASH ONLY — no margin, no short selling, no borrowing.")
     parts.append(_market_rules(markets))
     if positions:
-        parts.append("- If we hold a stock and the news is bad for it (directly or indirectly), return that stock with negative sentiment so we sell it.")
+        parts.append("- Only list a holding for SELLING if the headline directly and specifically concerns that company or its sector/industry.")
+        parts.append("- If the news does not directly concern a holding, leave it out of symbols entirely — even if the news is broadly negative.")
+        parts.append("- Never return the full holdings list just because sentiment is negative.")
         parts.append("- Higher confidence if the news directly impacts our holdings.")
     parts.append("- Sentiment is from the perspective of the returned symbols (positive = those symbols go up).")
     parts.append(_return_example(markets))
@@ -267,6 +273,7 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         resp = client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=_LLM_MAX_TOKENS,
         )
         elapsed_ms = (time.perf_counter() - t0) * 1000
         usage = resp.usage
