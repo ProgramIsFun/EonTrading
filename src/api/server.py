@@ -331,10 +331,8 @@ async def _run_live_backtest(job_id: str, params: dict):
     from src.common.events import CHANNEL_NEWS, CHANNEL_TRADE, NewsEvent
     from src.common.price import get_price
     from src.common.trading_logic import TradingLogic
-    from src.live.analyzer_service import AnalyzerService
-    from src.live.brokers import PaperBroker, TradeExecutor
-    from src.live.price_monitor import PriceMonitor
-    from src.live.sentiment_trader import SentimentTrader
+    from src.live.brokers import PaperBroker
+    from src.live.pipeline import build_pipeline
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
     from src.strategies.sentiment import BaseSentimentAnalyzer
 
@@ -379,10 +377,16 @@ async def _run_live_backtest(job_id: str, params: dict):
 
         store = InMemoryPositionStore()
         broker = PaperBroker(initial_cash=capital, cost_model=costs)
-        monitor = PriceMonitor(bus, store, logic, interval_sec=0)
-        trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        analyzer_svc = AnalyzerService(bus, analyzer=anlzr, get_positions=store.get_positions)
-        executor = TradeExecutor(bus, broker, log_order=noop_log_order)
+        pipeline = await build_pipeline(
+            bus,
+            broker=broker,
+            analyzer=anlzr,
+            position_store=store,
+            logic=logic,
+            monitor_interval_sec=0,
+            log_order=noop_log_order,
+        )
+        monitor = pipeline.monitor
 
         trades = []
 
@@ -394,9 +398,6 @@ async def _run_live_backtest(job_id: str, params: dict):
             job["log"].append(f"{status} {action.upper()} {symbol} — {msg.get('reason', '')}")
 
         await bus.subscribe(CHANNEL_TRADE, on_trade)
-        await analyzer_svc.start()
-        await trader.start()
-        await executor.start()
 
         equity = []
         prev_date = None

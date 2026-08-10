@@ -3,14 +3,13 @@ import logging
 from dataclasses import dataclass
 
 import pandas as pd
-import yfinance as yf
 
 from ..common.costs import ZERO, CostModel
 from ..common.events import NewsEvent
 from ..common.trading_logic import PositionState, TradingLogic
-from ..data.ingest.yfinance_ingest import normalize_yfinance_df
 from . import BacktestResultBase, SentimentTrade
-from .engine import compute_backtest_metrics
+from .engine import check_position_exit, compute_backtest_metrics
+from .prices import fetch_price_data
 from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -27,25 +26,6 @@ class Position:
     def __post_init__(self):
         if self.state is None:
             self.state = PositionState(self.symbol, self.shares, self.entry_price)
-
-
-def _fetch_hourly(symbol, start, end):
-    cache_key = f"{symbol}:{start}:{end}"
-    if cache_key in _price_data_cache:
-        return _price_data_cache[cache_key]
-    try:
-        df = yf.download(symbol, start=start, end=end, interval="1h", auto_adjust=True, progress=False, timeout=15)
-        if not df.empty:
-            _price_data_cache[cache_key] = df
-            return df
-    except Exception:
-        logger.debug("1h data unavailable for %s, falling back to 1d", symbol)
-    df = yf.download(symbol, start=start, end=end, interval="1d", auto_adjust=True, progress=False, timeout=15)
-    _price_data_cache[cache_key] = df
-    return df
-
-
-_price_data_cache: dict[str, pd.DataFrame] = {}
 
 
 def run_portfolio_backtest(
@@ -96,11 +76,9 @@ def run_portfolio_backtest(
     print(f"  Fetching prices for {len(all_symbols)} symbols: {', '.join(sorted(all_symbols))}")
     price_data = {}
     for sym in all_symbols:
-        df = _fetch_hourly(sym, start, end)
+        df = fetch_price_data(sym, start, end, interval="1h", date_column="ts")
         if df.empty:
             continue
-        df = df.reset_index()
-        df = normalize_yfinance_df(df, date_column="ts")
         price_data[sym] = df
 
     # Build unified timeline
@@ -161,40 +139,20 @@ def run_portfolio_backtest(
             bar = get_bar(sym, ts)
             if bar is None:
                 continue
-            price = float(bar["close"])
-            low = float(bar["low"]) if "low" in bar else price
-            high = float(bar["high"]) if "high" in bar else price
 
-            closed = False
             assert pos.state is not None
-            # Update peak price for trailing SL
-            logic.update_peak(pos.state, high)
-
-            sl_price = logic.check_stop_loss(pos.state, low)
-            if sl_price is not None:
-                cost = cost_model.sell_cost(sl_price, pos.shares)
-                pnl = (sl_price - pos.entry_price) * pos.shares - cost
-                cash += pos.shares * sl_price - cost
-                trades.append(SentimentTrade(sym, "sell (SL)", ts_str, sl_price, 0, "Stop loss", pos.shares, pnl))
-                closed = True
-            else:
-                tp_price = logic.check_take_profit(pos.state, high)
-                if tp_price is not None:
-                    cost = cost_model.sell_cost(tp_price, pos.shares)
-                    pnl = (tp_price - pos.entry_price) * pos.shares - cost
-                    cash += pos.shares * tp_price - cost
-                    trades.append(SentimentTrade(sym, "sell (TP)", ts_str, tp_price, 0, "Take profit", pos.shares, pnl))
-                    closed = True
-            if not closed and max_hold_days > 0 and (bar_idx - pos.entry_bar) >= max_hold_days * bars_per_day:
-                exec_p = float(bar["open"])
-                cost = cost_model.sell_cost(exec_p, pos.shares)
-                pnl = (exec_p - pos.entry_price) * pos.shares - cost
-                cash += pos.shares * exec_p - cost
-                trades.append(SentimentTrade(sym, "sell (expire)", ts_str, exec_p, 0, "Max hold", pos.shares, pnl))
-                closed = True
-
-            if closed:
-                del positions[sym]
+            exit_info = check_position_exit(
+                logic, cost_model, pos.state, bar, bar_idx, pos.entry_bar,
+                max_hold_days * bars_per_day,
+            )
+            if exit_info is None:
+                continue
+            action, exit_price, headline = exit_info
+            cost = cost_model.sell_cost(exit_price, pos.shares)
+            pnl = (exit_price - pos.entry_price) * pos.shares - cost
+            cash += pos.shares * exit_price - cost
+            trades.append(SentimentTrade(sym, action, ts_str, exit_price, 0, headline, pos.shares, pnl))
+            del positions[sym]
 
         # Check news — re-analyze with current positions for portfolio-aware scoring
         nq_item = news_map.get(ts)

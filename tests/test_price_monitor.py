@@ -1,5 +1,5 @@
 """Unit tests for PriceMonitor — SL/TP logic, state management, entry price resolution."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -208,6 +208,71 @@ class TestInit:
 
         monitor = PriceMonitor(mock_bus, store, logic)
         assert monitor._states == {}
+
+
+class TestCheckOnceAsync:
+    """Async check_once: the monitor executes its own exits via the broker."""
+
+    @pytest.fixture
+    def async_bus(self):
+        return AsyncMock()
+
+    @pytest.mark.asyncio
+    async def test_sl_executes_and_publishes(self, async_bus, mock_store, logic):
+        monitor = PriceMonitor(async_bus, mock_store, logic, broker=MagicMock())
+        monitor.broker.execute = AsyncMock(return_value="ORD-1")
+        monitor._states["AAPL"] = PositionState("AAPL", 10, 100)
+
+        with patch(PRICE_PATH, return_value=90):
+            sold = await monitor.check_once()
+
+        assert sold == ["AAPL"]
+        assert "AAPL" not in monitor._states
+        monitor.broker.execute.assert_called_once()
+        assert async_bus.publish.called
+        published = async_bus.publish.call_args.args[1]
+        assert published["symbol"] == "AAPL"
+        assert published["action"] == "sell"
+        assert published["size"] == 10
+
+    @pytest.mark.asyncio
+    async def test_failed_execution_keeps_state_for_retry(self, async_bus, mock_store, logic):
+        """If the broker returns no order_id, the stop-loss state must survive."""
+        monitor = PriceMonitor(async_bus, mock_store, logic, broker=MagicMock())
+        monitor.broker.execute = AsyncMock(return_value=None)
+        monitor._states["AAPL"] = PositionState("AAPL", 10, 100)
+
+        with patch(PRICE_PATH, return_value=90):
+            sold = await monitor.check_once()
+
+        assert sold == []
+        assert "AAPL" in monitor._states, "state must be kept for retry on next tick"
+        async_bus.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_broker_error_keeps_state_for_retry(self, async_bus, mock_store, logic):
+        monitor = PriceMonitor(async_bus, mock_store, logic, broker=MagicMock())
+        monitor.broker.execute = AsyncMock(side_effect=RuntimeError("broker down"))
+        monitor._states["AAPL"] = PositionState("AAPL", 10, 100)
+
+        with patch(PRICE_PATH, return_value=90):
+            sold = await monitor.check_once()
+
+        assert sold == []
+        assert "AAPL" in monitor._states
+        async_bus.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_broker_skips_execution(self, async_bus, mock_store, logic):
+        monitor = PriceMonitor(async_bus, mock_store, logic)
+        monitor._states["AAPL"] = PositionState("AAPL", 10, 100)
+
+        with patch(PRICE_PATH, return_value=90):
+            sold = await monitor.check_once()
+
+        assert sold == []
+        assert "AAPL" in monitor._states
+        async_bus.publish.assert_not_called()
 
 
 class TestRegisterEntry:

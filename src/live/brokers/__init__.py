@@ -5,7 +5,6 @@ Re-exports all public classes for backward compatibility:
 """
 from .alpaca import AlpacaBroker
 from .broker import AccountInfo, Broker, FillStatus
-from .executor import TradeExecutor
 from .futu import FutuBroker
 from .ibkr import IBKRBroker
 from .paper import PaperBroker
@@ -20,5 +19,4 @@ __all__ = [
     "IBKRBroker",
     "AlpacaBroker",
     "WebullBroker",
-    "TradeExecutor",
 ]

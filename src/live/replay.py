@@ -30,11 +30,9 @@ async def main(start: str, end: str):
     from src.common.startup import banner
     from src.common.trading_logic import TradingLogic
     from src.data.utils.db_helper import get_db
-    from src.live.analyzer_service import AnalyzerService
-    from src.live.brokers import PaperBroker, TradeExecutor
+    from src.live.brokers import PaperBroker
     from src.live.order_logger import mongo_log_order
-    from src.live.price_monitor import PriceMonitor
-    from src.live.sentiment_trader import SentimentTrader
+    from src.live.pipeline import build_pipeline
     from src.settings import settings
     from src.strategies.sentiment import KeywordSentimentAnalyzer, LLMSentimentAnalyzer
 
@@ -54,15 +52,15 @@ async def main(start: str, end: str):
     logic = TradingLogic(threshold=0.4, min_confidence=0.15)
     db = get_db()
     news_store = MongoNewsStore(db)
-    price_monitor = PriceMonitor(bus, store, logic)
-
-    trader = SentimentTrader(bus, logic=logic, position_store=store, broker=broker)
-    analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
-    executor = TradeExecutor(bus, broker, log_order=mongo_log_order)
-
-    await analyzer_svc.start()
-    await trader.start()
-    await executor.start()
+    pipeline = await build_pipeline(
+        bus,
+        broker=broker,
+        analyzer=analyzer,
+        position_store=store,
+        logic=logic,
+        log_order=mongo_log_order,
+    )
+    price_monitor = pipeline.monitor
 
     # Fetch historical news from MongoDB
     news_docs = news_store.find_news(

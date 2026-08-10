@@ -8,14 +8,14 @@ For distributed mode, run each runner in its own terminal:
   python3 -m src.live.runners.run_watcher
   python3 -m src.live.runners.run_analyzer
   python3 -m src.live.runners.run_trader
-  python3 -m src.live.runners.run_executor
+  python3 -m src.live.runners.run_order_tracker
 """
 import asyncio
 import logging
 import sys
 
 from src.common.log_handler import setup_logging
-for _comp in ["newswatcher", "analyzer", "trader", "executor", "monitor", "order_tracker", "wealth"]:
+for _comp in ["newswatcher", "analyzer", "trader", "monitor", "order_tracker", "wealth"]:
     setup_logging(_comp)
 logger = logging.getLogger(__name__)
 
@@ -25,17 +25,15 @@ async def main_single():
     from src.common.event_bus import LocalEventBus
     from src.common.factories import build_analyzer, build_broker
     from src.common.heartbeat import Heartbeat
+    from src.common.order_tracker import OrderTracker
     from src.common.position_store import PositionStore
     from src.common.shutdown import create_shutdown_event
     from src.common.startup import banner, env_status
     from src.common.trading_logic import TradingLogic
     from src.data.news.loader import build_news_sources
-    from src.live.analyzer_service import AnalyzerService
-    from src.live.brokers import TradeExecutor
-    from src.live.order_logger import mongo_log_order
     from src.live.news_watcher import NewsWatcher
-    from src.live.price_monitor import PriceMonitor
-    from src.live.sentiment_trader import SentimentTrader
+    from src.live.order_logger import mongo_log_order
+    from src.live.pipeline import build_pipeline
     from src.live.wealth_tracker import WealthTracker
     from src.settings import settings
 
@@ -63,25 +61,24 @@ async def main_single():
 
     store = PositionStore()
     logic = TradingLogic.from_settings()
-    monitor = PriceMonitor(bus, store, logic, interval_sec=60)
-    trader = SentimentTrader(bus, logic=logic, position_store=store,
-                             broker=broker)
-    analyzer_svc = AnalyzerService(bus, analyzer=analyzer, get_positions=store.get_positions)
+    pipeline = await build_pipeline(
+        bus,
+        broker=broker,
+        analyzer=analyzer,
+        position_store=store,
+        logic=logic,
+        log_order=mongo_log_order,
+    )
     watcher = NewsWatcher(bus, sources=sources, interval_sec=120,
                           persist_news=settings.persist_news,
                           publish=settings.publish_pipeline)
-    from src.common.order_tracker import OrderTracker
 
     tracker = OrderTracker(bus, broker)
     asyncio.create_task(tracker.run())
 
-    executor = TradeExecutor(bus, broker, log_order=mongo_log_order)
     wealth = WealthTracker(broker, position_store=store, interval_sec=60)
 
-    await analyzer_svc.start()
-    await trader.start()
-    await executor.start()
-    monitor_task = asyncio.create_task(monitor.run())
+    monitor_task = asyncio.create_task(pipeline.monitor.run())
     wealth_task = asyncio.create_task(wealth.run())
 
     for name in ["newswatcher", "analyzer", "trader", "executor", "monitor", "wealth"]:
@@ -113,7 +110,6 @@ if __name__ == "__main__":
         print("  python3 -m src.live.runners.run_watcher")
         print("  python3 -m src.live.runners.run_analyzer")
         print("  python3 -m src.live.runners.run_trader")
-        print("  python3 -m src.live.runners.run_executor")
         print("  python3 -m src.live.runners.run_order_tracker")
     else:
         asyncio.run(main_single())

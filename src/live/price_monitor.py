@@ -1,7 +1,10 @@
-"""PriceMonitor: watches open positions, triggers SL/TP sells via [trade] channel.
+"""PriceMonitor: watches open positions, triggers SL/TP sells and executes them.
 
-Runs as a standalone component (own container in distributed mode).
-Uses the same TradingLogic as backtest — identical SL/TP behavior.
+The monitor owns its exits end-to-end: it decides a stop-loss/take-profit
+sell via TradingLogic and executes it directly through the broker, then
+publishes the [trade] event so the position store / OrderTracker learn the
+position closed.  Decision and execution live together (like the trader);
+the bus stays the observability + state-sync channel.
 """
 import asyncio
 import logging
@@ -13,20 +16,25 @@ from src.common.events import CHANNEL_TRADE, TradeEvent
 from src.common.position_store import BasePositionStore
 from src.common.price import get_price
 from src.common.trading_logic import PositionState, TradingLogic
+from src.live.brokers.broker import Broker
+from src.live.order_logger import noop_log_order
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("monitor"))
 
 
 class PriceMonitor:
-    """Polls prices for open positions, publishes sell trades when SL/TP hit."""
+    """Polls prices for open positions, executes sell trades when SL/TP hit."""
 
     def __init__(self, bus: EventBus, store: BasePositionStore, logic: TradingLogic,
-                 interval_sec: int = 60, entry_prices: dict | None = None):
+                 interval_sec: int = 60, entry_prices: dict | None = None,
+                 broker: Broker | None = None, log_order=None):
         self.bus = bus
         self.store = store
         self.logic = logic
         self.interval = interval_sec
+        self.broker = broker
+        self._log_order = log_order or noop_log_order
         self._states: dict[str, PositionState] = {}
         # Restore entry prices + peak from store on startup
         try:
@@ -54,7 +62,11 @@ class PriceMonitor:
         return state
 
     def _evaluate_positions(self, as_of: str | None = None) -> list[tuple]:
-        """Core SL/TP evaluation — returns [(symbol, trigger_price, shares, reason), ...]."""
+        """Core SL/TP evaluation — returns [(symbol, trigger_price, shares, reason), ...].
+
+        Does NOT mutate state: triggers are returned so the caller decides
+        when to pop the position (after a successful fill).
+        """
         if not self._states:
             return []
         sold = []
@@ -73,22 +85,28 @@ class PriceMonitor:
             sl = self.logic.check_stop_loss(state, price)
             if sl:
                 logger.info("🛑 SL triggered: SELL %s %dsh @ $%.2f", symbol, state.shares, sl)
-                self._states.pop(symbol)
                 sold.append((symbol, sl, state.shares, "stop loss"))
                 continue
             tp = self.logic.check_take_profit(state, price)
             if tp:
                 logger.info("🎯 TP triggered: SELL %s %dsh @ $%.2f", symbol, state.shares, tp)
-                self._states.pop(symbol)
                 sold.append((symbol, tp, state.shares, "take profit"))
         return sold
 
     def check_once_sync(self, as_of: str | None = None) -> list[tuple]:
         """Fast synchronous SL/TP check — for backtesting only. No async, no MongoDB, no broker calls."""
-        return self._evaluate_positions(as_of)
+        results = self._evaluate_positions(as_of)
+        for symbol, _price, _shares, _reason in results:
+            self._states.pop(symbol, None)
+        return results
 
     async def check_once(self, as_of: str | None = None) -> list[str]:
-        """Check all positions against SL/TP. Publishes trade events, returns list of symbols sold."""
+        """Check all positions against SL/TP. Executes sells, publishes [trade] events.
+
+        A position is popped from monitoring state only after a successful
+        broker fill, so a failed execution is retried on the next tick instead
+        of silently abandoning the stop-loss.  Returns symbols sold.
+        """
         all_positions: dict[str, dict] = {}
         if self.store:
             all_positions = self.store.get_positions_with_prices()
@@ -109,12 +127,21 @@ class PriceMonitor:
         ts = as_of or (utcnow().isoformat() + "Z")
         sold = []
         for symbol, trigger_price, shares, reason in results:
+            price = await asyncio.to_thread(get_price, symbol, ts)
+            if price <= 0:
+                logger.warning("No price for %s — keeping stop-loss state, will retry", symbol)
+                continue
             trade = TradeEvent(
                 symbol=symbol, action="sell",
                 reason=f"{reason} @ ${trigger_price:.2f}",
                 timestamp=ts,
-                price=0.0, size=float(shares),
+                price=price, size=float(shares),
             )
+            filled = await self._execute(trade)
+            if not filled:
+                logger.warning("SL/TP sell failed for %s — position stays monitored", symbol)
+                continue
+            self._states.pop(symbol, None)
             await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
             sold.append(symbol)
 
@@ -125,6 +152,27 @@ class PriceMonitor:
                 del self._states[sym]
 
         return sold
+
+    async def _execute(self, trade: TradeEvent) -> bool:
+        """Execute a sell via the broker and log the order. Returns True on fill."""
+        if self.broker is None:
+            logger.warning("PriceMonitor has no broker — cannot execute %s %s",
+                           trade.action.upper(), trade.symbol)
+            return False
+        try:
+            order_id = await self.broker.execute(trade)
+            broker_name = self.broker.__class__.__name__
+            if order_id:
+                await self._log_order(trade, order_id, broker_name)
+                logger.info("Filled: SELL %s (order_id=%s)", trade.symbol, order_id)
+                return True
+            await self._log_order(trade, None, broker_name, status="failed",
+                                  error="broker returned None")
+            logger.warning("Order failed: SELL %s", trade.symbol)
+            return False
+        except Exception:
+            logger.error("Broker execution failed: SELL %s", trade.symbol, exc_info=True)
+            return False
 
     async def run(self):
         """Continuous monitoring loop for live mode."""

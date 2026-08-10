@@ -23,7 +23,7 @@ from src.common.events import (
 )
 from src.common.trading_logic import TradingLogic
 from src.live.analyzer_service import AnalyzerService
-from src.live.brokers import PaperBroker, TradeExecutor
+from src.live.brokers import PaperBroker
 from src.live.price_monitor import PriceMonitor
 from src.live.sentiment_trader import SentimentTrader
 from src.strategies.sentiment import KeywordSentimentAnalyzer
@@ -58,7 +58,7 @@ def track_position(store):
 
 
 # ---------------------------------------------------------------------------
-# 1. Full pipeline: news → analyzer → trader → executor → trades
+# 1. Full pipeline: news → analyzer → trader → executed trades
 # ---------------------------------------------------------------------------
 
 class TestFullPipelineIntegration:
@@ -82,11 +82,9 @@ class TestFullPipelineIntegration:
 
         analyzer_svc = AnalyzerService(bus, analyzer=analyzer, max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker)
 
         await analyzer_svc.start()
         await trader.start()
-        await executor.start()
 
         await bus.publish(CHANNEL_NEWS, BULLISH_APPLE.to_dict())
         ok = await trades.wait_for_count(1)
@@ -114,11 +112,9 @@ class TestFullPipelineIntegration:
 
         analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer(), max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker)
 
         await analyzer_svc.start()
         await trader.start()
-        await executor.start()
 
         # Buy on bullish news
         await bus.publish(CHANNEL_NEWS, make_news("Tesla surges on record deliveries and strong growth").to_dict())
@@ -155,11 +151,9 @@ class TestFullPipelineIntegration:
 
         analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer(), max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker)
 
         await analyzer_svc.start()
         await trader.start()
-        await executor.start()
 
         await bus.publish(CHANNEL_NEWS, BULLISH_APPLE.to_dict())
         ok = await trades.wait_for_count(1)
@@ -194,9 +188,7 @@ class TestBrokerCashIntegration:
         await bus.subscribe(CHANNEL_TRADE, trades.handler)
 
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker)
         await trader.start()
-        await executor.start()
 
         initial_cash = await broker.get_cash()
 
@@ -232,9 +224,7 @@ class TestBrokerCashIntegration:
         await bus.subscribe(CHANNEL_TRADE, trades.handler)
 
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker)
         await trader.start()
-        await executor.start()
 
         await bus.publish(CHANNEL_SENTIMENT, SentimentEvent(
             source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
@@ -275,9 +265,12 @@ class TestPriceMonitorIntegration:
 
         store = FakePositionStore()
         logic = TradingLogic(stop_loss_pct=0.05, take_profit_pct=0.10)
-        monitor = PriceMonitor(bus, store, logic)
+        broker = PaperBroker(initial_cash=100000)
+        monitor = PriceMonitor(bus, store, logic, broker=broker)
 
         monitor.register_entry("AAPL", 100.0, 10)
+        await broker.execute(TradeEvent(symbol="AAPL", action="buy", size=10, price=100.0,
+                                        timestamp="2026-04-22T10:00:00Z", reason="seed"))
 
         with patch("src.live.price_monitor.get_price", return_value=94.0), \
              patch("src.common.price.get_price", return_value=94.0):
@@ -287,8 +280,9 @@ class TestPriceMonitorIntegration:
 
         assert "AAPL" in sold
         assert trades.items[0].action == "sell"
-        assert trades.items[0].price == 0.0
+        assert trades.items[0].price == 94.0
         assert "stop loss" in trades.items[0].reason
+        assert (await broker.get_positions()).get("AAPL", 0) == 0
 
     @pytest.mark.asyncio
     async def test_take_profit_triggers_sell_trade(self):
@@ -300,9 +294,12 @@ class TestPriceMonitorIntegration:
 
         store = FakePositionStore()
         logic = TradingLogic(stop_loss_pct=0.05, take_profit_pct=0.10)
-        monitor = PriceMonitor(bus, store, logic)
+        broker = PaperBroker(initial_cash=100000)
+        monitor = PriceMonitor(bus, store, logic, broker=broker)
 
         monitor.register_entry("NVDA", 200.0, 5)
+        await broker.execute(TradeEvent(symbol="NVDA", action="buy", size=5, price=200.0,
+                                        timestamp="2026-04-22T10:00:00Z", reason="seed"))
 
         with patch("src.live.price_monitor.get_price", return_value=222.0), \
              patch("src.common.price.get_price", return_value=222.0):
@@ -312,8 +309,9 @@ class TestPriceMonitorIntegration:
 
         assert "NVDA" in sold
         assert trades.items[0].action == "sell"
-        assert trades.items[0].price == 0.0
+        assert trades.items[0].price == 222.0
         assert "take profit" in trades.items[0].reason
+        assert (await broker.get_positions()).get("NVDA", 0) == 0
 
     @pytest.mark.asyncio
     async def test_no_trigger_within_bounds(self):
@@ -354,14 +352,14 @@ class TestPriceMonitorIntegration:
 
 
 # ---------------------------------------------------------------------------
-# 4. SL/TP → Executor → Fill → Trader position cleanup
+# 4. SL/TP → Monitor executes → Fill → Trader position cleanup
 # ---------------------------------------------------------------------------
 
 class TestSLTPFullCycle:
 
     @pytest.mark.asyncio
-    async def test_sl_sell_flows_through_executor_and_updates_trader(self):
-        """PriceMonitor triggers SL → trade event → executor → fill → trader removes holding."""
+    async def test_sl_sell_executed_by_monitor_and_updates_trader(self):
+        """PriceMonitor triggers SL → monitor executes → [trade] event → store cleared."""
         bus = LocalEventBus()
         await bus.start()
 
@@ -370,10 +368,9 @@ class TestSLTPFullCycle:
         logic = TradingLogic(threshold=0.3, min_confidence=0.2, max_allocation=0.2,
                              stop_loss_pct=0.05, take_profit_pct=0.10)
 
-        monitor = PriceMonitor(bus, store, logic)
+        monitor = PriceMonitor(bus, store, logic, broker=broker)
         trader = SentimentTrader(bus, logic=logic, broker=broker,
-                                 position_store=store, price_monitor=monitor)
-        executor = TradeExecutor(bus, broker)
+                                 position_store=store)
 
         trades = Collector(
             parser=lambda msg: TradeEvent.from_dict(msg),
@@ -382,7 +379,6 @@ class TestSLTPFullCycle:
         await bus.subscribe(CHANNEL_TRADE, trades.handler)
 
         await trader.start()
-        await executor.start()
 
         await bus.publish(CHANNEL_SENTIMENT, SentimentEvent(
             source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
@@ -401,8 +397,8 @@ class TestSLTPFullCycle:
             sold = await monitor.check_once(as_of="2026-04-22T14:00:00Z")
             ok = await trades.wait_for_count(2)
             assert ok, f"Expected 2 trades after SL, got {len(trades.items)}"
-            # publish() fires handlers as create_task — executor is a separate
-            # concurrent task.  Yield so it can finish before we check the broker.
+            # check_once awaits the fill before returning, but the [trade]
+            # collector runs as a separate create_task — yield so it can finish.
             await asyncio.sleep(0.05)
 
         assert "AAPL" in sold
@@ -456,11 +452,9 @@ class TestNeutralNewsNoTrades:
 
         analyzer_svc = AnalyzerService(bus, analyzer=KeywordSentimentAnalyzer(), max_age_sec=0)
         trader = SentimentTrader(bus, logic=logic, broker=broker, position_store=store)
-        executor = TradeExecutor(bus, broker)
 
         await analyzer_svc.start()
         await trader.start()
-        await executor.start()
 
         neutral = make_news("Weather forecast for tomorrow is sunny and warm")
         await bus.publish(CHANNEL_NEWS, neutral.to_dict())

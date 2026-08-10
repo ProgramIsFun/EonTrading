@@ -18,7 +18,7 @@ from src.common.events import (
     SentimentEvent,
     TradeEvent,
 )
-from src.live.brokers import Broker, TradeExecutor
+from src.live.brokers import Broker
 from src.live.news_watcher import NewsWatcher
 from src.live.sentiment_trader import SentimentTrader
 from src.strategies.sentiment import KeywordSentimentAnalyzer
@@ -87,17 +87,15 @@ class TestSentimentTrader:
     @pytest.fixture
     def setup(self):
         bus = LocalEventBus()
-        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2)
         broker = MockBroker()
-        executor = TradeExecutor(bus, broker)
-        return bus, trader, executor, broker
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, broker=broker)
+        return bus, trader, broker
 
     @pytest.mark.asyncio
     async def test_buy_on_bullish_sentiment(self, setup):
-        bus, trader, executor, broker = setup
+        bus, trader, broker = setup
         await bus.start()
         await trader.start()
-        await executor.start()
 
         sentiment = SentimentEvent(
             source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
@@ -113,10 +111,9 @@ class TestSentimentTrader:
 
     @pytest.mark.asyncio
     async def test_sell_on_bearish_sentiment(self, setup):
-        bus, trader, executor, broker = setup
+        bus, trader, broker = setup
         await bus.start()
         await trader.start()
-        await executor.start()
 
         # Pre-load position via mock store
         mock_store = MagicMock()
@@ -139,10 +136,9 @@ class TestSentimentTrader:
 
     @pytest.mark.asyncio
     async def test_no_trade_on_low_confidence(self, setup):
-        bus, trader, executor, broker = setup
+        bus, trader, broker = setup
         await bus.start()
         await trader.start()
-        await executor.start()
 
         sentiment = SentimentEvent(
             source="test", headline="Something", timestamp="2026-04-22T10:00:00Z",
@@ -157,10 +153,9 @@ class TestSentimentTrader:
     @pytest.mark.asyncio
     async def test_no_trade_when_price_unavailable(self, setup):
         """If yfinance returns no data (price=0), skip the trade. Better to miss than buy at wrong price."""
-        bus, trader, executor, broker = setup
+        bus, trader, broker = setup
         await bus.start()
         await trader.start()
-        await executor.start()
 
         with patch("src.live.sentiment_trader.get_price", return_value=0.0):
             sentiment = SentimentEvent(
@@ -175,10 +170,9 @@ class TestSentimentTrader:
 
     @pytest.mark.asyncio
     async def test_no_duplicate_buy(self, setup):
-        bus, trader, executor, broker = setup
+        bus, trader, broker = setup
         await bus.start()
         await trader.start()
-        await executor.start()
 
         sentiment = SentimentEvent(
             source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
@@ -205,10 +199,8 @@ class TestFullPipeline:
 
         analyzer = KeywordSentimentAnalyzer()
         broker = MockBroker()
-        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2)
-        executor = TradeExecutor(bus, broker)
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, broker=broker)
         await trader.start()
-        await executor.start()
 
         # Simulate what NewsWatcher does
         sentiment = analyzer.analyze(BULLISH_NEWS)
@@ -252,27 +244,24 @@ class TestTradeExecution:
     @pytest.fixture
     def setup_with_mock(self):
         bus = LocalEventBus()
-        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2)
         broker = MockBroker()
-        executor = TradeExecutor(bus, broker)
-        return bus, trader, executor, broker
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, broker=broker)
+        return bus, trader, broker
 
     @pytest.fixture
     def setup_with_rejecting(self):
         bus = LocalEventBus()
-        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2)
         broker = RejectingBroker()
-        executor = TradeExecutor(bus, broker)
-        return bus, trader, executor, broker
+        trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, broker=broker)
+        return bus, trader, broker
 
     @pytest.mark.asyncio
     async def test_buy_writes_order(self, setup_with_mock, _mock_log_order):
-        """Executor calls log_order when broker confirms."""
-        bus, trader, executor, broker = setup_with_mock
-        executor._log_order = _mock_log_order
+        """Trader calls log_order when broker confirms."""
+        bus, trader, broker = setup_with_mock
+        trader._log_order = _mock_log_order
         await bus.start()
         await trader.start()
-        await executor.start()
 
         sentiment = SentimentEvent(
             source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
@@ -286,12 +275,11 @@ class TestTradeExecution:
 
     @pytest.mark.asyncio
     async def test_buy_rejected_logs_failed_order(self, setup_with_rejecting, _mock_log_order):
-        """Executor logs failed order when broker rejects."""
-        bus, trader, executor, broker = setup_with_rejecting
-        executor._log_order = _mock_log_order
+        """Trader logs failed order when broker rejects."""
+        bus, trader, broker = setup_with_rejecting
+        trader._log_order = _mock_log_order
         await bus.start()
         await trader.start()
-        await executor.start()
 
         sentiment = SentimentEvent(
             source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
@@ -310,12 +298,11 @@ class TestTradeExecution:
     @pytest.mark.asyncio
     async def test_ttl_dedup_blocks_duplicate_orders(self, setup_with_mock):
         """TTL-based dedup in SentimentTrader prevents duplicate sends."""
-        bus, trader, executor, broker = setup_with_mock
+        bus, trader, broker = setup_with_mock
         trades_published = []
         await bus.subscribe(CHANNEL_TRADE, lambda msg: trades_published.append(msg))
         await bus.start()
         await trader.start()
-        # Don't start executor — TTL dedup still applies
 
         sentiment = SentimentEvent(
             source="test", headline="Apple surges", timestamp="2026-04-22T10:00:00Z",
@@ -352,9 +339,8 @@ class TestTraderReadsPositionStore:
         await bus.start()
         trader = SentimentTrader(bus, threshold=0.3, min_confidence=0.2, position_store=mock_store)
         broker = MockBroker()
-        executor = TradeExecutor(bus, broker)
+        trader.broker = broker
         await trader.start()
-        await executor.start()
 
         # No holdings are tracked on trader — verify by checking the store
         mock_store.get_positions_with_prices.assert_not_called()

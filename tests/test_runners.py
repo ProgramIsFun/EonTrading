@@ -17,7 +17,6 @@ RUNNERS = {
     "watcher": "src/live/runners/run_watcher.py",
     "analyzer": "src/live/runners/run_analyzer.py",
     "trader": "src/live/runners/run_trader.py",
-    "executor": "src/live/runners/run_executor.py",
     "monitor": "src/live/runners/run_monitor.py",
     "order_tracker": "src/live/runners/run_order_tracker.py",
     "wealth": "src/live/runners/run_wealth.py",
@@ -27,7 +26,6 @@ EXPECTED_GROUPS = {
     "watcher": "newswatcher",
     "analyzer": "analyzer",
     "trader": "trader",
-    "executor": "executor",
     "monitor": "monitor",
     "order_tracker": "order_tracker",
     "wealth": "wealth",
@@ -111,9 +109,6 @@ class TestRunnerComponents:
 
     def test_trader_creates_sentiment_trader(self):
         assert "SentimentTrader(" in _read_source(RUNNERS["trader"])
-
-    def test_executor_creates_trade_executor(self):
-        assert "TradeExecutor(" in _read_source(RUNNERS["executor"])
 
     def test_monitor_creates_price_monitor(self):
         assert "PriceMonitor(" in _read_source(RUNNERS["monitor"])
@@ -215,32 +210,6 @@ class TestRunnerMainExecution:
             mock_hb.create_background.assert_called_once()
             assert mock_hb.create_background.call_args[0][0] == "analyzer"
             mock_svc.return_value.start.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_executor_runner_wiring(self):
-        import src.live.runners.run_executor as mod
-
-        mock_bus = AsyncMock()
-        mock_broker = MagicMock()
-
-        with patch("src.common.event_bus.RedisStreamBus", return_value=mock_bus), \
-             patch("src.common.heartbeat.Heartbeat") as mock_hb, \
-             patch("src.common.startup.banner"), \
-             patch.object(mod, "build_broker", return_value=mock_broker), \
-             patch.object(mod, "TradeExecutor") as mock_exec, \
-             patch.object(mod, "create_shutdown_event") as mock_shutdown, \
-             patch.object(mod, "mongo_log_order"):
-            mock_exec.return_value = AsyncMock()
-            evt = asyncio.Event()
-            evt.set()
-            mock_shutdown.return_value = evt
-
-            await mod.main()
-
-            mock_bus.start.assert_called_once()
-            mock_bus.stop.assert_called_once()
-            mock_hb.create_background.assert_called_once()
-            mock_exec.return_value.start.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_trader_runner_wiring(self):

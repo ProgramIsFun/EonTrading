@@ -1,7 +1,10 @@
-"""SentimentTrader: listens to sentiment events, decides trades, executes synchronously.
+"""SentimentTrader: listens to sentiment events, decides trades, and executes.
 
-Events are queued and processed one at a time to prevent race conditions
-where concurrent handlers read stale cash balances from the broker.
+The trader owns the full order lifecycle: it reads fresh cash, sizes the
+order, executes it via the broker, logs the order (so OrderTracker can
+confirm fills), and publishes the [trade] event for observability.  Events
+are queued and processed one at a time, so cash is deducted before the next
+decision — no stale-cash race and no double execution.
 """
 import asyncio
 import logging
@@ -15,13 +18,14 @@ from src.common.price import get_price
 from src.common.position_store import BasePositionStore
 from src.live.brokers.broker import Broker
 from src.common.trading_logic import TradingLogic
+from src.live.order_logger import noop_log_order
 
 logger = logging.getLogger(__name__)
 logger.addFilter(ComponentFilter("trader"))
 
 
 class SentimentTrader:
-    """Listens to sentiment events and decides trades.
+    """Listens to sentiment events, decides trades, and executes them.
 
     Events are queued and processed sequentially to ensure each trade
     reads a fresh cash balance from the broker.  PositionStore is the
@@ -29,12 +33,14 @@ class SentimentTrader:
     """
 
     def __init__(self, bus: EventBus, logic: TradingLogic | None = None, max_hold_days: int = 0,
-                 position_store: BasePositionStore | None = None, broker: Broker | None = None, **kwargs):
+                 position_store: BasePositionStore | None = None, broker: Broker | None = None,
+                 log_order=None, **kwargs):
         self.bus = bus
         self.logic = logic or TradingLogic(**kwargs)
         self.max_hold_days = max_hold_days
         self.position_store = position_store
         self.broker = broker
+        self._log_order = log_order or noop_log_order
         self._last_trade_at: dict[str, dict[str, datetime]] = {}
         self._dedup_seconds = 60
         self._queue: asyncio.Queue[dict] = asyncio.Queue()
@@ -164,39 +170,58 @@ class SentimentTrader:
             )
             logger.info("%s %s qty=%d @ $%.2f (sentiment: %.2f)",
                         action.upper(), symbol, shares, price, event.sentiment)
+            await self._execute_and_publish(trade)
 
-            if self.broker:
-                try:
-                    order_id = await self.broker.execute(trade)
-                    if order_id:
-                        logger.info("Filled: %s %s (order_id=%s)", action.upper(), symbol, order_id)
-                    else:
-                        logger.warning("Order failed: %s %s", action.upper(), symbol)
-                except Exception:
-                    logger.error("Broker execution failed: %s %s", action.upper(), symbol, exc_info=True)
+    async def _execute_and_publish(self, trade: TradeEvent):
+        """Execute the trade via the broker, log the order, and publish [trade].
 
-            await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
+        Runs synchronously in the sequential processing loop, so the broker's
+        cash is updated before the next decision reads it.  The [trade] event
+        is published for observability only — no other component executes it.
+        """
+        if self.broker:
+            try:
+                order_id = await self.broker.execute(trade)
+                broker_name = self.broker.__class__.__name__
+                if order_id:
+                    await self._log_order(trade, order_id, broker_name)
+                    logger.info("Filled: %s %s (order_id=%s)", trade.action.upper(), trade.symbol, order_id)
+                else:
+                    await self._log_order(trade, None, broker_name, status="failed", error="broker returned None")
+                    logger.warning("Order failed: %s %s", trade.action.upper(), trade.symbol)
+            except Exception:
+                logger.error("Broker execution failed: %s %s", trade.action.upper(), trade.symbol, exc_info=True)
+
+        await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
 
     async def _hold_checker(self):
         while True:
             await asyncio.sleep(3600)
             if not self.position_store:
                 continue
-            holdings = await asyncio.to_thread(self.position_store.get_positions)
+            holdings = await asyncio.to_thread(self.position_store.get_positions_with_prices)
             if not holdings:
                 continue
             now = utcnow()
-            for symbol, entry_time in holdings.items():
-                held_days = (now - entry_time).total_seconds() / 86400
-                if held_days >= self.max_hold_days:
-                    last = self._last_trade_at.get(symbol, {}).get("sell")
-                    if last and (now - last).total_seconds() < self._dedup_seconds:
-                        continue
-                    self._last_trade_at.setdefault(symbol, {})["sell"] = now
-                    trade = TradeEvent(
-                        symbol=symbol, action="sell",
-                        reason=f"max hold {self.max_hold_days}d reached",
-                        timestamp=now.isoformat() + "Z",
-                    )
-                    logger.info("SELL %s (max hold %dd reached)", symbol, self.max_hold_days)
-                    await self.bus.publish(CHANNEL_TRADE, trade.to_dict())
+            for symbol, info in holdings.items():
+                held_days = (now - info["entryTime"]).total_seconds() / 86400
+                if held_days < self.max_hold_days:
+                    continue
+                last = self._last_trade_at.get(symbol, {}).get("sell")
+                if last and (now - last).total_seconds() < self._dedup_seconds:
+                    continue
+                price = await asyncio.to_thread(get_price, symbol)
+                if price <= 0:
+                    logger.warning("No price for %s, skipping max-hold sell", symbol)
+                    continue
+                shares = int(info.get("qty", 1))
+                self._last_trade_at.setdefault(symbol, {})["sell"] = now
+                trade = TradeEvent(
+                    symbol=symbol, action="sell",
+                    reason=f"max hold {self.max_hold_days}d reached",
+                    timestamp=now.isoformat() + "Z",
+                    price=price,
+                    size=float(shares),
+                )
+                logger.info("SELL %s (max hold %dd reached)", symbol, self.max_hold_days)
+                await self._execute_and_publish(trade)

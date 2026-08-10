@@ -3,37 +3,16 @@ import logging
 from typing import Any
 
 import pandas as pd
-import yfinance as yf
 
 from ..common.costs import ZERO, CostModel
 from ..common.events import NewsEvent
 from ..common.trading_logic import PositionState, TradingLogic
-from ..data.ingest.yfinance_ingest import normalize_yfinance_df
 from . import BacktestResultBase, SentimentTrade
-from .engine import compute_backtest_metrics
+from .engine import check_position_exit, compute_backtest_metrics
+from .prices import fetch_price_data
 from ..strategies.sentiment import BaseSentimentAnalyzer, KeywordSentimentAnalyzer
 
 logger = logging.getLogger(__name__)
-
-
-def fetch_prices(symbol: str, start: str, end: str, interval: str = "1h") -> pd.DataFrame:
-    """Fetch price data. Tries requested interval, falls back to daily."""
-    df = None
-    if interval != "1d":
-        try:
-            df = yf.download(symbol, start=start, end=end, interval=interval, auto_adjust=True, progress=False)
-            if df.empty:
-                df = None
-        except Exception:
-            logger.debug("Interval %s unavailable for %s, falling back to 1d", interval, symbol)
-            df = None
-    if df is None:
-        df = yf.download(symbol, start=start, end=end, interval="1d", auto_adjust=True, progress=False)
-        interval = "1d"
-    df = df.reset_index()
-    df = normalize_yfinance_df(df, date_column="timestamp")
-    df._interval = interval
-    return df
 
 
 def run_sentiment_backtest(
@@ -64,7 +43,7 @@ def run_sentiment_backtest(
         scale_by_sentiment=scale_by_sentiment,
         max_allocation=max_allocation, risk_per_trade=risk_per_trade,
     )
-    prices = fetch_prices(symbol, start, end, interval=interval)
+    prices = fetch_price_data(symbol, start, end, interval=interval)
     if prices.empty:
         raise ValueError(f"No price data for {symbol}")
     used_interval = getattr(prices, '_interval', interval)
@@ -126,46 +105,19 @@ def run_sentiment_backtest(
         price = row["close"]       # use close for equity/SL/TP checks
         ts = str(row["timestamp"])[:19]
 
-        # Check stop-loss / take-profit using TradingLogic
+        # Check stop-loss / take-profit / max-hold exits using TradingLogic
         if shares > 0 and pos_state is not None:
-            bar_low = row["low"] if "low" in row else price
-            bar_high = row["high"] if "high" in row else price
-            logic.update_peak(pos_state, bar_high)
-
-            sl_price = logic.check_stop_loss(pos_state, bar_low)
-            if sl_price is not None:
-                cost = cost_model.sell_cost(sl_price, shares)
-                pnl = (sl_price - entry_price) * shares - cost
-                cash += shares * sl_price - cost
+            exit_info = check_position_exit(
+                logic, cost_model, pos_state, row, i, entry_bar_idx, max_hold_bars,
+            )
+            if exit_info is not None:
+                action, exit_price, headline = exit_info
+                cost = cost_model.sell_cost(exit_price, shares)
+                pnl = (exit_price - entry_price) * shares - cost
+                cash += shares * exit_price - cost
                 trades.append(SentimentTrade(
-                    symbol=symbol, action="sell (SL)", date=ts,
-                    price=sl_price, sentiment=0, headline="Stop loss hit",
-                    shares=shares, pnl=pnl,
-                ))
-                shares = 0
-                pos_state = None
-            else:
-                tp_price = logic.check_take_profit(pos_state, bar_high)
-                if tp_price is not None:
-                    cost = cost_model.sell_cost(tp_price, shares)
-                    pnl = (tp_price - entry_price) * shares - cost
-                    cash += shares * tp_price - cost
-                    trades.append(SentimentTrade(
-                        symbol=symbol, action="sell (TP)", date=ts,
-                        price=tp_price, sentiment=0, headline="Take profit hit",
-                        shares=shares, pnl=pnl,
-                    ))
-                    shares = 0
-                    pos_state = None
-
-            # Max hold period
-            if max_hold_days > 0 and shares > 0 and (i - entry_bar_idx) >= max_hold_bars:
-                cost = cost_model.sell_cost(exec_price, shares)
-                pnl = (exec_price - entry_price) * shares - cost
-                cash += shares * exec_price - cost
-                trades.append(SentimentTrade(
-                    symbol=symbol, action="sell (expire)", date=ts,
-                    price=price, sentiment=0, headline="Max hold reached",
+                    symbol=symbol, action=action, date=ts,
+                    price=exit_price, sentiment=0, headline=headline,
                     shares=shares, pnl=pnl,
                 ))
                 shares = 0

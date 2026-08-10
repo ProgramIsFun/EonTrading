@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from ..common.costs import ZERO, CostModel
+from ..common.trading_logic import PositionState, TradingLogic
 from ..strategies.base_strategy import Signal, Strategy
 
 
@@ -85,6 +86,37 @@ def compute_backtest_metrics(
         "win_rate": win_rate,
         "equity_curve": equity_series,
     }
+
+
+def check_position_exit(
+    logic: TradingLogic,
+    cost_model: CostModel,
+    state: PositionState,
+    bar: pd.Series,
+    bar_idx: int,
+    entry_bar_idx: int,
+    max_hold_bars: int,
+) -> tuple[str, float, str] | None:
+    """Check an open position for stop-loss / take-profit / max-hold exits on a bar.
+
+    Returns ``(action, exit_price, headline)`` when the position should close,
+    or ``None`` to keep holding. Used by both sentiment backtests.
+    """
+    price = float(bar["close"])
+    low = float(bar["low"]) if "low" in bar else price
+    high = float(bar["high"]) if "high" in bar else price
+
+    logic.update_peak(state, high)
+
+    sl_price = logic.check_stop_loss(state, low)
+    if sl_price is not None:
+        return "sell (SL)", sl_price, "Stop loss hit"
+    tp_price = logic.check_take_profit(state, high)
+    if tp_price is not None:
+        return "sell (TP)", tp_price, "Take profit hit"
+    if max_hold_bars > 0 and (bar_idx - entry_bar_idx) >= max_hold_bars:
+        return "sell (expire)", float(bar["open"]), "Max hold reached"
+    return None
 
 
 @dataclass

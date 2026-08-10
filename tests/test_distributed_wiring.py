@@ -33,28 +33,38 @@ class TestDistributedWiring:
         src = _get_function_source("src/live/runners/run_trader.py", "main")
         assert "position_store=" in src, "run_trader.py must pass position_store to SentimentTrader"
 
-    def test_executor_uses_bus_and_broker(self):
-        """run_executor must pass bus, broker, and log_order to TradeExecutor."""
-        src = _get_function_source("src/live/runners/run_executor.py", "main")
-        assert "TradeExecutor(bus, broker," in src, "run_executor uses TradeExecutor with log_order"
-
-    def test_executor_has_dedup(self):
-        """TradeExecutor must deduplicate trades (at-least-once delivery protection)."""
-        from src.live.brokers import TradeExecutor
-        src = inspect.getsource(TradeExecutor)
-        assert "_seen" in src, "TradeExecutor must have dedup tracking"
+    def test_trader_owns_execution_and_order_logging(self):
+        """run_trader must pass broker and log_order to SentimentTrader."""
+        src = _get_function_source("src/live/runners/run_trader.py", "main")
+        assert "broker=broker" in src, "run_trader.py must pass broker to SentimentTrader"
+        assert "log_order=mongo_log_order" in src, "run_trader.py must pass log_order to SentimentTrader"
 
     def test_single_and_distributed_use_same_components(self):
         """Both modes must use the same core component classes."""
         single_src = _get_function_source("src/live/news_trader.py", "main_single")
         trader_src = _get_function_source("src/live/runners/run_trader.py", "main")
-        executor_src = _get_function_source("src/live/runners/run_executor.py", "main")
         analyzer_src = _get_function_source("src/live/runners/run_analyzer.py", "main")
 
-        # All modes use the same component classes
-        assert "SentimentTrader(" in single_src and "SentimentTrader(" in trader_src
-        assert "TradeExecutor(" in single_src and "TradeExecutor(" in executor_src
-        assert "AnalyzerService(" in single_src and "AnalyzerService(" in analyzer_src
+        # Single process delegates wiring to the shared pipeline assembler
+        assert "build_pipeline(" in single_src
+
+        # Distributed runners build the same component classes directly
+        assert "SentimentTrader(" in trader_src
+        assert "AnalyzerService(" in analyzer_src
+
+    def test_build_pipeline_wires_standard_components(self):
+        """build_pipeline must create the standard component graph."""
+        from src.live.pipeline import build_pipeline
+        src = inspect.getsource(build_pipeline)
+        assert "PriceMonitor(" in src
+        assert "SentimentTrader(" in src
+        assert "AnalyzerService(" in src
+
+    def test_monitor_owns_execution(self):
+        """run_monitor must give PriceMonitor a broker — the monitor executes its own exits."""
+        src = _get_function_source("src/live/runners/run_monitor.py", "main")
+        assert "build_broker()" in src, "run_monitor.py must build a broker"
+        assert "broker=broker" in src, "run_monitor.py must pass broker to PriceMonitor"
 
     def test_monitor_reads_env_vars(self):
         """run_monitor must read SL/TP from settings (via from_settings or directly)."""
