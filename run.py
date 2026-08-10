@@ -8,10 +8,10 @@ Usage:
     python run.py stop           # kill all distributed processes
     python run.py status         # show running processes
     python run.py restart        # stop + start
-    python run.py clean          # delete all log files
-    python run.py logs           # open terminal windows tailing each log file
-    python run.py unlogs         # close all tail terminals
-    python run.py reset          # stop + resetdb + flushredis + clean + unlogs (no restart)
+    python run.py rmlogs          # delete all log files
+    python run.py logs            # open terminal windows tailing each log file
+    python run.py unlogs          # close all tail terminals
+    python run.py reset           # stop + resetdb + flushredis + rmlogs + unlogs (no restart)
     python run.py resetdb        # drop all MongoDB collections (fresh state)
     python run.py flushredis     # flush all Redis keys (streams + consumer groups)
     python run.py venv           # copy venv activation command to clipboard
@@ -84,7 +84,7 @@ def cmd_restart():
     restart_all()
 
 
-def cmd_clean():
+def cmd_rmlogs():
     log_dir = PROJECT_ROOT / "logs"
     if not log_dir.exists():
         print("No logs/ directory.")
@@ -155,13 +155,13 @@ def cmd_flushredis():
 
 
 def cmd_reset():
-    """Stop all, reset database, flush Redis, clean logs, close tail terminals."""
+    """Stop all, reset database, flush Redis, rmlogs, close tail terminals."""
     _setup_path()
     from scripts.distributed import stop_all
     stop_all()
     cmd_resetdb()
     cmd_flushredis()
-    cmd_clean()
+    cmd_rmlogs()
     cmd_unlogs()
 
 
@@ -189,7 +189,7 @@ COMMANDS = {
     "stop": cmd_stop,
     "status": cmd_status,
     "restart": cmd_restart,
-    "clean": cmd_clean,
+    "rmlogs": cmd_rmlogs,
     "logs": cmd_logs,
     "unlogs": cmd_unlogs,
     "reset": cmd_reset,
