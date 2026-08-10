@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     webull_app_key: str = ""
     webull_app_secret: str = ""
     webull_account_id: str = ""
+    webull_real: bool = False
     tradable_markets: str = "HK"  # comma-separated: HK, US, etc.
 
     # Trading params

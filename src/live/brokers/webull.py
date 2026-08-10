@@ -20,15 +20,25 @@ class WebullBroker(Broker):
     """pip install webull-openapi-python-sdk
 
     Uses Webull OpenAPI for US stock trading.
+
+    simulate:
+      True (default) — sandbox/test environment (paper trading)
+      False — live trading via openapi.webull.com
     """
 
+    _SANDBOX_ENDPOINT = "api.sandbox.webull.com"
+    _LIVE_ENDPOINT = "openapi.webull.com"
+
     def __init__(self, app_key: str = "", app_secret: str = "", region: str = "us",
-                 account_id: str = ""):
+                 account_id: str = "", simulate: bool = True):
         self.app_key = app_key or settings.webull_app_key
         self.app_secret = app_secret or settings.webull_app_secret
         self.region = region
         self.account_id = account_id or settings.webull_account_id
+        self.simulate = simulate
         self._client: Any = None
+        mode = "SANDBOX" if simulate else "LIVE"
+        logger.info("WebullBroker initialized in %s mode", mode)
 
     def _connect(self):
         if self._client is not None:
@@ -37,7 +47,8 @@ class WebullBroker(Broker):
             from webull.core.client import ApiClient
             from webull.trade.trade_client import TradeClient
             api_client = ApiClient(self.app_key, self.app_secret, self.region)
-            api_client.add_endpoint(self.region, f"openapi.webull.com")
+            endpoint = self._SANDBOX_ENDPOINT if self.simulate else self._LIVE_ENDPOINT
+            api_client.add_endpoint(self.region, endpoint)
             self._client = TradeClient(api_client)
         except Exception as e:
             raise ConnectionError(f"Webull connect failed: {e}") from e

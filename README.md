@@ -114,6 +114,7 @@ Copy `.env.example` to `.env`. All vars optional — default is PaperBroker + ke
 | Futu | Poll or callback | `BROKER=futu` + `futu-api` ([install guide](docs/futu-opend-install.md)) |
 | IBKR | Callback | `BROKER=ibkr` + `ib_insync` |
 | Alpaca | Poll | `BROKER=alpaca` + keys |
+| Webull | Poll | `BROKER=webull` + `webull-openapi-python-sdk` ([setup guide](docs/webull-openapi-setup.md)) |
 
 ## Replay Mode
 
@@ -195,6 +196,6 @@ Supports OpenAI, Azure OpenAI, and local Ollama.
 
 ## Roadmap
 
-**Done:** Live pipeline (3 channels: [news], [sentiment], [trade]), 5 news sources, 4 brokers, single `orders` collection for order lifecycle, OrderTracker state machine (fill/fail/timeout), MongoDB persistence, dedup, 2 analyzers (keyword + LLM), SL/TP (trailing), backtesting (sentiment + price), React dashboard, single/distributed modes, Redis Streams, replay mode, price cache, transaction costs, Docker Compose deployment, heartbeats, graceful shutdown, 269 tests.
+**Done:** Live pipeline (3 channels: [news], [sentiment], [trade]), 5 news sources, 5 brokers, single `orders` collection for order lifecycle, OrderTracker state machine (fill/fail/timeout), MongoDB persistence, dedup, 2 analyzers (keyword + LLM), SL/TP (trailing), backtesting (sentiment + price), React dashboard, single/distributed modes, Redis Streams, replay mode, price cache, transaction costs, Docker Compose deployment, heartbeats, graceful shutdown, 269 tests.
 
 **To do:** Cross-source dedup, inverse ETF support, sector trading, real-news backtest, side-by-side comparison, live dashboard, Telegram alerts.

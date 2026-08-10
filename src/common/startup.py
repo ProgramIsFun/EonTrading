@@ -42,5 +42,7 @@ def env_status():
         print(f"      {_check('ALPACA_SECRET_KEY')} ALPACA_SECRET_KEY")
     if os.getenv("BROKER", "").lower() == "futu":
         print(f"      FUTU_REAL={'yes' if os.getenv('FUTU_REAL') else 'no (simulate)'}")
+    if os.getenv("BROKER", "").lower() == "webull":
+        print(f"      WEBULL_REAL={'yes' if os.getenv('WEBULL_REAL') else 'no (sandbox)'}")
     print("    Redis (distributed only):")
     print(f"      REDIS_HOST={os.getenv('REDIS_HOST', 'localhost')}")

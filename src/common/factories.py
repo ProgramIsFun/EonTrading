@@ -4,13 +4,14 @@ from src.settings import settings
 # To add a new broker: import it and add one line below.
 # The factory function never needs to change.
 
-from src.live.brokers import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker
+from src.live.brokers import AlpacaBroker, FutuBroker, IBKRBroker, PaperBroker, WebullBroker
 
 BROKERS = {
     "paper": lambda: PaperBroker(persist_cash=True),
     "futu": lambda: FutuBroker(simulate=not settings.futu_real, confirm_mode=settings.futu_confirm),
     "ibkr": lambda: IBKRBroker(),
     "alpaca": lambda: AlpacaBroker(),
+    "webull": lambda: WebullBroker(simulate=not settings.webull_real),
 }
 
 

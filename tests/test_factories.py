@@ -9,7 +9,7 @@ from src.data.news.loader import NEWS_SOURCES, build_news_sources
 
 class TestBrokerRegistry:
     def test_all_expected_brokers_registered(self):
-        assert set(BROKERS.keys()) == {"paper", "futu", "ibkr", "alpaca"}
+        assert set(BROKERS.keys()) == {"paper", "futu", "ibkr", "alpaca", "webull"}
 
     def test_build_broker_returns_paper_by_default(self):
         with patch("src.common.factories.settings") as mock_settings:
@@ -44,6 +44,22 @@ class TestBrokerRegistry:
             assert type(broker).__name__ == "FutuBroker"
             assert broker.simulate is True
             assert broker.confirm_mode is True
+
+    def test_build_broker_webull_uses_settings(self):
+        with patch("src.common.factories.settings") as mock_settings:
+            mock_settings.broker = "webull"
+            mock_settings.webull_real = False
+            broker = build_broker()
+            assert type(broker).__name__ == "WebullBroker"
+            assert broker.simulate is True
+
+    def test_build_broker_webull_live(self):
+        with patch("src.common.factories.settings") as mock_settings:
+            mock_settings.broker = "webull"
+            mock_settings.webull_real = True
+            broker = build_broker()
+            assert type(broker).__name__ == "WebullBroker"
+            assert broker.simulate is False
 
 
 class TestAnalyzerRegistry:
