@@ -132,4 +132,4 @@ class TestLLMPromptSelection:
         analyzer.analyze(TARIFF_NEWS)
 
         call_args = mock_get_client.return_value.chat.completions.create.call_args
-        assert call_args[1]["max_tokens"] == 500
+        assert call_args[1]["max_tokens"] == 1500

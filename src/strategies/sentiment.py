@@ -123,8 +123,9 @@ class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
 # --- LLM-based (accurate, needs API key) ---
 
 # Cap output so a rambling LLM can't turn a 50-token JSON into 4000 tokens (42s calls).
-# JSON-only replies fit comfortably; prose gets truncated and parsed conservatively.
-_LLM_MAX_TOKENS = 500
+# Generous enough for hidden reasoning + the JSON reply; a tighter cap (500) made the
+# model burn the whole budget on reasoning and return an empty content string.
+_LLM_MAX_TOKENS = 1500
 
 _LLM_RETURN_JSON = """\
 {{

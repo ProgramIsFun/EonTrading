@@ -50,10 +50,11 @@ class PaperBroker(Broker):
                 self._cash = float(doc["cash"])
                 logger.info("Loaded paper cash: $%.2f from MongoDB", self._cash)
             else:
-                db.paper_account.insert_one({
-                    "_id": PAPER_ACCOUNT_ID,
-                    "cash": self._initial_cash,
-                })
+                db.paper_account.update_one(
+                    {"_id": PAPER_ACCOUNT_ID},
+                    {"$setOnInsert": {"cash": self._initial_cash}},
+                    upsert=True,
+                )
                 self._cash = self._initial_cash
                 logger.info("Created paper account with $%.2f cash", self._initial_cash)
         except Exception:
