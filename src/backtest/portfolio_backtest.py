@@ -212,8 +212,8 @@ def run_portfolio_backtest(
                         exec_p = get_price(sym, ts, "open")
                         if exec_p is None:
                             continue
-                        buy_shares = logic.should_buy(sig.sentiment, sig.confidence, sym, positions, cash, cost_model.effective_buy_price(exec_p))
-                        if buy_shares > 0 and buy_shares * exec_p < cash:
+                        buy_shares = logic.should_buy(sig.sentiment, sig.confidence, sym, positions, cash, exec_p, cost_model=cost_model)
+                        if buy_shares > 0:
                             cost = cost_model.buy_cost(exec_p, buy_shares)
                             cash -= buy_shares * exec_p + cost
                             positions[sym] = Position(sym, buy_shares, exec_p, bar_idx)

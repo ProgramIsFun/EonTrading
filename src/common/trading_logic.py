@@ -1,6 +1,8 @@
 """Shared trading logic used by both backtest and live trader."""
 from dataclasses import dataclass
 
+from src.common.costs import CostModel
+
 
 @dataclass
 class PositionState:
@@ -50,20 +52,30 @@ class TradingLogic:
             take_profit_pct=settings.take_profit_pct,
         )
 
-    def should_buy(self, sentiment: float, confidence: float, symbol: str, positions: dict, cash: float, price: float) -> int:
-        """Returns number of shares to buy, or 0 if no trade."""
+    def should_buy(self, sentiment: float, confidence: float, symbol: str, positions: dict,
+                   cash: float, price: float, cost_model: CostModel | None = None) -> int:
+        """Returns number of shares to buy, or 0 if no trade.
+
+        Size is the smallest of sentiment-scaled capital, max allocation, and
+        risk-per-trade (when a stop loss is set). Buy costs are folded into the
+        effective price via cost_model when provided.
+        """
         if confidence < self.min_confidence:
             return 0
         if sentiment < self.threshold:
             return 0
 
         size = min(abs(sentiment), 1.0) if self.scale_by_sentiment else 1.0
-        alloc = cash * self.max_allocation if self.max_allocation > 0 else cash * size
-        if self.risk_per_trade > 0 and self.stop_loss_pct > 0:
-            risk_alloc = (cash * self.risk_per_trade) / self.stop_loss_pct
-            alloc = min(alloc, risk_alloc)
+        eff_price = cost_model.effective_buy_price(price) if cost_model is not None else price
 
-        shares = int(alloc / price)
+        max_shares = int((cash * size) / eff_price)
+        if self.max_allocation > 0:
+            max_shares = min(max_shares, int((cash * self.max_allocation) / eff_price))
+        if self.risk_per_trade > 0 and self.stop_loss_pct > 0:
+            risk_shares = int((cash * self.risk_per_trade) / (price * self.stop_loss_pct))
+            max_shares = min(max_shares, risk_shares)
+
+        shares = max_shares
         return shares if shares > 0 and shares * price < cash else 0
 
     def should_sell_on_sentiment(self, sentiment: float, confidence: float, symbol: str, positions: dict) -> bool:

@@ -1,6 +1,7 @@
 """Unit tests for TradingLogic — should_buy, should_sell, SL/TP, position sizing."""
 import pytest
 
+from src.common.costs import CostModel
 from src.common.trading_logic import PositionState, TradingLogic
 
 
@@ -22,6 +23,22 @@ class TestShouldBuy:
     def test_should_buy(self, desc, kwargs, sentiment, confidence, positions, cash, price, expected):
         logic = TradingLogic(**kwargs)
         assert logic.should_buy(sentiment, confidence, "AAPL", positions, cash, price) == expected, desc
+
+
+class TestShouldBuyCostAware:
+    def test_costs_reduce_position_size(self):
+        logic = TradingLogic(threshold=0.3, min_confidence=0.1, max_allocation=1.0)
+        cm = CostModel(slippage_pct=0.05, commission_pct=0.01)  # effective buy price = 100 * 1.06 = 106
+        assert logic.should_buy(1.0, 0.9, "AAPL", {}, 10000, 100, cost_model=cm) == 94  # int(10000 / 106)
+        assert logic.should_buy(1.0, 0.9, "AAPL", {}, 10000, 100) == 0  # 100 shares would fully exhaust cash
+        assert logic.should_buy(1.0, 0.9, "AAPL", {}, 10001, 100) == 100
+
+    def test_risk_cap_uses_raw_price(self):
+        logic = TradingLogic(threshold=0.3, min_confidence=0.1, max_allocation=1.0,
+                             risk_per_trade=0.02, stop_loss_pct=0.05)
+        cm = CostModel(slippage_pct=0.05)
+        # risk cap on raw price: int(10000 * 0.02 / (100 * 0.05)) = 40
+        assert logic.should_buy(1.0, 0.9, "AAPL", {}, 10000, 100, cost_model=cm) == 40
 
 
 class TestShouldSellOnSentiment:
