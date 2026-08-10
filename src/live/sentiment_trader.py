@@ -66,6 +66,30 @@ class SentimentTrader:
             finally:
                 self._queue.task_done()
 
+    async def _buy_shares(self, symbol: str, event: SentimentEvent,
+                          positions: dict, price: float) -> int:
+        """Compute buy size. Returns 0 to skip the trade.
+
+        With a real broker: skip when reported cash is exhausted (≤ 0).
+        Without a broker (or on fetch failure): fall back to a single share.
+        """
+        cash = 0.0
+        cash_known = False
+        if self.broker is not None:
+            try:
+                cash = await self.broker.get_cash()
+                cash_known = True
+            except Exception:
+                logger.warning("Failed to fetch cash from broker, using 0", exc_info=True)
+        if cash > 0:
+            return self.logic.should_buy(event.sentiment, event.confidence, symbol,
+                                         positions, cash, price)
+        if not cash_known:
+            logger.warning("Cash unavailable, defaulting to qty=1 for %s", symbol)
+            return 1
+        logger.warning("Cash exhausted ($%.2f), skipping buy for %s", cash, symbol)
+        return 0
+
     async def _handle_sentiment(self, msg: dict):
         event = SentimentEvent.from_dict(msg)
         if not event.symbols:
@@ -102,19 +126,7 @@ class SentimentTrader:
                     if price <= 0:
                         logger.warning("No price for %s, skipping", symbol)
                         continue
-                    try:
-                        cash = await self.broker.get_cash() if self.broker else 0.0
-                    except Exception:
-                        logger.warning("Failed to fetch cash from broker, using 0", exc_info=True)
-                        cash = 0.0
-                    if cash > 0:
-                        shares = self.logic.should_buy(
-                            event.sentiment, event.confidence, symbol,
-                            positions, cash, price,
-                        )
-                    else:
-                        logger.warning("Cash unavailable, defaulting to qty=1 for %s", symbol)
-                        shares = 1
+                    shares = await self._buy_shares(symbol, event, positions, price)
                     if shares <= 0:
                         continue
                     action = "buy"
@@ -131,19 +143,7 @@ class SentimentTrader:
                 if price <= 0:
                     logger.warning("No price for %s, skipping", symbol)
                     continue
-                try:
-                    cash = await self.broker.get_cash() if self.broker else 0.0
-                except Exception:
-                    logger.warning("Failed to fetch cash from broker, using 0", exc_info=True)
-                    cash = 0.0
-                if cash > 0:
-                    shares = self.logic.should_buy(
-                        event.sentiment, event.confidence, symbol,
-                        positions, cash, price,
-                    )
-                else:
-                    logger.warning("Cash unavailable, defaulting to qty=1 for %s", symbol)
-                    shares = 1
+                shares = await self._buy_shares(symbol, event, positions, price)
                 if shares <= 0:
                     continue
                 action = "buy"

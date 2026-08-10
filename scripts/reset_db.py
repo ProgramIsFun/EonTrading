@@ -26,6 +26,7 @@ COLLECTIONS = [
     "heartbeats",
     "logs",
     "replay_trades",
+    "paper_account",
 ]
 
 

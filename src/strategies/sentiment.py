@@ -13,6 +13,25 @@ from ..common.retry import retry
 logger = logging.getLogger(__name__)
 
 
+def _parse_llm_json(text: str) -> dict:
+    """Parse a JSON object from an LLM response, tolerating prose, fences, and double braces."""
+    text = re.sub(r"```json?\s*", "", text).replace("```", "").strip()
+    candidates = [text]
+    if text.startswith("{{"):
+        candidates.append(text[1:-1])
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match and match.group(0) not in candidates:
+        candidates.append(match.group(0))
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    raise json.JSONDecodeError("No JSON object found in LLM response", text, 0)
+
+
 class BaseSentimentAnalyzer(ABC):
     """Interface for sentiment analyzers. Swap implementations freely."""
 
@@ -103,34 +122,55 @@ class KeywordSentimentAnalyzer(BaseSentimentAnalyzer):
 
 # --- LLM-based (accurate, needs API key) ---
 
-_LLM_COMMON_RULES = """\
-- We trade CASH ONLY — no margin, no short selling, no borrowing.
-- We can only trade stocks on these markets: {markets}
-- Only return symbols that are well-known, actively traded stocks with a valid Yahoo Finance ticker.
-- SYMBOL FORMAT (Yahoo Finance convention — CRITICAL):
-  - HK stocks: exactly 4 digits + .HK → 0700.HK (Tencent), 9988.HK (Alibaba), 0005.HK (HSBC), 0388.HK (HKEX), 0981.HK (SMIC), 0883.HK (CNOOC)
-  - WRONG examples — these will fail: 00700.HK ✗, 00005.HK ✗, 00002.HK ✗, 883.HK ✗, 981.HK ✗
-  - The ticker must match what Yahoo Finance recognizes. 5-digit HK codes (00700, 00005) do NOT exist on Yahoo Finance.
-- Do NOT return US tickers like AAPL, TSLA, NVDA unless we can trade US stocks.
-- Always try to find indirect links to Hong Kong stocks, even if the news is not directly about HK. For example: negative US tech news (e.g. chip restrictions, AI regulation, big tech earnings miss) may also impact HK-listed tech stocks like Tencent, Alibaba, or Semiconductor Manufacturing International (0981.HK). News about US-China trade tensions, tariffs, or sanctions directly affects HK stocks. Global macro events (Fed decisions, oil prices, recession fears) have spillover effects on HK markets.
-- When you identify an indirect link, use lower confidence (0.3-0.6) to reflect the indirect nature of the connection. Use higher confidence (0.7-1.0) only for direct mentions.
-- Even if the news mentions only US or global events, if there is a plausible connection to HK stocks, return those HK tickers with appropriate sentiment and confidence.
-- Only return empty symbols if there is truly no meaningful connection to any HK stock.
-- Sentiment is from the perspective of the returned symbols (positive = those symbols go up)."""
-
-_LLM_POSITION_EXTRA = """\
-If we hold a stock and the news is bad for it (directly or indirectly), return that stock with negative sentiment so we sell it.
-- Higher confidence if the news directly impacts our holdings."""
-
-_LLM_RETURN_EXAMPLE = """
-Return:
+_LLM_RETURN_JSON = """\
 {{
-  "symbols": ["0700.HK"],
+  "symbols": ["{symbol}"],
   "sector": "technology",
   "sentiment": 0.5,
   "confidence": 0.8,
   "urgency": "normal"
 }}"""
+
+
+def _return_example(markets: str) -> str:
+    """Return example using a symbol from a tradable market."""
+    market_list = [m.strip().upper() for m in markets.split(",") if m.strip()]
+    symbol = "0700.HK" if "HK" in market_list else "AAPL"
+    return "\nReturn:\n" + _LLM_RETURN_JSON.format(symbol=symbol)
+
+_MARKET_FORMATS = {
+    "HK": (
+        "- HK stocks: exactly 4 digits + .HK → 0700.HK (Tencent), 9988.HK (Alibaba), 0005.HK (HSBC), 0388.HK (HKEX), 0981.HK (SMIC), 0883.HK (CNOOC)\n"
+        "  - WRONG examples — these will fail: 00700.HK ✗, 00005.HK ✗, 00002.HK ✗, 883.HK ✗, 981.HK ✗\n"
+        "  - The ticker must match what Yahoo Finance recognizes. 5-digit HK codes (00700, 00005) do NOT exist on Yahoo Finance.\n"
+        "- Try to find indirect links to HK stocks when the news is global (Fed decisions, oil, trade/tariffs, big-tech earnings, chip restrictions). "
+        "Examples: US-China trade tension → Tencent (0700.HK), Alibaba (9988.HK), SMIC (0981.HK); oil news → CNOOC (0883.HK); rate news → HSBC (0005.HK).\n"
+        "- Use confidence 0.3-0.6 for indirect links, 0.7-1.0 only for direct mentions.\n"
+        "- Only return empty symbols if there is truly no meaningful connection to any HK stock."
+    ),
+    "US": (
+        "- US stocks: plain uppercase ticker without suffix or exchange code → AAPL, TSLA, NVDA, MSFT.\n"
+        "- Return well-known, actively traded US-listed stocks with valid Yahoo Finance tickers.\n"
+        "- Prefer tickers directly affected by the news. Use confidence 0.7-1.0 for direct mentions, 0.3-0.6 for indirect links.\n"
+        "- Only return empty symbols if the news has no meaningful connection to any US stock."
+    ),
+}
+
+
+def _market_rules(markets: str) -> str:
+    """Build market-specific rules for the LLM prompt."""
+    market_list = [m.strip().upper() for m in markets.split(",") if m.strip()]
+    lines = [f"- We can ONLY trade stocks on these markets: {', '.join(market_list) or 'NONE'}"]
+    if not market_list:
+        lines.append("- Return empty symbols — we cannot trade anything.")
+        return "\n".join(lines)
+    for m in market_list:
+        guidance = _MARKET_FORMATS.get(m)
+        if guidance:
+            lines.append(guidance)
+        else:
+            lines.append(f"- Market '{m}' is unsupported — never return symbols for it.")
+    return "\n".join(lines)
 
 
 def _build_llm_prompt(headline: str, markets: str, positions: dict | None = None) -> str:
@@ -142,10 +182,13 @@ def _build_llm_prompt(headline: str, markets: str, positions: dict | None = None
         pos_str = "\n".join(f"- {sym}" for sym in positions.keys()) or "None"
         parts.append(f"\nCurrent holdings:\n{pos_str}")
     parts.append("\nRules:")
-    parts.append(_LLM_COMMON_RULES.format(markets=markets))
+    parts.append("- We trade CASH ONLY — no margin, no short selling, no borrowing.")
+    parts.append(_market_rules(markets))
     if positions:
-        parts.append(_LLM_POSITION_EXTRA)
-    parts.append(_LLM_RETURN_EXAMPLE)
+        parts.append("- If we hold a stock and the news is bad for it (directly or indirectly), return that stock with negative sentiment so we sell it.")
+        parts.append("- Higher confidence if the news directly impacts our holdings.")
+    parts.append("- Sentiment is from the perspective of the returned symbols (positive = those symbols go up).")
+    parts.append(_return_example(markets))
     return "\n".join(parts)
 
 
@@ -190,28 +233,31 @@ class LLMSentimentAnalyzer(BaseSentimentAnalyzer):
         try:
             content = self._call_llm(prompt)
             elapsed_ms = (time.perf_counter() - t0) * 1000
-            # Extract JSON from response (handle markdown code blocks)
-            content = re.sub(r"```json?\s*", "", content).replace("```", "").strip()
-            data = json.loads(content)
-
-            logger.info("LLM response in %.0fms — sentiment=%+.2f confidence=%.2f symbols=%s",
-                        elapsed_ms, float(data.get("sentiment", 0)),
-                        float(data.get("confidence", 0)), data.get("symbols", []))
-
-            return SentimentEvent(
-                source=event.source, headline=event.headline,
-                timestamp=event.timestamp,
-                analyzed_at=utcnow().isoformat() + "Z",
-                symbols=data.get("symbols", []),
-                sector=data.get("sector", ""),
-                sentiment=round(float(data.get("sentiment", 0)), 3),
-                confidence=round(float(data.get("confidence", 0)), 3),
-                urgency=data.get("urgency", "normal"),
-            )
+            data = _parse_llm_json(content)
+        except json.JSONDecodeError as e:
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            logger.warning("LLM returned non-JSON after %.0fms (%s) — emitting neutral sentiment. Content: %.300r",
+                           elapsed_ms, e, content)
+            data = {}
         except Exception as e:
             elapsed_ms = (time.perf_counter() - t0) * 1000
             logger.error("LLM analysis failed after %.0fms: %s", elapsed_ms, e, exc_info=True)
             raise
+
+        logger.info("LLM response in %.0fms — sentiment=%+.2f confidence=%.2f symbols=%s",
+                    elapsed_ms, float(data.get("sentiment", 0)),
+                    float(data.get("confidence", 0)), data.get("symbols", []))
+
+        return SentimentEvent(
+            source=event.source, headline=event.headline,
+            timestamp=event.timestamp,
+            analyzed_at=utcnow().isoformat() + "Z",
+            symbols=data.get("symbols", []),
+            sector=data.get("sector", ""),
+            sentiment=round(float(data.get("sentiment", 0)), 3),
+            confidence=round(float(data.get("confidence", 0)), 3),
+            urgency=data.get("urgency", "normal"),
+        )
 
     @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
     def _call_llm(self, prompt: str) -> str:
