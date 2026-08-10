@@ -1,9 +1,8 @@
 """AnalyzerService: subscribes to [news], queries positions, scores sentiment, publishes to [sentiment]."""
 import asyncio
 import logging
-from datetime import datetime
 
-from src.common.clock import utcnow
+from src.common.clock import parse_dt, utcnow
 from src.common.log_handler import ComponentFilter
 from src.common.event_bus import EventBus
 from src.common.events import CHANNEL_NEWS, CHANNEL_SENTIMENT, NewsEvent
@@ -32,14 +31,13 @@ class AnalyzerService:
     def _is_stale(self, event: NewsEvent) -> bool:
         if not event.timestamp or self.max_age_sec <= 0:
             return False
-        try:
-            ts = datetime.fromisoformat(event.timestamp.replace("Z", "+00:00")).replace(tzinfo=None)
-            age = (utcnow().replace(tzinfo=None) - ts).total_seconds()
-            if age > self.max_age_sec:
-                logger.info("Skipping stale news (%.0fs old): %s", age, event.headline[:60])
-                return True
-        except (ValueError, TypeError):
-            pass
+        ts = parse_dt(event.timestamp, strip_tz=True)
+        if ts is None:
+            return False
+        age = (utcnow() - ts).total_seconds()
+        if age > self.max_age_sec:
+            logger.info("Skipping stale news (%.0fs old): %s", age, event.headline[:60])
+            return True
         return False
 
     async def _on_news(self, msg: dict):

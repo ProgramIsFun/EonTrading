@@ -18,7 +18,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from src.common.clock import utcnow
+from src.common.clock import parse_dt, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -63,17 +63,6 @@ class PortfolioSource(ABC):
     @abstractmethod
     async def get_snapshot(self) -> PortfolioSnapshot:
         pass
-
-
-def _parse_dt(value) -> datetime | None:
-    if not value:
-        return None
-    if isinstance(value, datetime):
-        return value
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except (ValueError, TypeError):
-        return None
 
 
 class MongoPortfolioSource(PortfolioSource):
@@ -122,7 +111,7 @@ class MongoPortfolioSource(PortfolioSource):
                     symbol=symbol,
                     qty=int(info.get("qty", 0)),
                     entry_price=float(info.get("entryPrice", 0.0)),
-                    entry_time=_parse_dt(info.get("entryTime")),
+                    entry_time=parse_dt(info.get("entryTime")),
                     peak_price=float(info.get("peakPrice", info.get("entryPrice", 0.0))),
                 )
                 for symbol, info in positions.items()
@@ -135,8 +124,8 @@ class MongoPortfolioSource(PortfolioSource):
                     price=float(doc.get("price", 0.0)),
                     status=doc.get("status", ""),
                     order_id=doc.get("order_id", ""),
-                    placed_at=_parse_dt(doc.get("placed_at")),
-                    filled_at=_parse_dt(doc.get("filled_at")),
+                    placed_at=parse_dt(doc.get("placed_at")),
+                    filled_at=parse_dt(doc.get("filled_at")),
                 )
                 for doc in orders
             ],
@@ -173,8 +162,8 @@ class BrokerPortfolioSource(PortfolioSource):
                     price=float(doc.get("price", 0.0)),
                     status=doc.get("status", ""),
                     order_id=doc.get("order_id", ""),
-                    placed_at=_parse_dt(doc.get("placed_at")),
-                    filled_at=_parse_dt(doc.get("filled_at")),
+                    placed_at=parse_dt(doc.get("placed_at")),
+                    filled_at=parse_dt(doc.get("filled_at")),
                 )
                 for doc in orders
             ],

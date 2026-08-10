@@ -4,26 +4,27 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.common.price import _cache_get, _cache_set, _parse_time, get_price
+from src.common.clock import parse_dt
+from src.common.price import _cache_get, _cache_set, get_price
 
 
 class TestParseTime:
     def test_none_returns_none(self):
-        assert _parse_time(None) is None
+        assert parse_dt(None, strip_tz=True) is None
 
     def test_empty_string_returns_none(self):
-        assert _parse_time("") is None
+        assert parse_dt("", strip_tz=True) is None
 
     def test_iso_with_z(self):
-        t = _parse_time("2026-05-31T10:30:00Z")
+        t = parse_dt("2026-05-31T10:30:00Z", strip_tz=True)
         assert t == datetime(2026, 5, 31, 10, 30, 0)
 
     def test_iso_without_z(self):
-        t = _parse_time("2026-05-31T10:30:00")
+        t = parse_dt("2026-05-31T10:30:00", strip_tz=True)
         assert t == datetime(2026, 5, 31, 10, 30, 0)
 
     def test_invalid_returns_none(self):
-        assert _parse_time("not-a-date") is None
+        assert parse_dt("not-a-date", strip_tz=True) is None
 
 
 class TestCache:
@@ -71,7 +72,7 @@ class TestGetPrice:
         assert p2 == 300.0
         assert mock_yf.call_count == 1  # not incremented
 
-    @patch("src.common.price._parse_time", return_value=datetime(2026, 5, 31, 10, 0, 0))
+    @patch("src.common.price.parse_dt", return_value=datetime(2026, 5, 31, 10, 0, 0))
     def test_history_uses_cache_before_source(self, mock_parse):
         cache_key = "AAPL:2026-05-31-10"
         _cache_set(cache_key, 999.0)

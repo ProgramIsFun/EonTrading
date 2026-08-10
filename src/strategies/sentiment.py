@@ -5,9 +5,8 @@ import os
 import re
 import time
 from abc import ABC, abstractmethod
-from datetime import datetime
 
-from ..common.clock import utcnow
+from ..common.clock import parse_dt, utcnow
 from ..common.events import NewsEvent, SentimentEvent
 from ..common.retry import retry
 
@@ -218,7 +217,7 @@ def _build_llm_prompt(headline: str, markets: str, positions: dict | None = None
 def _order_age(order) -> str:
     """Human-readable age of an order for the prompt, e.g. '2 min ago'."""
     placed = order.get("placed_at") if isinstance(order, dict) else getattr(order, "placed_at", None)
-    ts = _parse_dt(placed)
+    ts = parse_dt(placed)
     if ts is None:
         return "recently"
     age_sec = max(0, (utcnow().replace(tzinfo=None) - ts.replace(tzinfo=None)).total_seconds())
@@ -227,17 +226,6 @@ def _order_age(order) -> str:
     if age_sec < 3600:
         return f"{int(age_sec // 60)} min ago"
     return f"{int(age_sec // 3600)} h ago"
-
-
-def _parse_dt(value) -> datetime | None:
-    if not value:
-        return None
-    if isinstance(value, datetime):
-        return value
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except (ValueError, TypeError):
-        return None
 
 
 class LLMSentimentAnalyzer(BaseSentimentAnalyzer):

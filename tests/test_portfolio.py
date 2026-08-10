@@ -4,23 +4,23 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.common.clock import parse_dt
 from src.common.portfolio import (
     BrokerPortfolioSource,
     MongoPortfolioSource,
     OrderInfo,
     PortfolioSnapshot,
     PositionInfo,
-    _parse_dt,
     build_portfolio_source,
 )
 
 
 def test_parse_dt_handles_z_suffix():
     utc = timezone.utc
-    assert _parse_dt("2026-05-31T10:00:00Z") == datetime(2026, 5, 31, 10, 0, 0, tzinfo=utc)
-    assert _parse_dt(None) is None
-    assert _parse_dt("garbage") is None
-    assert _parse_dt(datetime(2026, 1, 1)) == datetime(2026, 1, 1)
+    assert parse_dt("2026-05-31T10:00:00Z") == datetime(2026, 5, 31, 10, 0, 0, tzinfo=utc)
+    assert parse_dt(None) is None
+    assert parse_dt("garbage") is None
+    assert parse_dt(datetime(2026, 1, 1)) == datetime(2026, 1, 1)
 
 
 class TestMongoPortfolioSource:

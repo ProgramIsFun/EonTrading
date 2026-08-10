@@ -9,7 +9,7 @@ Set via: PRICE_SOURCE=clickhouse or PRICE_SOURCE=yfinance (default)
 import logging
 from datetime import datetime, timedelta
 
-from src.common.clock import utcnow
+from src.common.clock import parse_dt, utcnow
 from src.common.retry import retry
 from src.settings import settings
 
@@ -63,7 +63,7 @@ def get_price(symbol: str, as_of: str | None = None) -> float:
     - as_of=old timestamp: fetch historical price at that time
     - Caches via Redis (if available) or in-memory dict
     """
-    t = _parse_time(as_of)
+    t = parse_dt(as_of, strip_tz=True)
     is_historical = t and (utcnow() - t).total_seconds() > 600
 
     if is_historical and t is not None:
@@ -83,15 +83,6 @@ def get_price(symbol: str, as_of: str | None = None) -> float:
     return price
 
 
-def _parse_time(as_of: str | None = None) -> datetime | None:
-    if not as_of:
-        return None
-    try:
-        return datetime.fromisoformat(as_of.replace("Z", "+00:00")).replace(tzinfo=None)
-    except Exception:
-        return None
-
-
 def _from_yfinance(symbol: str, as_of: str | None = None) -> float:
     try:
         price = _yfinance_download(symbol, as_of)
@@ -104,7 +95,7 @@ def _from_yfinance(symbol: str, as_of: str | None = None) -> float:
 @retry(max_attempts=3, base_delay=1.0, exceptions=(Exception,))
 def _yfinance_download(symbol: str, as_of: str | None = None) -> float:
     import yfinance as yf
-    t = _parse_time(as_of)
+    t = parse_dt(as_of, strip_tz=True)
     if t:
         start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
         end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -131,7 +122,7 @@ def _yfinance_download(symbol: str, as_of: str | None = None) -> float:
 def _from_clickhouse(symbol: str, as_of: str | None = None) -> float:
     try:
         from src.data.storage.clickhouse_storage import ClickHouseStorage
-        t = _parse_time(as_of) or utcnow()
+        t = parse_dt(as_of, strip_tz=True) or utcnow()
         storage = ClickHouseStorage()
         start = (t - timedelta(days=5)).strftime("%Y-%m-%d")
         end = (t + timedelta(days=1)).strftime("%Y-%m-%d")
