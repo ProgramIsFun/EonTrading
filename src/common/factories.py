@@ -15,8 +15,10 @@ BROKERS = {
 }
 
 
-def build_broker():
+def build_broker(persist_cash: bool = True):
     name = settings.broker.lower()
+    if name == "paper":
+        return PaperBroker(persist_cash=persist_cash)
     factory = BROKERS.get(name)
     if factory is None:
         raise ValueError(f"Unknown broker '{name}'. Valid: {list(BROKERS)}")

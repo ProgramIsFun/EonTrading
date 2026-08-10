@@ -13,7 +13,7 @@ from src.live.runners import runner_lifecycle
 
 
 async def main():
-    broker = build_broker()
+    broker = build_broker(persist_cash=False)
 
     async with runner_lifecycle("order_tracker", "OrderTracker", {
         "Broker": broker.__class__.__name__,
