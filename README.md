@@ -200,4 +200,6 @@ Supports OpenAI, Azure OpenAI, and local Ollama.
 
 **To do:** Cross-source dedup, inverse ETF support, sector trading, real-news backtest, side-by-side comparison, live dashboard, Telegram alerts.
 
+**TODO — investigate:** SL/TP duplicate-trade risk when PriceMonitor runs in a loop. `check_once` pops in-memory state after a successful fill, but it re-hydrates `_states` from the position store at the top of every call. If the store still lists the symbol (OrderTracker fill-confirmation lag, or replay/backtest without OrderTracker), the same stop-loss/take-profit re-triggers on the next iteration and publishes a duplicate [trade] — and PaperBroker's sell path has no short protection, so it double-counts the proceeds instead of rejecting. Confirm the window, and consider a sold-symbol cooldown and/or a broker-holdings check before re-sell.
+
 **Cash reservation:** We trust the real broker to report held cash. If a broker were ever slow to register the hold (like a bank that hasn't processed the hold yet), we might ask "how much money?" and get the old number ($10,000 instead of $9,000), then place a second order we can't really afford. We don't yet keep our own "money on hold" ledger to protect against that.
