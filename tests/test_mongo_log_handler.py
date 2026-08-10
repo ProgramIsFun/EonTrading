@@ -167,9 +167,11 @@ class TestSetupLogging:
 class TestLLMSentimentAnalyzerOpencode:
     def test_opencode_key_sets_correct_defaults(self):
         from src.strategies.sentiment import LLMSentimentAnalyzer
+        from src.settings import settings
         os.environ["OPENCODE_API_KEY"] = "sk-test-key"
         try:
-            a = LLMSentimentAnalyzer()
+            with patch.object(settings, "llm_provider", ""):
+                a = LLMSentimentAnalyzer()
             assert a.api_key == "sk-test-key"
             assert "opencode.ai" in a.base_url
             assert a.model in ("big-pickle",)
@@ -178,9 +180,11 @@ class TestLLMSentimentAnalyzerOpencode:
 
     def test_opencode_key_no_azure(self):
         from src.strategies.sentiment import LLMSentimentAnalyzer
+        from src.settings import settings
         os.environ["OPENCODE_API_KEY"] = "sk-test-key"
         try:
-            a = LLMSentimentAnalyzer()
+            with patch.object(settings, "llm_provider", ""):
+                a = LLMSentimentAnalyzer()
             assert "opencode.ai" in a.base_url
         finally:
             del os.environ["OPENCODE_API_KEY"]
@@ -204,10 +208,12 @@ class TestLLMSentimentAnalyzerOpencode:
 
     def test_opencode_custom_model(self):
         from src.strategies.sentiment import LLMSentimentAnalyzer
+        from src.settings import settings
         os.environ["OPENCODE_API_KEY"] = "sk-test"
         os.environ["OPENCODE_MODEL"] = "deepseek-v4-flash-free"
         try:
-            a = LLMSentimentAnalyzer()
+            with patch.object(settings, "llm_provider", ""):
+                a = LLMSentimentAnalyzer()
             assert a.model == "deepseek-v4-flash-free"
         finally:
             del os.environ["OPENCODE_API_KEY"]

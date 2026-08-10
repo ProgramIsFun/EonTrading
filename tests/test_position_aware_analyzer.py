@@ -209,10 +209,12 @@ class TestLLMProviderSelection:
 
     @patch("src.strategies.sentiment.os.getenv")
     def test_auto_prefers_opencode_when_key_set(self, mock_getenv):
+        from src.settings import settings
         mock_getenv.side_effect = lambda name, default=None: (
             "sk-test" if name == "OPENCODE_API_KEY" else default
         )
-        analyzer = LLMSentimentAnalyzer()
+        with patch.object(settings, "llm_provider", ""):
+            analyzer = LLMSentimentAnalyzer()
         assert analyzer.model == "big-pickle"
 
     @patch("src.strategies.sentiment.os.getenv")
